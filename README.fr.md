@@ -35,6 +35,7 @@ npm ci && uv sync
 uv run pre-commit install
 npm run check        # Prettier, vérification des types, tests JavaScript
 uv run poe check     # ruff, pyright, tests Python
+uv run poe serve     # http://localhost:8017/ sans cache navigateur
 ```
 
 Les fichiers JSON de `data/grenoble/` sont produits par les scripts de `tools/` (accès

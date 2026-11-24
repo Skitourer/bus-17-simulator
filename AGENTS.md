@@ -264,8 +264,8 @@ approved. An approval covers the proposed action only.
 - **Layout**: `index.html` + `src/menu.js` menu · `hd2d.html` + `src/hd2d/` game · shared
   `src/common/`, `src/world/track.js`, `src/ui/minimap.js` · `tests/js/`, `tests/python/` ·
   `bus17-simulateur-v2.html`: older single-file prototype kept as UI reference.
-- **Commands**: run `python -m http.server 8017` at the root, open
-  `http://localhost:8017/`. Rebuild data (network needed, cached in `tools/cache/`,
+- **Commands**: `uv run poe serve` (no-cache static server, `tools/serve.py`), open
+  `http://localhost:8017/`; plain `python -m http.server` lets browsers mix cached modules. Rebuild data (network needed, cached in `tools/cache/`,
   git-ignored): `uv run python tools/build_line.py`, then `build_map.py`,
   `build_terrain.py`, `build_buildings.py`; a pure refactor of `tools/` must leave
   `data/` byte-identical (`git status data/`).

@@ -4,6 +4,9 @@ updates:
     directory: /
     schedule:
       interval: weekly
+    ignore:
+      # must match the Three.js version vendored in vendor/; updated together with it
+      - dependency-name: '@types/three'
     groups:
       npm:
         patterns: ['*']
