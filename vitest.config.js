@@ -14,8 +14,7 @@ export default defineConfig({
       // pure logic only; rendering and UI modules are checked in the browser
       include: [
         'src/common/service.js',
-        'src/sim/bus.js',
-        'src/world/*.js',
+        'src/world/track.js',
         'src/hd2d/heightfield.js',
         'src/hd2d/drive.js',
       ],

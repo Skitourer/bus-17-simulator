@@ -1,6 +1,6 @@
 # Install once with: uv run pre-commit install
 # The local hooks reuse the project's pinned tools (npm devDependencies, uv dev group).
-exclude: ^(vendor/|data/|bus17-outrun\.html|bus17-simulateur-v2\.html)
+exclude: ^(vendor/|data/|bus17-simulateur-v2\.html)
 repos:
   - repo: https://github.com/pre-commit/pre-commit-hooks
     rev: v6.0.0

@@ -4,7 +4,7 @@
  * Repere du modele : +X = avant, +Y = haut, +Z = cote droit (portes). Origine = essieu arriere, au sol.
  */
 import * as THREE from 'three';
-import { digits } from '../render/sprites.js';
+import { digits } from './sprites.js';
 
 export const BUS = { L: 12, W: 2.55, H: 3.1, REAR: 3.0, WB: 6.0 }; // longueur, largeur, hauteur, porte-a-faux arriere, empattement
 const PPM = 8;

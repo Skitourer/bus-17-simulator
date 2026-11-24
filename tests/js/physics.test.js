@@ -1,10 +1,8 @@
 // @ts-check
 import { describe, expect, it } from 'vitest';
-import { BUS_LEN, Bus, VMAX } from '../../src/sim/bus.js';
-import { ROAD } from '../../src/world/road_geom.js';
 import { Drive } from '../../src/hd2d/drive.js';
 import { Heightfield } from '../../src/hd2d/heightfield.js';
-import { NO_INPUT, leftTurnTrack, straightTrack, tiltedTerrain } from './fixtures.js';
+import { NO_INPUT, tiltedTerrain } from './fixtures.js';
 
 const DT = 1 / 60;
 
@@ -16,70 +14,6 @@ function run(vehicle, step, seconds) {
   for (let t = 0; t < seconds; t += DT) step(DT);
   return vehicle;
 }
-
-describe('Bus (pseudo-3D route physics)', () => {
-  it('accelerates to the speed limit and never exceeds it', () => {
-    const track = straightTrack(2000);
-    const bus = new Bus();
-    run(bus, (dt) => bus.update(track, { ...NO_INPUT, up: true }, dt), 7);
-    expect(bus.v * 3.6).toBeGreaterThan(35); // cahier des charges §4.5: 0 → 50 km/h in about 7 s
-    run(bus, (dt) => bus.update(track, { ...NO_INPUT, up: true }, dt), 60);
-    expect(bus.v).toBeLessThanOrEqual(VMAX);
-  });
-
-  it('stops exactly at zero when braking, then reverses if the brake is held', () => {
-    const track = straightTrack(2000);
-    const bus = new Bus();
-    bus.v = 10;
-    let steps = 0;
-    while (bus.v > 0 && steps++ < 1000) bus.update(track, { ...NO_INPUT, down: true }, DT);
-    expect(bus.v).toBe(0); // no overshoot into reverse on the stopping frame
-    run(bus, (dt) => bus.update(track, { ...NO_INPUT, down: true }, dt), 3);
-    expect(bus.v).toBeLessThan(0);
-    expect(bus.v).toBeGreaterThanOrEqual(-8 / 3.6);
-  });
-
-  it('coasts to a stop and rolls back on a steep climb', () => {
-    const flat = new Bus();
-    flat.v = 5;
-    const track = straightTrack(2000);
-    run(flat, (dt) => flat.update(track, NO_INPUT, dt), 20);
-    expect(Math.abs(flat.v)).toBeLessThan(0.05);
-
-    const hill = straightTrack(2000, 0.15);
-    const climbing = new Bus();
-    climbing.s = 100;
-    run(climbing, (dt) => climbing.update(hill, NO_INPUT, dt), 5);
-    expect(climbing.v).toBeLessThan(0);
-  });
-
-  it('steers right, drifts outwards in turns and is held by the kerb', () => {
-    const track = straightTrack(2000);
-    const bus = new Bus();
-    bus.v = 8;
-    run(bus, (dt) => bus.update(track, { ...NO_INPUT, right: true }, dt), 0.5);
-    expect(bus.lat).toBeGreaterThan(ROAD.LANE);
-    run(bus, (dt) => bus.update(track, { ...NO_INPUT, right: true, up: true }, dt), 10);
-    expect(bus.lat).toBeCloseTo(ROAD.SW - 1.28 - 0.3);
-    expect(bus.offroad).toBe(true);
-
-    const turn = leftTurnTrack(40);
-    const drifting = new Bus();
-    drifting.v = 12;
-    run(drifting, (dt) => drifting.update(turn, NO_INPUT, dt), 0.5);
-    expect(drifting.lat).toBeGreaterThan(ROAD.LANE); // left turn: pushed to the right
-  });
-
-  it('stops at the end of the route', () => {
-    const track = straightTrack(100);
-    const bus = new Bus();
-    bus.s = 80;
-    bus.v = 10;
-    run(bus, (dt) => bus.update(track, { ...NO_INPUT, up: true }, dt), 3);
-    expect(bus.s).toBe(track.length - BUS_LEN);
-    expect(bus.v).toBe(0);
-  });
-});
 
 describe('Heightfield', () => {
   const hf = new Heightfield(tiltedTerrain(0.1));

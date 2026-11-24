@@ -8,7 +8,7 @@
  * Conversion de repere : local (x est, y nord, z altitude) -> Three (X = x, Y = z, Z = -y).
  */
 import * as THREE from 'three';
-import { tree, shelter, stopPole } from '../render/sprites.js';
+import { tree, shelter, stopPole } from './sprites.js';
 
 /** @typedef {{ring: number[][], x0: number, y0: number, x1: number, y1: number}} Footprint */
 

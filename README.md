@@ -6,11 +6,8 @@ A bus-driving game in the browser, on the real route of Grenoble bus line 17
 (Verdun – Préfecture ⇄ Meylan, Lycée du Grésivaudan): real streets, real elevation,
 real stops and timetables. Made first for a 12-year-old bus fan, then for anyone.
 
-It is an early prototype with two rendering engines:
-
-- **HD-2D**: low-resolution 3D city with pixel-art look, free driving in the streets
-  (the main direction);
-- **Pseudo-3D**: OutRun-style road following the route.
+It is an early prototype in **HD-2D**: a low-resolution 3D city with a pixel-art look,
+where you drive freely in the streets.
 
 ![HD-2D prototype: the bus at Verdun – Préfecture, with the next-stop panel and the minimap](docs/screenshot-hd2d.png)
 

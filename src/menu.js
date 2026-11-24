@@ -1,11 +1,11 @@
 // @ts-check
-/** Page d'accueil : direction, bus, jour, depart reel (GTFS), moteur. Choix memorises localement. */
+/** Page d'accueil : direction, bus, jour, depart reel (GTFS). Choix memorises localement. */
 import { serviceLabel, sortedServices, todayService, toSec } from './common/service.js';
 
 /** @param {string} id */
 const $ = (id) => /** @type {HTMLElement} */ (document.getElementById(id));
 const KEY = 'bus17.menu';
-/** @type {{dir?: number, eng?: string}} */
+/** @type {{dir?: number}} */
 let saved = {};
 try {
   saved = JSON.parse(localStorage.getItem(KEY) || '{}') || {};
@@ -20,7 +20,7 @@ const save = () => {
   }
 };
 
-const sel = { dir: saved.dir ?? 1, bus: 'std', day: '', dep: '', eng: saved.eng || 'hd2d' };
+const sel = { dir: saved.dir ?? 1, bus: 'std', day: '', dep: '' };
 /** @type {import('./common/types.js').LineData} */
 let line;
 
@@ -95,21 +95,13 @@ function render() {
   }
   if (!deps.length) box.innerHTML = '<span class="empty">Aucun départ ce jour-là.</span>';
 
-  document.querySelectorAll('#engChips .chip').forEach((b) => {
-    const el = /** @type {HTMLElement} */ (b);
-    el.classList.toggle('on', el.dataset.eng === sel.eng);
-    el.onclick = () => {
-      sel.eng = el.dataset.eng || 'hd2d';
-      render();
-    };
-  });
   /** @type {HTMLButtonElement} */ ($('goBtn')).disabled = !sel.dep;
   save();
 }
 
 $('goBtn').onclick = () => {
   const q = new URLSearchParams({ dir: String(sel.dir), day: sel.day, dep: sel.dep, bus: sel.bus });
-  location.href = (sel.eng === 'outrun' ? 'outrun.html?' : 'hd2d.html?') + q;
+  location.href = 'hd2d.html?' + q;
 };
 
 fetch('data/grenoble/17.json')
