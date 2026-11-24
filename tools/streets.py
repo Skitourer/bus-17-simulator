@@ -12,9 +12,10 @@ from typing import Any
 import numpy as np
 import shapely
 from geo import Point, gauss_smooth
-from shapely import LineString, MultiPolygon, Polygon, STRtree, box, prepare
+from shapely import LineString, MultiLineString, MultiPolygon, Polygon, STRtree, box, prepare
 from shapely.geometry.base import BaseGeometry
 from shapely.geometry.polygon import orient
+from shapely.ops import substring
 from shapes import (
     FloatArray,
     GeometryArray,
@@ -45,6 +46,7 @@ class RoadEdge:
     width: float
     flags: frozenset[str]
     coords: list[Point]
+    cls: str = 'minor'
 
     @property
     def level(self) -> str:
@@ -59,12 +61,13 @@ class RoadEdge:
 def load_edges(data: dict[str, Any]) -> list[RoadEdge]:
     """Edges of a roads.json document (see build_roads.py), converted to metres."""
     flags_table: list[str] = data['flags']
+    classes: list[str] = data['classes']
     edges: list[RoadEdge] = []
     for rec in data['edges']:
-        a, b, _cls, width_dm, _layer, mask, *flat = (int(v) for v in rec)
+        a, b, cls, width_dm, _layer, mask, *flat = (int(v) for v in rec)
         flags = frozenset(str(f) for i, f in enumerate(flags_table) if mask & (1 << i))
         coords = [(flat[i] / 10, flat[i + 1] / 10) for i in range(0, len(flat), 2)]
-        edges.append(RoadEdge(a, b, width_dm / 10, flags, coords))
+        edges.append(RoadEdge(a, b, width_dm / 10, flags, coords, classes[cls]))
     return edges
 
 
@@ -282,3 +285,99 @@ def clear_trees(trees: Sequence[Point], keep_out: BaseGeometry, footprints: Sequ
         hit, _ = STRtree(list(footprints)).query(pts, predicate='within')
         keep[np.asarray(hit, dtype=np.int64)] = False
     return [(float(x), float(y)) for x, y in zip(xs[keep], ys[keep], strict=True)]
+
+
+NO_SIDEWALK = ('service', 'busway')  # classes without sidewalks (yards, bus-only links)
+CENTRE_LINE_MIN_WIDTH = 5.5  # m: narrower two-way streets have no centre line (French practice)
+CROSSING_CLASSES = ('primary', 'secondary')
+CROSSING_DEPTH = 2.5  # m along the road (zebra stripes of French crossings: 0.5 m wide, 0.5 m apart)
+STRIPE, STRIPE_GAP = 0.5, 0.5
+
+
+def sidewalk_zone(edges: Sequence[RoadEdge], surface: BaseGeometry) -> BaseGeometry:
+    """SIDEWALK-wide strips beside the carriageway of the streets that have sidewalks."""
+    shapes = [
+        LineString(e.coords).buffer(e.width / 2 + SIDEWALK, quad_segs=4)
+        for e in edges
+        if e.level == 'ground' and e.cls not in NO_SIDEWALK
+    ]
+    return shapely.union_all(shapes).difference(surface)
+
+
+def kerb_lines(surface: BaseGeometry, sidewalks: BaseGeometry) -> list[list[Point]]:
+    """Parts of the carriageway outline that border a sidewalk (where a kerb is drawn)."""
+    edge = surface.boundary.intersection(sidewalks.buffer(0.05))
+    lines = list(edge.geoms) if isinstance(edge, MultiLineString) else [edge]
+    return [
+        [(float(x), float(y)) for x, y in line.coords]
+        for line in lines
+        if isinstance(line, LineString) and line.length > 0.5
+    ]
+
+
+def junction_radii(edges: Sequence[RoadEdge]) -> dict[int, float]:
+    """Nodes joining three ground roads or more, with their junction radius (half the widest road + 1 m)."""
+    widths: defaultdict[int, list[float]] = defaultdict(list)
+    for e in edges:
+        if e.level == 'ground':
+            widths[e.a].append(e.width)
+            widths[e.b].append(e.width)
+    return {n: max(w) / 2 + 1.0 for n, w in widths.items() if len(w) >= 3}
+
+
+def trimmed(e: RoadEdge, radii: dict[int, float], extra: float = 0.0) -> LineString | None:
+    """Centreline without its ends inside junction areas (plus `extra` metres), or None if nothing is left."""
+    line = LineString(e.coords)
+    start = radii.get(e.a, 0.0) + (extra if e.a in radii else 0.0)
+    end = line.length - radii.get(e.b, 0.0) - (extra if e.b in radii else 0.0)
+    if end - start < 1.0:
+        return None
+    piece = substring(line, start, end)
+    return piece if isinstance(piece, LineString) else None
+
+
+def centre_lines(edges: Sequence[RoadEdge], radii: dict[int, float]) -> list[list[Point]]:
+    """Dashed centre lines of two-way streets, stopped before junctions."""
+    out: list[list[Point]] = []
+    for e in edges:
+        if (
+            e.level == 'tunnel'
+            or 'oneway' in e.flags
+            or e.cls in NO_SIDEWALK
+            or e.width < CENTRE_LINE_MIN_WIDTH
+        ):
+            continue
+        line = trimmed(e, radii)
+        if line is not None:
+            out.append([(float(x), float(y)) for x, y in line.coords])
+    return out
+
+
+def crossings(edges: Sequence[RoadEdge], radii: dict[int, float]) -> list[list[Point]]:
+    """Zebra stripes (4-corner polygons) across main roads just outside their junctions."""
+    out: list[list[Point]] = []
+    for e in edges:
+        if e.level != 'ground' or e.cls not in CROSSING_CLASSES:
+            continue
+        line = LineString(e.coords)
+        for node, at_start in ((e.a, True), (e.b, False)):
+            if node not in radii or line.length < radii[node] + CROSSING_DEPTH + 2:
+                continue
+            s0 = radii[node] + 1.0 if at_start else line.length - radii[node] - 1.0 - CROSSING_DEPTH
+            p0, p1 = line.interpolate(s0), line.interpolate(s0 + CROSSING_DEPTH)
+            dx, dy = p1.x - p0.x, p1.y - p0.y
+            length = math.hypot(dx, dy) or 1.0
+            ux, uy = dx / length, dy / length  # along the road
+            nx, ny = uy, -ux  # across
+            half = e.width / 2 - 0.5
+            offset = -half
+            while offset + STRIPE <= half:
+                corners = [
+                    (offset, 0.0),
+                    (offset + STRIPE, 0.0),
+                    (offset + STRIPE, CROSSING_DEPTH),
+                    (offset, CROSSING_DEPTH),
+                ]
+                out.append([(p0.x + nx * a + ux * b, p0.y + ny * a + uy * b) for a, b in corners])
+                offset += STRIPE + STRIPE_GAP
+    return out

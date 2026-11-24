@@ -196,6 +196,13 @@ function terrainCoarse(hf) {
  * (tools/streets.py), so they are coplanar with the ground; the lift only avoids depth fighting.
  */
 const ROAD_LIFT = 0.05;
+/** Sidewalk height above the road (m): a low kerb, readable at the HD-2D resolution. */
+const KERB_HEIGHT = 0.15;
+/** Road markings: lift above the road, line width, dash and gap of centre lines (m). */
+const MARK_LIFT = ROAD_LIFT + 0.02;
+const MARK_WIDTH = 0.25;
+const DASH = 3,
+  GAP = 5;
 
 /** asphalt texture, mapped in world metres (4 m per repeat) */
 function asphaltTexture() {
@@ -218,16 +225,31 @@ function asphaltTexture() {
  * @param {Ground} ground @param {Map<string, TileData>} tiles
  */
 function roadSurface(ground, tiles) {
+  return piecesMesh(ground, tiles, (tile) => tile.road, ROAD_LIFT, asphaltTexture(), 1);
+}
+
+/**
+ * Raised sidewalks beside the carriageway of the streets that have them.
+ * @param {Ground} ground @param {Map<string, TileData>} tiles
+ */
+function sidewalks(ground, tiles) {
+  return piecesMesh(ground, tiles, (tile) => tile.sidewalks, KERB_HEIGHT, pavingTexture(), 2);
+}
+
+/**
+ * One mesh from polygon pieces (cut along the ground triangles, so coplanar with the ground), lifted by `lift`.
+ * @param {Ground} ground @param {Map<string, TileData>} tiles
+ * @param {(tile: TileData) => number[][][]} select @param {number} lift @param {THREE.Texture} map
+ * @param {number} order render order and polygon offset strength
+ */
+function piecesMesh(ground, tiles, select, lift, map, order) {
   /** @type {number[]} */
   const P = [],
     U = [],
     I = [];
-  const ix = ground.index;
   for (const [key, tile] of tiles) {
-    const [ti, tj] = key.split('_').map(Number);
-    const ox = ix.x0 + ti * ix.size,
-      oy = ix.y0 + tj * ix.size;
-    for (const rings of tile.road) {
+    const [ox, oy] = tileOrigin(ground, key);
+    for (const rings of select(tile)) {
       const vec = rings.map((ring) => {
         const out = [];
         for (let k = 0; k + 1 < ring.length; k += 2)
@@ -237,7 +259,7 @@ function roadSurface(ground, tiles) {
       const [contour, ...holes] = vec;
       const base = P.length / 3;
       for (const v of vec.flat()) {
-        P.push(v.x, ground.h(v.x, v.y) + ROAD_LIFT, -v.y);
+        P.push(v.x, ground.h(v.x, v.y) + lift, -v.y);
         U.push(v.x / 4, v.y / 4);
       }
       for (const tri of THREE.ShapeUtils.triangulateShape(contour, holes))
@@ -250,15 +272,138 @@ function roadSurface(ground, tiles) {
   geo.setIndex(I);
   geo.computeVertexNormals();
   const mat = new THREE.MeshLambertMaterial({
-    map: asphaltTexture(),
+    map,
     side: THREE.DoubleSide, // ring orientation from shapely is not guaranteed
     polygonOffset: true,
     polygonOffsetFactor: -2,
-    polygonOffsetUnits: -4,
+    polygonOffsetUnits: -4 * order,
   });
   const m = new THREE.Mesh(geo, mat);
   m.receiveShadow = true;
-  m.renderOrder = 1;
+  m.renderOrder = order;
+  return m;
+}
+
+/** @param {Ground} ground @param {string} key "i_j" @returns {[number, number]} tile origin (m) */
+function tileOrigin(ground, key) {
+  const [ti, tj] = key.split('_').map(Number);
+  return [ground.index.x0 + ti * ground.index.size, ground.index.y0 + tj * ground.index.size];
+}
+
+/** grey paving slabs, mapped in world metres (4 m per repeat) */
+function pavingTexture() {
+  const { c, g } = canvas(32, 32);
+  const r = rng(13);
+  for (let y = 0; y < 32; y++)
+    for (let x = 0; x < 32; x++) {
+      let v = 172 + (r() - 0.5) * 10;
+      if (x % 8 === 0 || y % 8 === 0) v -= 16; // 1 m slabs
+      g.fillStyle = `rgb(${v},${v - 3},${v - 8})`;
+      g.fillRect(x, y, 1, 1);
+    }
+  const t = NEAREST(new THREE.CanvasTexture(c));
+  t.wrapS = t.wrapT = THREE.RepeatWrapping;
+  return t;
+}
+
+/**
+ * Kerb faces (from the road up to the sidewalk) and white markings: dashed centre lines and zebra crossings.
+ * @param {Ground} ground @param {Map<string, TileData>} tiles
+ */
+function streetDetails(ground, tiles) {
+  /** @type {number[]} */
+  const P = [];
+  /** @type {number[]} */
+  const C = [];
+  const kerb = new THREE.Color('#c9c5bb'),
+    paint = new THREE.Color('#f1efe6');
+  /** @param {number[][]} q four corners [x, z, -y] @param {THREE.Color} col */
+  const quad = (q, col) => {
+    P.push(...q[0], ...q[1], ...q[2], ...q[0], ...q[2], ...q[3]);
+    for (let k = 0; k < 6; k++) C.push(col.r, col.g, col.b);
+  };
+  /** @param {number} x @param {number} y @param {number} lift */
+  const at = (x, y, lift) => [x, ground.h(x, y) + lift, -y];
+  /** flat strip of half-width w from (x0, y0) to (x1, y1) @param {number[]} seg */
+  const strip = ([x0, y0, x1, y1], w = MARK_WIDTH / 2) => {
+    const L = Math.hypot(x1 - x0, y1 - y0) || 1,
+      nx = ((y1 - y0) / L) * w,
+      ny = (-(x1 - x0) / L) * w;
+    quad(
+      [
+        at(x0 - nx, y0 - ny, MARK_LIFT),
+        at(x0 + nx, y0 + ny, MARK_LIFT),
+        at(x1 + nx, y1 + ny, MARK_LIFT),
+        at(x1 - nx, y1 - ny, MARK_LIFT),
+      ],
+      paint,
+    );
+  };
+  for (const [key, tile] of tiles) {
+    const [ox, oy] = tileOrigin(ground, key);
+    /** @param {number[]} flat @returns {number[][]} */
+    const pts = (flat) => {
+      const out = [];
+      for (let k = 0; k + 1 < flat.length; k += 2) out.push([ox + flat[k] / 10, oy + flat[k + 1] / 10]);
+      return out;
+    };
+    for (const line of tile.kerbs) {
+      const p = pts(line);
+      for (let k = 0; k + 1 < p.length; k++) {
+        const [x0, y0] = p[k],
+          [x1, y1] = p[k + 1];
+        quad(
+          [at(x0, y0, ROAD_LIFT), at(x1, y1, ROAD_LIFT), at(x1, y1, KERB_HEIGHT), at(x0, y0, KERB_HEIGHT)],
+          kerb,
+        );
+      }
+    }
+    for (const line of tile.centre_lines) {
+      // dashes of DASH metres every DASH + GAP metres, continued across the points of the line
+      const p = pts(line);
+      let phase = 0;
+      for (let k = 0; k + 1 < p.length; k++) {
+        const [x0, y0] = p[k],
+          [x1, y1] = p[k + 1];
+        const L = Math.hypot(x1 - x0, y1 - y0);
+        for (let s = -phase; s < L; s += DASH + GAP) {
+          const a = Math.max(0, s),
+            b = Math.min(L, s + DASH);
+          if (b > a)
+            strip([
+              x0 + ((x1 - x0) * a) / L,
+              y0 + ((y1 - y0) * a) / L,
+              x0 + ((x1 - x0) * b) / L,
+              y0 + ((y1 - y0) * b) / L,
+            ]);
+        }
+        phase = (phase + L) % (DASH + GAP);
+      }
+    }
+    for (const stripe of tile.crossings) {
+      const p = pts(stripe);
+      quad(
+        p.map(([x, y]) => at(x, y, MARK_LIFT)),
+        paint,
+      );
+    }
+  }
+  const geo = new THREE.BufferGeometry();
+  geo.setAttribute('position', new THREE.Float32BufferAttribute(P, 3));
+  geo.setAttribute('color', new THREE.Float32BufferAttribute(C, 3));
+  geo.computeVertexNormals();
+  const m = new THREE.Mesh(
+    geo,
+    new THREE.MeshLambertMaterial({
+      vertexColors: true,
+      side: THREE.DoubleSide,
+      polygonOffset: true,
+      polygonOffsetFactor: -2,
+      polygonOffsetUnits: -12,
+    }),
+  );
+  m.receiveShadow = true;
+  m.renderOrder = 3;
   return m;
 }
 
@@ -765,6 +910,8 @@ export function buildWorld(scene, hf, data, track) {
   scene.add(terrainCoarse(hf.natural));
   scene.add(terrainTiles(hf, data.tiles, data.map));
   scene.add(roadSurface(hf, data.tiles));
+  scene.add(sidewalks(hf, data.tiles));
+  scene.add(streetDetails(hf, data.tiles));
   scene.add(bridges(hf));
   const route = routeStrip(hf, track);
   scene.add(route);

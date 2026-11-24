@@ -1,14 +1,18 @@
-"""Builds data/grenoble/tiles/: 1 km tiles of ground shaped by the roads, carriageway outlines and bridges.
+"""Builds data/grenoble/tiles/: 500 m tiles of ground shaped by the roads, carriageway outlines and bridges.
 
 Usage:  uv run python tools/build_streets.py      (after build_terrain.py and build_roads.py)
 Geometry: see tools/streets.py and ADR 0003. All coordinates in decimetres.
 
-  tiles/index.json  { "x0", "y0", "size": 1000, "step": 10, "nx", "ny" }        tile (i, j) covers
+  tiles/index.json  { "x0", "y0", "size": 500, "step": 10, "nx", "ny" }        tile (i, j) covers
                     [x0 + i size, x0 + (i+1) size] x [y0 + j size, y0 + (j+1) size]
   tiles/t_i_j.json  { "ground": [z, ...]          (n x n heights, row by row from south, n = size/step + 1),
                       "road": [[ring, hole, ...], ...]   (carriageway cut along the ground triangles;
                                                          rings [x, y, ...] relative to the tile origin),
                       "bridges": [[width, x, y, z, x, y, z, ...], ...] (x, y relative to the tile origin),
+                      "sidewalks": [[ring, ...], ...]   (like "road"),
+                      "kerbs": [[x, y, ...], ...]   (carriageway outline along sidewalks),
+                      "centre_lines": [[x, y, ...], ...]   (dashed, stopped before junctions),
+                      "crossings": [[x, y, x, y, x, y, x, y], ...]   (zebra stripes),
                       "buildings": [[height, kind, x, y, ...], ...]   (clipped off the carriageway, CCW),
                       "trees": [x, y, ...]   (OSM and seeded, off roads and buildings) }
 """
@@ -34,20 +38,25 @@ from streets import (
     RoadHeights,
     TerrainGrid,
     carriageway,
+    centre_lines,
     clear_trees,
     clip_building,
+    crossings,
+    junction_radii,
     keep_out_zone,
+    kerb_lines,
     load_edges,
     road_pieces,
     road_profiles,
     sample_positions,
     seeded_trees,
     shaped_ground,
+    sidewalk_zone,
 )
 
 DATA = os.path.join(ROOT, 'data', 'grenoble')
 OUT = os.path.join(DATA, 'tiles')
-TILE = 1000  # m
+TILE = 500  # m (keeps every tile file under the 1 MB pre-commit limit)
 STEP = 10  # m between ground heights
 TREE_SEED = 5
 
@@ -83,6 +92,22 @@ type TileKey = tuple[int, int]
 
 def tile_of(x: float, y: float, bx0: float, by0: float) -> TileKey:
     return int((x - bx0) // TILE), int((y - by0) // TILE)
+
+
+def flat_dm(coords: list[Point], ox: float, oy: float) -> list[int]:
+    return [v for x, y in coords for v in (dm(x - ox), dm(y - oy))]
+
+
+def group_by_tile(
+    shapes: list[tuple[list[Point], bool]], bx0: float, by0: float
+) -> dict[TileKey, list[list[Point]]]:
+    """Shapes grouped by the tile of their first point (lines) or of their centre (polygons)."""
+    out: defaultdict[TileKey, list[list[Point]]] = defaultdict(list)
+    for coords, is_polygon in shapes:
+        x = sum(p[0] for p in coords) / len(coords) if is_polygon else coords[0][0]
+        y = sum(p[1] for p in coords) / len(coords) if is_polygon else coords[0][1]
+        out[tile_of(x, y, bx0, by0)].append(coords)
+    return out
 
 
 def buildings_and_trees(
@@ -125,6 +150,12 @@ def main() -> None:
     surface = carriageway(edges)
     heights = RoadHeights(edges, profiles)
     bridges = [(e, p) for e, p in zip(edges, profiles, strict=True) if e.level == 'bridge']
+    print('trottoirs et marquage...')
+    sidewalks = sidewalk_zone(edges, surface)
+    radii = junction_radii(edges)
+    marks = group_by_tile([(line, False) for line in centre_lines(edges, radii)], bx0, by0)
+    zebras = group_by_tile([(poly, True) for poly in crossings(edges, radii)], bx0, by0)
+    kerbs = group_by_tile([(line, False) for line in kerb_lines(surface, sidewalks)], bx0, by0)
     print('batiments et arbres...')
     by_tile_buildings, by_tile_trees = buildings_and_trees(
         read_json(os.path.join(DATA, 'buildings.json')), map_data['polys'], surface, bx0, by0
@@ -147,6 +178,10 @@ def main() -> None:
                 ground = terrain.heights(xs, ys)
             road = local if isinstance(local, Polygon | MultiPolygon) else Polygon()
             pieces = road_pieces(road, ox, oy, n, STEP)
+            walk = clip(sidewalks, box(ox, oy, ox + TILE, oy + TILE))
+            walk_pieces = (
+                road_pieces(walk, ox, oy, n, STEP) if isinstance(walk, Polygon | MultiPolygon) else []
+            )
             tile_bridges = [
                 bridge_record(e, p, ox, oy)
                 for e, p in bridges
@@ -159,6 +194,10 @@ def main() -> None:
                     'ground': [dm(float(z)) for z in ground],
                     'road': rings_of(MultiPolygon(pieces), ox, oy) if pieces else [],
                     'bridges': tile_bridges,
+                    'sidewalks': rings_of(MultiPolygon(walk_pieces), ox, oy) if walk_pieces else [],
+                    'kerbs': [flat_dm(line, ox, oy) for line in kerbs.get((i, j), [])],
+                    'centre_lines': [flat_dm(line, ox, oy) for line in marks.get((i, j), [])],
+                    'crossings': [flat_dm(poly, ox, oy) for poly in zebras.get((i, j), [])],
                     'buildings': [
                         [h, kind, *(v for x, y in ring for v in (dm(x - ox), dm(y - oy)))]
                         for h, kind, ring in by_tile_buildings.get((i, j), [])
