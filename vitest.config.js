@@ -18,6 +18,7 @@ export default defineConfig({
         'src/world/track.js',
         'src/hd2d/heightfield.js',
         'src/hd2d/drive.js',
+        'src/hd2d/orbit.js',
       ],
       thresholds: { lines: 80, functions: 80, branches: 80, statements: 80 },
     },
