@@ -1,0 +1,19 @@
+Page d’accueil avec sélection 
+    * du type de bus (accordéon, normal)
+    * le l’horaire
+    * du sens de parcours
+    * vacances scolaires, semaine, samedi, dimanche et jours fériés
+
+Gestion jour/nuit
+Vue cabine
+Vue passager
+Rétroviseur pour voir les passagers entrer et sortir
+Bouton pour les portes
+Cockpit avec affichage :
+    Signalisation arrêt demandé
+    horaires à respecter (heure d’arrivée au prochain arrêt)ç
+    Nom du prochain arrêt
+    Annonce sonores avec nom du prochain arrêt
+Panneau d’information voyageur avec représentation linéaire du trajet (précédente station, prochaine station, station suivante)
+Abris bus
+

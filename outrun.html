@@ -1,0 +1,32 @@
+<!doctype html>
+<html lang="fr">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Bus 17 · OutRun</title>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Press+Start+2P&display=swap">
+<link rel="stylesheet" href="src/style.css">
+</head>
+<body>
+<div id="wrap">
+  <canvas id="game" width="960" height="540"></canvas>
+
+  <div id="map" class="small" hidden>
+    <canvas id="mapc"></canvas>
+    <div class="mapbtns">
+      <button data-act="in" title="Zoomer (+)">+</button>
+      <button data-act="out" title="Dézoomer (-)">−</button>
+      <button data-act="follow" title="Recentrer sur le bus">⌖</button>
+      <button data-act="size" title="Agrandir / réduire (M)">⤢</button>
+    </div>
+    <div class="attrib">© OpenStreetMap</div>
+  </div>
+
+  <div id="start">
+    <h1>BUS <span>17</span></h1>
+    <p id="loading">Chargement des données…</p>
+  </div>
+</div>
+<script type="module" src="src/outrun_main.js"></script>
+</body>
+</html>

@@ -1,0 +1,73 @@
+/* Prototype HD-2D : image plein ecran, interface facon SAE (pupitre du chauffeur), inspiree du prototype v2. */
+:root {
+  --bg: #1b1f24; --panel: rgba(21, 24, 28, .86); --line: #343b45; --txt: #e8edf2; --muted: #a8b3bf;
+  --green: #33a457; --yellow: #ffcc33; --sae: rgba(11, 26, 18, .92); --saeTxt: #7dffa8;
+  color-scheme: dark;
+}
+* { box-sizing: border-box; }
+html, body { margin: 0; height: 100%; overflow: hidden; background: #000; color: var(--txt);
+  font-family: Inter, system-ui, -apple-system, "Segoe UI", Roboto, sans-serif; user-select: none; }
+#view { position: fixed; inset: 0; width: 100%; height: 100%; display: block; image-rendering: pixelated; }
+.badge { width: 44px; height: 44px; border-radius: 10px; background: var(--green); color: #fff; font-weight: 800; font-size: 22px;
+  display: flex; align-items: center; justify-content: center; flex-shrink: 0; }
+
+/* bandeau synoptique */
+#syn { position: fixed; left: 0; right: 0; top: 0; height: 64px; background: var(--panel); border-bottom: 2px solid #2a3038;
+  display: flex; align-items: center; gap: 18px; padding: 0 20px; }
+#track { flex: 1; position: relative; height: 40px; min-width: 0; }
+#track .rail { position: absolute; left: 0; right: 0; top: 17px; height: 6px; background: #3a414b; border-radius: 3px; }
+#track .done { position: absolute; left: 0; top: 17px; height: 6px; background: var(--green); border-radius: 3px; width: 0; }
+#track .st { position: absolute; top: 12px; width: 16px; height: 16px; margin-left: -8px; border-radius: 50%; border: 4px solid #6b7480; background: #111418; }
+#track .st.ok { border-color: var(--green); background: var(--green); }
+#track .st.miss { border-color: #c0392b; }
+#track .st.nx { border-color: var(--yellow); background: var(--yellow); }
+#track .bus { position: absolute; top: 6px; width: 14px; height: 28px; margin-left: -7px; border-radius: 4px; background: #fff; border: 3px solid var(--green); }
+#clock { text-align: right; flex-shrink: 0; font-variant-numeric: tabular-nums; }
+#clock .t { font-size: 24px; font-family: "Share Tech Mono", ui-monospace, Consolas, monospace; }
+#clock .d { font-size: 12px; color: var(--muted); }
+
+/* pupitre SAE */
+#sae { position: fixed; left: 16px; top: 80px; width: min(420px, 44vw); background: var(--sae); border: 3px solid var(--line); border-radius: 14px;
+  padding: 8px 14px; color: var(--saeTxt); font-family: "Share Tech Mono", ui-monospace, Consolas, monospace; }
+#sae .row { display: flex; justify-content: space-between; gap: 12px; font-size: 14px; color: #7aa88a; }
+#sae .stop { font-size: 26px; color: #fff; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; margin: 2px 0; }
+#sae .late { color: #ff8a6a; } #sae .early { color: var(--yellow); }
+
+#speed { position: fixed; left: 16px; bottom: 44px; width: 190px; background: var(--panel); border: 2px solid var(--line); border-radius: 14px;
+  padding: 8px 14px; display: grid; grid-template-columns: auto 1fr; align-items: baseline; column-gap: 8px; }
+#speed .v { font-size: 44px; font-weight: 800; font-variant-numeric: tabular-nums; line-height: 1; }
+#speed .u { color: var(--muted); }
+#speed .alt { grid-column: 1 / -1; display: flex; justify-content: space-between; color: var(--muted); font-size: 13px; margin-top: 4px; }
+
+#offroute { position: fixed; left: 50%; top: 84px; transform: translateX(-50%); background: #c42b2b; color: #fff; font-weight: 800;
+  padding: 10px 18px; border-radius: 10px; font-size: 16px; box-shadow: 0 4px 0 rgba(0,0,0,.4); }
+#offroute[hidden] { display: none; }
+#toasts { position: fixed; left: 50%; top: 38%; transform: translateX(-50%); display: flex; flex-direction: column; align-items: center; gap: 6px; pointer-events: none; }
+.toast { padding: 8px 16px; border-radius: 10px; font-weight: 800; font-size: 18px; animation: tf 2.8s forwards; white-space: nowrap; }
+.toast.good { background: #1d7a3a; color: #fff; } .toast.bad { background: #c42b2b; color: #fff; } .toast.info { background: #1b1f24; color: #fff; }
+@keyframes tf { 0% { opacity: 0; transform: translateY(10px); } 10% { opacity: 1; transform: none; } 80% { opacity: 1; } 100% { opacity: 0; transform: translateY(-14px); } }
+
+#keys { position: fixed; left: 0; right: 0; bottom: 0; height: 30px; background: rgba(21,24,28,.8); display: flex; align-items: center; justify-content: center;
+  font-size: 12px; color: var(--muted); white-space: nowrap; overflow: hidden; gap: 4px; }
+#keys b { color: #fff; }
+
+/* mini-carte (composant partage avec le prototype OutRun) */
+#map { position: fixed; border: 3px solid #0f1215; border-radius: 12px; background: #e9e4d6; overflow: hidden; box-shadow: 0 4px 0 rgba(0,0,0,.35); }
+#map.small { right: 16px; bottom: 44px; width: min(300px, 30vw); height: min(300px, 30vw); }
+#map.large { inset: 80px 6vw 44px 6vw; }
+#map.hidden { display: none; }
+#mapc { display: block; width: 100%; height: 100%; cursor: grab; touch-action: none; }
+#mapc.drag { cursor: grabbing; }
+.mapbtns { position: absolute; top: 6px; right: 6px; display: flex; flex-direction: column; gap: 4px; }
+.mapbtns button { width: 28px; height: 28px; font: 700 15px system-ui, sans-serif; padding: 0; border: 2px solid #222; border-radius: 6px; background: #f4efe2; color: #222; cursor: pointer; }
+.mapbtns button:hover { background: #fff; }
+.mapbtns button.on { background: var(--green); color: #fff; }
+.attrib { position: absolute; left: 4px; bottom: 3px; font-size: 10px; color: #333; background: rgba(255,255,255,.7); padding: 1px 4px; border-radius: 3px; }
+
+#loading, #pause { position: fixed; inset: 0; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 16px;
+  background: var(--bg); font-size: 18px; }
+#pause { background: rgba(10,12,15,.65); font-size: 30px; font-weight: 800; }
+#pause p { margin: 0; }
+#pause button { font: 700 16px inherit; font-family: inherit; border: 2px solid var(--line); background: #15181c; color: var(--txt); border-radius: 12px; padding: 10px 16px; cursor: pointer; min-width: 220px; }
+#pause button:hover { border-color: var(--green); }
+#loading[hidden], #pause[hidden] { display: none; }

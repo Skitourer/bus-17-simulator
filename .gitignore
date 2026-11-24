@@ -1,0 +1,23 @@
+# Python
+__pycache__/
+*.py[cod]
+.venv/
+
+# Downloaded source data (large, rebuilt by tools/*.py)
+tools/cache/
+
+# Temporary files
+*.tmp
+
+# Node
+node_modules/
+
+# Secrets and local settings
+.env
+.claude/settings.local.json
+
+# OS / editors
+.DS_Store
+Thumbs.db
+.vscode/
+.idea/

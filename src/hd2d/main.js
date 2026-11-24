@@ -1,0 +1,307 @@
+// @ts-check
+/**
+ * Prototype HD-2D : Grenoble reelle (relief IGN, bati et arbres OSM) en 3D basse resolution + sprites,
+ * conduite libre, suivi du parcours de la ligne 17, desserte des arrets aux horaires reels.
+ */
+import * as THREE from 'three';
+import { Track } from '../world/track.js';
+import { Minimap } from '../ui/minimap.js';
+import { readParams, ServiceClock, serviceLabel, hms, hm, delta } from '../common/service.js';
+import { Heightfield } from './heightfield.js';
+import { buildWorld } from './world.js';
+import { makeBus, BUS } from './bus3d.js';
+import { Drive } from './drive.js';
+import { Post } from './post.js';
+
+const $ = (id) => /** @type {HTMLElement} */ (document.getElementById(id));
+const P = readParams();
+if (!location.search) location.replace('index.html');
+
+// ------------------------------------------------------------------ rendu
+const canvas = /** @type {HTMLCanvasElement} */ ($('view'));
+const renderer = new THREE.WebGLRenderer({ canvas, antialias: false, powerPreference: 'high-performance' });
+renderer.setPixelRatio(1);
+renderer.shadowMap.enabled = true;
+renderer.shadowMap.type = THREE.PCFShadowMap;
+const post = new Post(renderer, 300);
+const scene = new THREE.Scene();
+const FOG = new THREE.Color('#c9d8e4');
+scene.fog = new THREE.Fog(FOG, 900, 26000);
+scene.background = FOG;
+const camera = new THREE.PerspectiveCamera(32, 16 / 9, 1, 45000);
+
+// ciel en degrade (dome qui suit la camera)
+const sky = new THREE.Mesh(new THREE.SphereGeometry(40000, 24, 12), new THREE.ShaderMaterial({
+  side: THREE.BackSide, depthWrite: false, fog: false,
+  uniforms: { top: { value: new THREE.Color('#3f74bd') }, mid: { value: new THREE.Color('#9cc0e0') }, bot: { value: FOG } },
+  vertexShader: 'varying vec3 vDir; void main(){ vDir = normalize(position); gl_Position = projectionMatrix * modelViewMatrix * vec4(position,1.0); }',
+  fragmentShader: `uniform vec3 top, mid, bot; varying vec3 vDir;
+    void main(){ float h = vDir.y; vec3 c = h < 0.03 ? bot : (h < 0.25 ? mix(bot, mid, (h-0.03)/0.22) : mix(mid, top, min(1.0,(h-0.25)/0.5)));
+    float band = floor(h * 40.0) / 40.0; c = mix(c, c * 0.985, step(0.5, fract(band * 20.0)));
+    gl_FragColor = vec4(c, 1.0); #include <colorspace_fragment> }`,
+}));
+sky.renderOrder = -1;
+scene.add(sky);
+
+// lumieres : soleil d'apres-midi au sud-ouest, ombres autour du bus
+const hemi = new THREE.HemisphereLight('#dfeaff', '#6d6450', 1.6);
+scene.add(hemi);
+const sun = new THREE.DirectionalLight('#fff1d6', 2.4);
+const SUN_AZ = 215 * Math.PI / 180, SUN_EL = 34 * Math.PI / 180;
+const sunDir = new THREE.Vector3(Math.sin(SUN_AZ) * Math.cos(SUN_EL), Math.sin(SUN_EL), -Math.cos(SUN_AZ) * Math.cos(SUN_EL));
+sun.castShadow = true;
+sun.shadow.mapSize.set(2048, 2048);
+Object.assign(sun.shadow.camera, { left: -110, right: 110, top: 110, bottom: -110, near: 10, far: 900 });
+sun.shadow.bias = -0.0006;
+sun.shadow.normalBias = 0.6;
+scene.add(sun, sun.target);
+
+function resize() {
+  const w = innerWidth, h = innerHeight;
+  renderer.setSize(w, h, false);
+  camera.aspect = w / h; camera.updateProjectionMatrix();
+  post.resize(w, h);
+}
+addEventListener('resize', resize);
+resize();
+
+// ------------------------------------------------------------------ etat de jeu
+const keys = { up: false, down: false, left: false, right: false };
+const KEYMAP = { ArrowUp: 'up', KeyW: 'up', ArrowDown: 'down', KeyS: 'down', ArrowLeft: 'left', KeyA: 'left', ArrowRight: 'right', KeyD: 'right' };
+let hf, track, world, bus, minimap, line;
+const drive = new Drive();
+const clock = new ServiceClock(P.dep);
+let bumps = 0, progress = 0, offT = 0, next = 0, doors = 0, paused = false, running = false;
+const CAMS = [
+  { name: 'HD-2D', dist: 52, pitch: 0.36, fov: 30, ahead: 16 },
+  { name: 'Poursuite', dist: 20, pitch: 0.24, fov: 48, ahead: 10 },
+  { name: 'Vue du ciel', dist: 140, pitch: 1.15, fov: 30, ahead: 0 },
+];
+let camMode = +(new URLSearchParams(location.search).get('cam') || 0) % 3, zoom = 1, camYaw = 0;
+
+function toast(text, kind = 'info') {
+  const d = document.createElement('div');
+  d.className = 'toast ' + kind; d.textContent = text;
+  $('toasts').appendChild(d);
+  setTimeout(() => d.remove(), 2800);
+}
+
+/** abscisse du point du trace le plus proche (recherche locale autour de `hint`, ou globale) */
+function nearest(x, y, hint, win) {
+  const st = track.step;
+  const i0 = win ? Math.max(0, Math.floor((hint - win) / st)) : 0;
+  const i1 = win ? Math.min(track.n - 1, Math.ceil((hint + win) / st)) : track.n - 1;
+  let best = 1e18, bi = i0;
+  for (let i = i0; i <= i1; i++) {
+    const d = (track.x[i] - x) ** 2 + (track.y[i] - y) ** 2;
+    if (d < best) { best = d; bi = i; }
+  }
+  return { s: bi * st, d: Math.sqrt(best) };
+}
+
+function placeOnRoute(s) {
+  const p = track.pos(s, 1.8);
+  drive.place(p.x, p.y, p.h);
+  progress = s + BUS.REAR;
+  camYaw = p.h;
+}
+
+// ------------------------------------------------------------------ chargement
+async function load() {
+  const get = (f) => fetch('data/grenoble/' + f).then(r => { if (!r.ok) throw new Error(f); return r.json(); });
+  const [l, map, terrain, buildings] = await Promise.all([get('17.json'), get('map.json').catch(() => null), get('terrain.json'), get('buildings.json').catch(() => null)]);
+  line = l;
+  hf = new Heightfield(terrain);
+  track = new Track(line.directions[P.dir], line.step);
+  track.stops.forEach(s => { s.served = false; s.missed = false; });
+  $('loadMsg').textContent = 'Construction des rues et des immeubles…';
+  await new Promise(r => setTimeout(r, 30));
+  world = buildWorld(scene, hf, { map, buildings }, track);
+  bus = makeBus();
+  scene.add(bus.group);
+  minimap = new Minimap($('map'), map, line);
+  minimap.setTrack(track);
+  if (P.map) minimap.zoomBy(P.map);
+  buildSynoptic();
+  $('svc').textContent = `${serviceLabel(P.day, line.calendar)} · départ ${P.dep}`;
+  placeOnRoute(P.s !== null ? P.s : Math.max(0, track.stops[0].s - 4));
+  // arrets deja derriere le point de depart (mode test)
+  while (next < track.stops.length && track.stops[next].s < progress - 5) { track.stops[next].missed = true; next++; }
+  // mode test : ?auto&ff=40 -> simule 40 s d'un coup (pilote automatique)
+  const ff = +(new URLSearchParams(location.search).get('ff') || 0);
+  for (let i = 0; i < ff * 60; i++) update(STEP);
+  document.body.dataset.progress = progress.toFixed(1) + ' / off ' + offT.toFixed(1) + ' / v ' + drive.v.toFixed(2) + ' / next ' + next + ' / bumps ' + bumps + ' / lat ' + nearest(drive.center.x, drive.center.y, progress, 60).d.toFixed(1);
+  $('loading').hidden = true;
+  running = true;
+  toast(`Service de ${P.dep} vers ${track.stops[track.stops.length - 1].name}`, 'info');
+}
+
+function buildSynoptic() {
+  const box = $('trStops');
+  box.innerHTML = '';
+  track.stops.forEach((st, i) => {
+    const d = document.createElement('div');
+    d.className = 'st'; d.id = 'st' + i; d.title = st.name;
+    d.style.left = (st.s / track.length * 100) + '%';
+    box.appendChild(d);
+  });
+}
+
+// ------------------------------------------------------------------ simulation
+function update(dt) {
+  clock.tick(dt);
+  let inp = keys;
+  if (P.auto) inp = autopilot();
+  if (doors > 0) {
+    doors -= dt;
+    inp = { up: false, down: true, left: false, right: false };
+    if (doors <= 0) toast(next < track.stops.length ? 'Prochain arrêt : ' + track.stops[next].name : 'Terminus ! Fin du service.', next < track.stops.length ? 'info' : 'good');
+  }
+  const ev = drive.update(inp, dt, hf, world.index);
+  if (drive.bump === 0) bumps++;
+  if (ev) toast(ev, 'bad');
+
+  // suivi du parcours
+  const c = drive.center;
+  let n = nearest(c.x, c.y, progress, 60);
+  if (n.d > 25) { const g = nearest(c.x, c.y, 0, 0); if (g.d < n.d) n = g; }
+  progress = n.s;
+  offT = n.d > 18 ? offT + dt : 0;
+  $('offroute').hidden = offT < 0.8;
+
+  // desserte : porte avant (avant droit du bus) a hauteur de l'arret, bus a l'arret
+  const st = track.stops[next];
+  if (st && doors <= 0) {
+    const door = drive.point(BUS.L - BUS.REAR - 0.9, BUS.W / 2);
+    const dd = Math.hypot(door.x - st.x, door.y - st.y);
+    if (dd < 6 && Math.abs(drive.v) < 0.3) {
+      st.served = true; next++; doors = 3;
+      const late = clock.t - clock.sched(st);
+      toast(st.name + (Math.abs(late) < 60 ? ' · à l\'heure !' : ` · ${delta(late)}`), 'good');
+    } else if (progress > st.s + 25 && n.d < 25) {
+      st.missed = true; next++;
+      toast('Arrêt manqué : ' + st.name, 'bad');
+    }
+  }
+}
+
+/** pilote de test (?auto) : suit le trace dans la voie de droite */
+function autopilot() {
+  const look = track.pos(progress + 14, 1.8);
+  const c = drive.point(BUS.WB, 0);
+  const want = Math.atan2(look.y - c.y, look.x - c.x);
+  let err = want - drive.h;
+  while (err > Math.PI) err -= 2 * Math.PI;
+  while (err < -Math.PI) err += 2 * Math.PI;
+  return { up: drive.v < 8, down: false, left: err > 0.03, right: err < -0.03 };
+}
+
+// ------------------------------------------------------------------ rendu
+const tmpV = new THREE.Vector3();
+function render(dt) {
+  // bus : position, cap, assiette selon le relief
+  const g = bus.group, c = drive.center;
+  const z = hf.h(c.x, c.y);
+  g.position.set(drive.x, hf.h(drive.x, drive.y), -drive.y);
+  g.rotation.set(0, drive.h, 0);
+  const fr = drive.point(BUS.L - BUS.REAR, 0), rr = drive.point(-BUS.REAR, 0);
+  const pitch = Math.atan2(hf.h(fr.x, fr.y) - hf.h(rr.x, rr.y), BUS.L);
+  const lt = drive.point(BUS.WB / 2, -1.2), rt = drive.point(BUS.WB / 2, 1.2);
+  const roll = Math.atan2(hf.h(lt.x, lt.y) - hf.h(rt.x, rt.y), 2.4) + drive.v * drive.v * Math.tan(drive.delta) / BUS.WB * 0.012;
+  bus.body.rotation.set(roll, 0, pitch);
+  bus.group.position.y = hf.h(drive.x, drive.y) + Math.sin(pitch) * 0;
+  bus.setBrake(drive.braking || doors > 0);
+  for (const w of bus.wheels) w.rotation.z -= drive.v * dt / 0.5;
+
+  // camera
+  const m = CAMS[camMode];
+  let dy = drive.h - camYaw;
+  while (dy > Math.PI) dy -= 2 * Math.PI;
+  while (dy < -Math.PI) dy += 2 * Math.PI;
+  camYaw += dy * (1 - Math.exp(-dt / (camMode === 2 ? 1.2 : 0.45)));
+  const D = m.dist * zoom;
+  const tx = c.x + Math.cos(drive.h) * m.ahead, ty = c.y + Math.sin(drive.h) * m.ahead;
+  const tz = hf.h(tx, ty) + 2;
+  const cx = tx - Math.cos(camYaw) * Math.cos(m.pitch) * D, cy = ty - Math.sin(camYaw) * Math.cos(m.pitch) * D;
+  const cz = Math.max(tz + Math.sin(m.pitch) * D, hf.h(cx, cy) + 3);
+  camera.position.set(cx, cz, -cy);
+  camera.lookAt(tx, tz, -ty);
+  if (camera.fov !== m.fov) { camera.fov = m.fov; camera.updateProjectionMatrix(); }
+  sky.position.copy(camera.position);
+
+  // soleil et ombres centres sur le bus
+  sun.target.position.set(c.x, z, -c.y);
+  sun.position.copy(tmpV.copy(sunDir).multiplyScalar(400).add(sun.target.position));
+  post.mat.uniforms.focus.value = camMode === 1 ? 0.55 : 0.5;
+  post.mat.uniforms.blur.value = camMode === 1 ? 1.2 : 2.4;
+  post.render(scene, camera);
+
+  hud();
+  minimap.draw({ x: c.x, y: c.y, h: drive.h }, next);
+}
+
+let lastHud = 0;
+function hud() {
+  const now = performance.now();
+  if (now - lastHud < 100) return;
+  lastHud = now;
+  $('clk').textContent = hms(clock.t);
+  $('spd').textContent = String(Math.round(Math.abs(drive.v) * 3.6));
+  const c = drive.center;
+  $('alt').textContent = Math.round(hf.h(c.x, c.y)) + ' m';
+  const sl = hf.slope(c.x, c.y, drive.h, 10) * 100;
+  $('slope').textContent = (sl > 0 ? '+' : '') + sl.toFixed(1) + ' %';
+  const st = track.stops[next];
+  if (st) {
+    $('saeStop').textContent = st.name;
+    const d = Math.max(0, st.s - progress - (BUS.L - BUS.REAR));
+    $('saeDist').textContent = d > 1000 ? (d / 1000).toFixed(1) + ' km' : Math.round(d / 10) * 10 + ' m';
+    $('saeSched').textContent = 'prévu ' + hm(clock.sched(st));
+    const late = clock.t - clock.sched(st);
+    const e = $('saeDelta');
+    e.textContent = late > 30 ? 'retard ' + delta(late) : late < -30 ? 'avance ' + delta(late) : 'à l\'heure';
+    e.className = late > 60 ? 'late' : late < -60 ? 'early' : '';
+  } else {
+    $('saeStop').textContent = 'Terminus';
+    $('saeDist').textContent = ''; $('saeSched').textContent = ''; $('saeDelta').textContent = '';
+  }
+  $('trDone').style.width = (progress / track.length * 100) + '%';
+  $('trBus').style.left = (progress / track.length * 100) + '%';
+  track.stops.forEach((s, i) => { const el = $('st' + i); el.className = 'st' + (s.served ? ' ok' : s.missed ? ' miss' : i === next ? ' nx' : ''); });
+}
+
+// ------------------------------------------------------------------ boucle
+let last = performance.now(), acc = 0;
+const STEP = 1 / 60;
+function frame(t) {
+  requestAnimationFrame(frame);
+  const el = Math.min(0.1, (t - last) / 1000); last = t;
+  if (!running) return;
+  if (!paused) {
+    acc += el;
+    while (acc >= STEP) { update(STEP); acc -= STEP; }
+  }
+  render(el);
+}
+requestAnimationFrame(frame);
+
+function setPause(p) { paused = p; $('pause').hidden = !p; }
+addEventListener('keydown', (e) => {
+  const k = KEYMAP[e.code];
+  if (k) { keys[k] = true; e.preventDefault(); }
+  if (!running) return;
+  if (e.code === 'KeyM') minimap.cycleSize();
+  if (e.code === 'KeyP') setPause(!paused);
+  if (e.code === 'Escape') { if (paused) location.href = 'index.html'; else setPause(true); }
+  if (e.code === 'KeyC') { camMode = (camMode + 1) % CAMS.length; zoom = 1; toast('Caméra : ' + CAMS[camMode].name); }
+  if (e.code === 'KeyG') { world.route.visible = !world.route.visible; toast(world.route.visible ? 'Guidage affiché' : 'Guidage masqué'); }
+  if (e.code === 'KeyR') { placeOnRoute(progress - BUS.REAR); toast('Bus replacé sur le parcours'); }
+});
+addEventListener('keyup', (e) => { const k = KEYMAP[e.code]; if (k) keys[k] = false; });
+addEventListener('blur', () => { for (const k in keys) keys[k] = false; });
+canvas.addEventListener('wheel', (e) => { e.preventDefault(); zoom = Math.max(0.35, Math.min(3, zoom * Math.exp(e.deltaY * 0.001))); }, { passive: false });
+$('resume').onclick = () => setPause(false);
+$('quit').onclick = () => { location.href = 'index.html'; };
+window.addEventListener('error', (e) => { document.body.dataset.error = String(e.message); });
+
+load().catch((e) => { $('loadMsg').textContent = 'Erreur de chargement : ' + e.message; document.body.dataset.error = String(e.message); });
