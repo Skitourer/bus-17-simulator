@@ -96,6 +96,16 @@
  */
 
 /**
+ * Road graph written by tools/build_roads.py (ADR 0002); coordinates in decimetres.
+ * @typedef {object} RoadsData
+ * @property {string} attribution
+ * @property {string[]} classes class index -> name
+ * @property {string[]} flags bit i of an edge flag mask -> name
+ * @property {number[]} nodes flat [x, y, ...] per graph node
+ * @property {number[][]} edges [a, b, class, width_dm, layer, flag_mask, x, y, x, y, ...]
+ */
+
+/**
  * @typedef {object} DriveInput
  * @property {boolean} up
  * @property {boolean} down

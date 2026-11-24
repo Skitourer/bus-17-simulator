@@ -4,7 +4,9 @@ version = "0.1.0"
 description = "Scripts that build the game data (route, map, terrain, buildings) from GTFS, OSM and IGN."
 license = "MIT"
 requires-python = ">=3.13"
-dependencies = []
+dependencies = [
+    "shapely==2.2.0",
+]
 
 [dependency-groups]
 dev = [
@@ -45,7 +47,7 @@ extraPaths = ["tools"]
 [tool.pytest.ini_options]
 testpaths = ["tests/python"]
 pythonpath = ["tools"]
-addopts = "--cov=geo --cov-report=term-missing --cov-fail-under=80"
+addopts = "--cov=geo --cov=roads --cov-report=term-missing --cov-fail-under=80"
 
 [tool.poe.tasks]
 format = "ruff format"
