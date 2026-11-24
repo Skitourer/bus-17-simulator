@@ -64,3 +64,8 @@ def intersections(geoms: GeometryArray, geom: BaseGeometry) -> list[BaseGeometry
 def clip(geom: BaseGeometry, area: Polygon) -> BaseGeometry:
     """Intersection of two single geometries."""
     return shapely.intersection(geom, area)
+
+
+def contains(geom: BaseGeometry, pts: GeometryArray) -> npt.NDArray[np.bool_]:
+    """Which points lie inside `geom`."""
+    return np.asarray(shapely.contains(geom, pts), dtype=np.bool_)

@@ -407,7 +407,12 @@ const WALLS = [
   '#bfb3a3',
   '#e2c7a6',
 ];
-/** @type {Record<number, string>} roof colour by building kind (see tools/build_buildings.py) */
+/** stone plinth colour, and a texel of the facade texture without window (plain wall) */
+const PLINTH = new THREE.Color('#8f8a80');
+const PLAIN_U = 0.02,
+  PLAIN_V = 0.5;
+
+/** @type {Record<number, string>} roof colour by building kind (see geo.building_kind) */
 const ROOFS = { 0: '#8a8d93', 1: '#a0543c', 2: '#7c8086', 3: '#6e8a95' };
 
 function facadeTexture() {
@@ -454,20 +459,26 @@ function buildings(hf, data) {
       zmin = Math.min(zmin, z);
       zmax = Math.max(zmax, z);
     }
-    const top = zmax + h;
+    const top = zmax + h,
+      base = zmin - 0.5,
+      floor = zmax + 0.2;
     col.set(kind === 3 ? '#d8cbb0' : WALLS[Math.floor(r() * WALLS.length)]);
     let u = 0;
     for (let i = 0; i < ring.length; i++) {
       const [x0, y0] = ring[i],
         [x1, y1] = ring[(i + 1) % ring.length];
       const L = Math.hypot(x1 - x0, y1 - y0);
-      const z0 = hf.h(x0, y0) - 0.5,
-        z1 = hf.h(x1, y1) - 0.5;
       const u0 = u / 3,
         u1 = (u + L) / 3;
-      // deux triangles (ordre anti-horaire vu de l'exterieur : l'anneau est anti-horaire)
-      WP.push(x0, z0, -y0, x1, z1, -y1, x1, top, -y1, x0, z0, -y0, x1, top, -y1, x0, top, -y0);
-      WU.push(u0, (z0 - top) / 3, u1, (z1 - top) / 3, u1, 0, u0, (z0 - top) / 3, u1, 0, u0, 0);
+      // deux triangles par quad (ordre anti-horaire vu de l'exterieur : l'anneau est anti-horaire)
+      // socle en pierre du point le plus bas au rez-de-chaussee : aucun mur n'est coupe par le relief
+      WP.push(x0, base, -y0, x1, base, -y1, x1, floor, -y1, x0, base, -y0, x1, floor, -y1, x0, floor, -y0);
+      for (let k = 0; k < 6; k++) WU.push(PLAIN_U, PLAIN_V);
+      for (let k = 0; k < 6; k++) WC.push(PLINTH.r, PLINTH.g, PLINTH.b);
+      // facade du rez-de-chaussee au toit
+      WP.push(x0, floor, -y0, x1, floor, -y1, x1, top, -y1, x0, floor, -y0, x1, top, -y1, x0, top, -y0);
+      const vf = (floor - top) / 3;
+      WU.push(u0, vf, u1, vf, u1, 0, u0, vf, u1, 0, u0, 0);
       for (let k = 0; k < 6; k++) WC.push(col.r, col.g, col.b);
       u += L;
     }
@@ -681,51 +692,6 @@ function treeBillboards(hf, positions) {
   return m;
 }
 
-/** arbres : OSM (natural=tree) + semis dans les parcs et bois */
-/** @param {import('../common/types.js').MapData | null} map @param {number[]} trees @param {Ground} hf */
-function treePositions(map, trees, hf) {
-  const out = [];
-  for (let i = 0; i < (trees || []).length; i += 2) out.push(trees[i] / 10, trees[i + 1] / 10);
-  if (!map) return out;
-  const r = rng(5),
-    b = hf.bounds;
-  /** @type {[string, number][]} */
-  const densities = [
-    ['park', 1 / 700],
-    ['forest', 1 / 160],
-  ];
-  for (const [kind, dens] of densities) {
-    for (const p of map.polys[kind]) {
-      let x0 = 1e9,
-        y0 = 1e9,
-        x1 = -1e9,
-        y1 = -1e9;
-      for (let i = 0; i < p.length; i += 2) {
-        x0 = Math.min(x0, p[i]);
-        x1 = Math.max(x1, p[i]);
-        y0 = Math.min(y0, p[i + 1]);
-        y1 = Math.max(y1, p[i + 1]);
-      }
-      if (x1 < b.x0 || x0 > b.x1 || y1 < b.y0 || y0 > b.y1) continue;
-      const n = Math.min(800, Math.round((x1 - x0) * (y1 - y0) * dens));
-      for (let k = 0; k < n; k++) {
-        const x = x0 + r() * (x1 - x0),
-          y = y0 + r() * (y1 - y0);
-        let inside = false;
-        for (let i = 0, j = p.length - 2; i < p.length; j = i, i += 2) {
-          if (
-            p[i + 1] > y !== p[j + 1] > y &&
-            x < ((p[j] - p[i]) * (y - p[i + 1])) / (p[j + 1] - p[i + 1]) + p[i]
-          )
-            inside = !inside;
-        }
-        if (inside) out.push(x, y);
-      }
-    }
-  }
-  return out;
-}
-
 // ------------------------------------------------------------------ arrets
 /** @param {Ground} hf @param {import('../world/track.js').Track} track */
 function stops(hf, track) {
@@ -767,10 +733,33 @@ function stops(hf, track) {
   return grp;
 }
 
+/**
+ * Buildings (clipped off the carriageway) and trees (off roads and buildings) of all tiles, in the world
+ * frame: buildings as BuildingsData records in decimetres, trees as flat [x, y, ...] in metres.
+ * @param {Ground} ground @param {Map<string, TileData>} tiles
+ */
+function tileObjects(ground, tiles) {
+  /** @type {import('../common/types.js').BuildingsData} */
+  const out = { attribution: '', b: [], trees: [] };
+  /** @type {number[]} */
+  const trees = [];
+  const ix = ground.index;
+  for (const [key, tile] of tiles) {
+    const [ti, tj] = key.split('_').map(Number);
+    const ox = (ix.x0 + ti * ix.size) * 10,
+      oy = (ix.y0 + tj * ix.size) * 10;
+    for (const [h, kind, ...ring] of tile.buildings)
+      out.b.push([h, kind, ...ring.map((v, k) => v + (k % 2 ? oy : ox))]);
+    for (let k = 0; k + 1 < tile.trees.length; k += 2)
+      trees.push((tile.trees[k] + ox) / 10, (tile.trees[k + 1] + oy) / 10);
+  }
+  return { buildings: out, trees };
+}
+
 // ------------------------------------------------------------------ assemblage
 /**
  * @param {THREE.Scene} scene @param {Ground} hf
- * @param {{map: import('../common/types.js').MapData | null, buildings: import('../common/types.js').BuildingsData | null, tiles: Map<string, TileData>}} data @param {import('../world/track.js').Track} track
+ * @param {{map: import('../common/types.js').MapData | null, tiles: Map<string, TileData>}} data @param {import('../world/track.js').Track} track
  */
 export function buildWorld(scene, hf, data, track) {
   scene.add(terrainCoarse(hf.natural));
@@ -781,12 +770,11 @@ export function buildWorld(scene, hf, data, track) {
   scene.add(route);
   /** @type {Footprint[]} */
   let footprints = [];
-  if (data.buildings) {
-    const b = buildings(hf, data.buildings);
-    scene.add(b.walls, b.roofs);
-    footprints = b.footprints;
-    scene.add(treeBillboards(hf, treePositions(data.map, data.buildings.trees, hf)));
-  }
+  const fromTiles = tileObjects(hf, data.tiles);
+  const b = buildings(hf, fromTiles.buildings);
+  scene.add(b.walls, b.roofs);
+  footprints = b.footprints;
+  scene.add(treeBillboards(hf, fromTiles.trees));
   scene.add(stops(hf, track));
   return { route, index: new FootprintIndex(footprints, track) };
 }

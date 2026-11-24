@@ -7,7 +7,9 @@ import { tiltedTerrain } from './fixtures.js';
 function oneTile(/** @type {number[]} */ metres, /** @type {number[][]} */ bridges = []) {
   /** @type {import('../../src/hd2d/ground.js').TileIndex} */
   const index = { x0: 0, y0: 0, size: 20, step: 10, nx: 1, ny: 1 };
-  const tiles = new Map([['0_0', { ground: metres.map((m) => m * 10), road: [], bridges }]]);
+  const tiles = new Map([
+    ['0_0', { ground: metres.map((m) => m * 10), road: [], bridges, buildings: [], trees: [] }],
+  ]);
   return new Ground(tiltedTerrain(0), index, tiles);
 }
 

@@ -19,7 +19,10 @@ each read a terrain that did not match what was drawn.
   - the carriageway: union of all road pieces at their real width (junctions and
     roundabouts come out clean), cut along the ground triangles so every piece is
     coplanar with the ground;
-  - bridge decks as centrelines with heights.
+  - bridge decks as centrelines with heights;
+  - buildings clipped 0.3 m off the carriageway, and trees (OSM and seeded in parks and
+    woods) kept 1 m off the carriageway and outside buildings. Buildings stand on a stone
+    plinth from their lowest ground point, so no wall is cut by the slope.
 - In the game, `Ground` (`src/hd2d/ground.js`) is the single height source: ground
   triangles exactly as rendered, bridge decks when the vehicle is at deck level, the
   coarse IGN grid outside the tiles.
