@@ -3,7 +3,7 @@
   <head>
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
-    <title>Bus 17 · Simulateur</title>
+    <title>Bus 17</title>
     <link rel="stylesheet" href="src/menu.css" />
   </head>
   <body>
@@ -11,18 +11,18 @@
       <header class="title">
         <div class="badge">17</div>
         <div>
-          <h1>Simulateur de bus · Ligne 17</h1>
-          <p id="sub">Tracé réel · Verdun – Préfecture ⇄ Meylan, Lycée du Grésivaudan</p>
+          <h1 data-i18n="menu.title"></h1>
+          <p id="sub" data-i18n="menu.subtitle"></p>
         </div>
       </header>
 
       <section class="group">
-        <h2>1 · Direction</h2>
-        <div class="chips" id="dirChips"><span class="empty">Chargement des données…</span></div>
+        <h2 data-i18n="menu.direction"></h2>
+        <div class="chips" id="dirChips"><span class="empty" data-i18n="menu.loading"></span></div>
       </section>
 
       <section class="group">
-        <h2>2 · Ton bus</h2>
+        <h2 data-i18n="menu.bus"></h2>
         <div class="chips" id="busChips">
           <button class="chip on" data-bus="std">
             <svg width="54" height="20" viewBox="0 0 54 20" aria-hidden="true">
@@ -31,9 +31,9 @@
               <circle cx="10" cy="16" r="3" fill="#111" />
               <circle cx="36" cy="16" r="3" fill="#111" />
             </svg>
-            Bus standard <small>12 m</small>
+            <span data-i18n="menu.busStandard"></span> <small data-i18n="menu.lengthStandard"></small>
           </button>
-          <button class="chip lock" data-bus="art" disabled title="Bientôt">
+          <button class="chip lock" data-bus="art" disabled data-i18n-title="menu.soon">
             <svg width="54" height="20" viewBox="0 0 54 20" aria-hidden="true">
               <rect x="1" y="2" width="30" height="13" rx="3" fill="#33a457" />
               <rect x="31" y="3" width="3" height="11" fill="#333" />
@@ -44,41 +44,28 @@
               <circle cx="25" cy="16" r="3" fill="#111" />
               <circle cx="46" cy="16" r="3" fill="#111" />
             </svg>
-            Bus articulé <small>18 m · bientôt</small>
+            <span data-i18n="menu.busArticulated"></span> <small data-i18n="menu.lengthArticulated"></small>
           </button>
         </div>
       </section>
 
       <section class="group">
-        <h2>3 · Jour</h2>
+        <h2 data-i18n="menu.day"></h2>
         <div class="chips" id="dayChips"></div>
       </section>
 
       <section class="group">
-        <h2>4 · Choisis ton service (heure de départ)</h2>
+        <h2 data-i18n="menu.departure"></h2>
         <div class="deps" id="deps"></div>
       </section>
 
-      <button class="go" id="goBtn" disabled>Prendre le service ▶</button>
+      <button class="go" id="goBtn" disabled data-i18n="menu.start"></button>
 
       <section class="group help">
-        <div>
-          <b>Z / ↑</b> accélérer · <b>S / ↓</b> freiner, puis reculer à l'arrêt · <b>Q D / ← →</b> tourner ·
-          <b>M</b> carte · <b>molette sur la carte</b> zoom · <b>glisser</b> déplacer la carte ·
-          <b>P / Échap</b> pause
-        </div>
-        <div>
-          <b>molette</b> rapprocher / éloigner la caméra · <b>C</b> changer de caméra · <b>R</b> replacer le
-          bus sur le parcours. Suis le tracé vert de la ligne : si tu t'en écartes, le jeu te le signale.
-        </div>
-        <div>
-          Pour desservir un arrêt : arrête-toi le long du trottoir, la porte avant à hauteur de l'abri. Les
-          portes s'ouvrent toutes seules.
-        </div>
-        <div class="credits">
-          Tracé, arrêts, horaires : GTFS M réso (SMMAG, ODbL). Fond de carte, bâtiments, arbres : ©
-          contributeurs OpenStreetMap (ODbL). Altitude : IGN RGE ALTI.
-        </div>
+        <div data-i18n-html="menu.helpKeys"></div>
+        <div data-i18n-html="menu.helpCamera"></div>
+        <div data-i18n="menu.helpStops"></div>
+        <div class="credits" data-i18n="menu.credits"></div>
       </section>
     </main>
     <script type="module" src="src/menu.js"></script>

@@ -1,16 +1,21 @@
 // @ts-check
-import { afterEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeAll, describe, expect, it, vi } from 'vitest';
 import {
   ServiceClock,
   delta,
   hm,
   hms,
   readParams,
+  serviceDayType,
   serviceLabel,
   sortedServices,
   todayService,
   toSec,
 } from '../../src/common/service.js';
+import { setMessages } from '../../src/i18n/i18n.js';
+import fr from '../../src/i18n/fr.json';
+
+beforeAll(() => setMessages(fr));
 
 /** @type {import('../../src/common/types.js').Calendar} */
 const CAL = {
@@ -36,9 +41,19 @@ describe('serviceLabel', () => {
   });
 });
 
+describe('serviceDayType', () => {
+  it('decodes the M réso day type from the service id', () => {
+    expect(serviceDayType('X-LVHfi-Semaine')).toBe('school');
+    expect(serviceDayType('X-LVIfi-Semaine')).toBe('holidays');
+    expect(serviceDayType('X-SAHfi-Samedi')).toBe('saturday');
+    expect(serviceDayType('X-DFHfi-Dimanche')).toBe('sunday');
+    expect(serviceDayType('X-other')).toBeNull();
+  });
+});
+
 describe('sortedServices', () => {
   it('orders school week, holidays, Saturday, Sunday, then the others', () => {
-    expect(sortedServices(SERVICES, CAL)).toEqual([
+    expect(sortedServices(SERVICES)).toEqual([
       'X-LVHfi-Semaine',
       'X-LVIfi-Semaine',
       'X-SAHfi-Samedi',
