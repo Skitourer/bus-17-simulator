@@ -21,3 +21,8 @@ node_modules/
 Thumbs.db
 .vscode/
 .idea/
+.venv/
+coverage/
+.pytest_cache/
+.ruff_cache/
+.coverage

@@ -1,7 +1,10 @@
 // @ts-check
 /** Services (jours, departs) tires du GTFS, partages par la page d'accueil et les deux moteurs. */
 
-/** Libelle lisible d'un service GTFS M reso. */
+/**
+ * Libelle lisible d'un service GTFS M reso.
+ * @param {string} sid @param {import('./types.js').Calendar} cal
+ */
 export function serviceLabel(sid, cal) {
   const c = cal[sid];
   if (/Dimanche/i.test(sid)) return 'Dimanche / férié';
@@ -13,15 +16,23 @@ export function serviceLabel(sid, cal) {
 }
 
 const ORDER = ['Semaine (école)', 'Semaine (vacances)', 'Samedi', 'Dimanche / férié'];
-/** services tries dans un ordre naturel */
+/**
+ * services tries dans un ordre naturel
+ * @param {Record<string, string[]>} services @param {import('./types.js').Calendar} cal
+ */
 export function sortedServices(services, cal) {
   return Object.keys(services).sort((a, b) => {
-    const ia = ORDER.indexOf(serviceLabel(a, cal)), ib = ORDER.indexOf(serviceLabel(b, cal));
+    const ia = ORDER.indexOf(serviceLabel(a, cal)),
+      ib = ORDER.indexOf(serviceLabel(b, cal));
     return (ia < 0 ? 99 : ia) - (ib < 0 ? 99 : ib) || a.localeCompare(b);
   });
 }
 
-/** service valable aujourd'hui (date dans la periode et jour de semaine coche), sinon null */
+/**
+ * service valable aujourd'hui (date dans la periode et jour de semaine coche), sinon null
+ * @param {Record<string, string[]>} services @param {import('./types.js').Calendar} cal
+ * @returns {string|null}
+ */
 export function todayService(services, cal, now = new Date()) {
   const ymd = now.getFullYear() * 10000 + (now.getMonth() + 1) * 100 + now.getDate();
   const dow = (now.getDay() + 6) % 7; // lundi = 0
@@ -32,12 +43,23 @@ export function todayService(services, cal, now = new Date()) {
   return null;
 }
 
-export const toSec = (hm) => { const [h, m, s] = hm.split(':').map(Number); return h * 3600 + m * 60 + (s || 0); };
+/** @param {string} hm "HH:MM" or "HH:MM:SS" */
+export const toSec = (hm) => {
+  const [h, m, s] = hm.split(':').map(Number);
+  return h * 3600 + m * 60 + (s || 0);
+};
+/** @param {number} n */
 const pad = (n) => String(n).padStart(2, '0');
-export const hms = (s) => { s = Math.max(0, Math.floor(s)); return `${pad(Math.floor(s / 3600) % 24)}:${pad(Math.floor(s / 60) % 60)}:${pad(s % 60)}`; };
+/** @param {number} s seconds since midnight */
+export const hms = (s) => {
+  s = Math.max(0, Math.floor(s));
+  return `${pad(Math.floor(s / 3600) % 24)}:${pad(Math.floor(s / 60) % 60)}:${pad(s % 60)}`;
+};
+/** @param {number} s seconds since midnight */
 export const hm = (s) => hms(s).slice(0, 5);
-/** ecart horaire lisible : +1:20 (retard) / -0:45 (avance) */
-export const delta = (s) => `${s >= 0 ? '+' : '−'}${Math.floor(Math.abs(s) / 60)}:${pad(Math.round(Math.abs(s)) % 60)}`;
+/** ecart horaire lisible : +1:20 (retard) / -0:45 (avance) @param {number} s */
+export const delta = (s) =>
+  `${s >= 0 ? '+' : '−'}${Math.floor(Math.abs(s) / 60)}:${pad(Math.round(Math.abs(s)) % 60)}`;
 
 /** Parametres de partie passes dans l'URL par la page d'accueil. */
 export function readParams() {
@@ -56,8 +78,17 @@ export function readParams() {
 
 /** Horloge de service : heure de depart + temps de jeu ecoule. */
 export class ServiceClock {
-  constructor(dep) { this.t0 = toSec(dep); this.t = this.t0; }
-  tick(dt) { this.t += dt; }
-  /** heure theorique de passage a un arret */
-  sched(stop) { return this.t0 + (stop.t || 0); }
+  /** @param {string} dep departure time "HH:MM" */
+  constructor(dep) {
+    this.t0 = toSec(dep);
+    this.t = this.t0;
+  }
+  /** @param {number} dt */
+  tick(dt) {
+    this.t += dt;
+  }
+  /** heure theorique de passage a un arret @param {{t?: number}} stop */
+  sched(stop) {
+    return this.t0 + (stop.t || 0);
+  }
 }

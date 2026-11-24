@@ -1,51 +1,72 @@
 <!doctype html>
 <html lang="fr">
-<head>
-<meta charset="utf-8">
-<meta name="viewport" content="width=device-width, initial-scale=1">
-<title>Bus 17 · HD-2D</title>
-<link rel="stylesheet" href="src/hd2d/hd2d.css">
-<script type="importmap">{ "imports": { "three": "./vendor/three.module.min.js" } }</script>
-</head>
-<body>
-<canvas id="view"></canvas>
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Bus 17 · HD-2D</title>
+    <link rel="stylesheet" href="src/hd2d/hd2d.css" />
+    <script type="importmap">
+      { "imports": { "three": "./vendor/three.module.min.js" } }
+    </script>
+  </head>
+  <body>
+    <canvas id="view"></canvas>
 
-<header id="syn">
-  <div class="badge">17</div>
-  <div id="track"><div class="rail"></div><div class="done" id="trDone"></div><div id="trStops"></div><div class="bus" id="trBus"></div></div>
-  <div id="clock"><div class="t" id="clk">--:--:--</div><div class="d" id="svc"></div></div>
-</header>
+    <header id="syn">
+      <div class="badge">17</div>
+      <div id="track">
+        <div class="rail"></div>
+        <div class="done" id="trDone"></div>
+        <div id="trStops"></div>
+        <div class="bus" id="trBus"></div>
+      </div>
+      <div id="clock">
+        <div class="t" id="clk">--:--:--</div>
+        <div class="d" id="svc"></div>
+      </div>
+    </header>
 
-<section id="sae">
-  <div class="row"><span>PROCHAIN ARRÊT</span><span id="saeDist"></span></div>
-  <div class="stop" id="saeStop">—</div>
-  <div class="row"><span id="saeSched"></span><span id="saeDelta"></span></div>
-</section>
+    <section id="sae">
+      <div class="row"><span>PROCHAIN ARRÊT</span><span id="saeDist"></span></div>
+      <div class="stop" id="saeStop">—</div>
+      <div class="row"><span id="saeSched"></span><span id="saeDelta"></span></div>
+    </section>
 
-<section id="speed">
-  <div class="v" id="spd">0</div><div class="u">km/h</div>
-  <div class="alt"><span id="alt">— m</span><span id="slope"></span></div>
-</section>
+    <section id="speed">
+      <div class="v" id="spd">0</div>
+      <div class="u">km/h</div>
+      <div class="alt"><span id="alt">— m</span><span id="slope"></span></div>
+    </section>
 
-<div id="offroute" hidden>⚠ HORS PARCOURS — rejoins le tracé vert</div>
-<div id="toasts"></div>
+    <div id="offroute" hidden>⚠ HORS PARCOURS — rejoins le tracé vert</div>
+    <div id="toasts"></div>
 
-<div id="map" class="small">
-  <canvas id="mapc"></canvas>
-  <div class="mapbtns">
-    <button data-act="in" title="Zoomer (+)">+</button>
-    <button data-act="out" title="Dézoomer (-)">−</button>
-    <button data-act="follow" title="Recentrer sur le bus">⌖</button>
-    <button data-act="size" title="Agrandir / réduire (M)">⤢</button>
-  </div>
-  <div class="attrib">© OpenStreetMap</div>
-</div>
+    <div id="map" class="small">
+      <canvas id="mapc"></canvas>
+      <div class="mapbtns">
+        <button data-act="in" title="Zoomer (+)">+</button>
+        <button data-act="out" title="Dézoomer (-)">−</button>
+        <button data-act="follow" title="Recentrer sur le bus">⌖</button>
+        <button data-act="size" title="Agrandir / réduire (M)">⤢</button>
+      </div>
+      <div class="attrib">© OpenStreetMap</div>
+    </div>
 
-<div id="keys"><b>Z/↑</b> accélérer · <b>S/↓</b> freiner/reculer · <b>Q D/← →</b> tourner · <b>C</b> caméra · <b>molette</b> zoom · <b>G</b> guidage · <b>M</b> carte · <b>R</b> replacer · <b>P</b> pause · <b>Échap</b> menu</div>
+    <div id="keys">
+      <b>Z/↑</b> accélérer · <b>S/↓</b> freiner/reculer · <b>Q D/← →</b> tourner · <b>C</b> caméra ·
+      <b>molette</b> zoom · <b>G</b> guidage · <b>M</b> carte · <b>R</b> replacer · <b>P</b> pause ·
+      <b>Échap</b> menu
+    </div>
 
-<div id="loading"><div class="badge">17</div><p id="loadMsg">Construction de Grenoble…</p></div>
-<div id="pause" hidden><p>PAUSE</p><button id="resume">Reprendre (P)</button><button id="quit">Quitter le service</button></div>
+    <div id="loading">
+      <div class="badge">17</div>
+      <p id="loadMsg">Construction de Grenoble…</p>
+    </div>
+    <div id="pause" hidden>
+      <p>PAUSE</p>
+      <button id="resume">Reprendre (P)</button><button id="quit">Quitter le service</button>
+    </div>
 
-<script type="module" src="src/hd2d/main.js"></script>
-</body>
+    <script type="module" src="src/hd2d/main.js"></script>
+  </body>
 </html>

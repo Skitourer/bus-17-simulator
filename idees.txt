@@ -1,4 +1,4 @@
-Page d’accueil avec sélection 
+Page d’accueil avec sélection
     * du type de bus (accordéon, normal)
     * le l’horaire
     * du sens de parcours
@@ -16,4 +16,3 @@ Cockpit avec affichage :
     Annonce sonores avec nom du prochain arrêt
 Panneau d’information voyageur avec représentation linéaire du trajet (précédente station, prochaine station, station suivante)
 Abris bus
-

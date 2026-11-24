@@ -22,6 +22,7 @@ Tools enforce style; this file only holds what tools cannot check. Every repo ha
 |---|---|---|---|---|
 | Python | ruff format | ruff, pyright strict | pytest | type hints everywhere; uv only (no pip, no global env) |
 | TypeScript / Svelte | prettier | TS `strict`, svelte-check | vitest | no ESLint unless needed |
+| JavaScript (no build) | prettier | `tsc` `checkJs` + `strict`, types in JSDoc | vitest | ES modules served as is; `@types/*` for libraries |
 | C / C++ | clang-format | clang-tidy; `-Wall -Wextra` as errors in CI | GoogleTest + CTest | CMake; sanitizers (address, undefined) in tests |
 | Shell | shfmt | shellcheck | bats | `#!/usr/bin/env bash`, `set -euo pipefail`; beyond ~100 lines, use Python |
 | PHP | PHP-CS-Fixer (PER-CS) | PHPStan | PHPUnit | `declare(strict_types=1);`, Composer |
@@ -241,9 +242,11 @@ approved. An approval covers the proposed action only.
 - Language (temporary): code comments, docstrings and `CAHIER_DES_CHARGES.md` are still in
   French (imported as is on 2026-11-24). New code is written in English; translation is
   done in dedicated PRs.
-- Tooling (temporary): no formatter, linter, tests or CI yet. Proposed set, to be added in
-  its own PR with an ADR: JavaScript (ES modules, no build) → Prettier, TypeScript
-  `checkJs` strict via JSDoc, Vitest; Python → ruff, pyright strict, pytest, uv; gitleaks.
+- Coverage: the 80 % floor applies to the pure logic modules listed in
+  `vitest.config.js` and to `tools/geo.py`; rendering, UI and network code are checked in
+  the browser or by rebuilding the data (see ADR 0001).
+- Frozen references: `bus17-outrun.html` and `bus17-simulateur-v2.html` are excluded from
+  formatting and checks.
 
 ## Project specifics
 
@@ -265,8 +268,13 @@ approved. An approval covers the proposed action only.
   proofs of concept kept as reference.
 - **Commands**: run `python -m http.server 8017` at the root, open
   `http://localhost:8017/`. Rebuild data (network needed, cached in `tools/cache/`,
-  git-ignored): `python tools/build_line.py`, then `build_map.py`, `build_terrain.py`,
-  `build_buildings.py`.
+  git-ignored): `uv run python tools/build_line.py`, then `build_map.py`,
+  `build_terrain.py`, `build_buildings.py`; a pure refactor of `tools/` must leave
+  `data/` byte-identical (`git status data/`).
+- **Checks**: `npm ci` and `uv sync` once, `uv run pre-commit install`; then
+  `npm run check` (Prettier, tsc, Vitest + coverage) and `uv run poe check` (ruff,
+  pyright, pytest + coverage), the same as CI.
+- **Decisions**: `docs/adr/` (English + French mirror).
 - **Ports**: 8017 (local static server).
 - **Glossary**: line (ligne) · direction (sens) · stop (arrêt) · service (a departure of
   the timetable) · route / track (tracé) · SAE (on-board passenger information panel) ·
