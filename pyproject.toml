@@ -47,7 +47,7 @@ extraPaths = ["tools"]
 [tool.pytest.ini_options]
 testpaths = ["tests/python"]
 pythonpath = ["tools"]
-addopts = "--cov=geo --cov=roads --cov-report=term-missing --cov-fail-under=80"
+addopts = "--cov=geo --cov=roads --cov=streets --cov=shapes --cov-report=term-missing --cov-fail-under=80"
 
 [tool.poe.tasks]
 format = "ruff format"

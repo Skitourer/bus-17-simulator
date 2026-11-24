@@ -260,14 +260,15 @@ approved. An approval covers the proposed action only.
   Linux server, no professional network · deliverable: static site on GitHub Pages · API reference: not needed yet.
 - **Architecture**: plain JavaScript ES modules served as static files, no build step.
   Three.js is vendored in `vendor/` (MIT). Python scripts in `tools/` (standard library
-  plus `geo.py`, `roads.py`, `sources.py`; shapely) download OSM / GTFS / IGN data and write the JSON files in `data/grenoble/`.
+  plus `geo.py`, `roads.py`, `streets.py`, `shapes.py`, `sources.py`; shapely) download OSM / GTFS / IGN data and write the JSON files in `data/grenoble/`.
 - **Layout**: `index.html` + `src/menu.js` menu · `hd2d.html` + `src/hd2d/` game · shared
-  `src/common/`, `src/world/track.js`, `src/ui/minimap.js` · `tests/js/`, `tests/python/` ·
+  `src/common/`, `src/world/track.js`, `src/ui/minimap.js`; heights only through
+  `src/hd2d/ground.js` · `tests/js/`, `tests/python/` ·
   `bus17-simulateur-v2.html`: older single-file prototype kept as UI reference.
 - **Commands**: `uv run poe serve` (no-cache static server, `tools/serve.py`), open
   `http://localhost:8017/`; plain `python -m http.server` lets browsers mix cached modules. Rebuild data (network needed, cached in `tools/cache/`,
   git-ignored): `uv run python tools/build_line.py`, then `build_map.py`,
-  `build_terrain.py`, `build_buildings.py`, `build_roads.py` (road graph, ADR 0002); a pure refactor of `tools/` must leave
+  `build_terrain.py`, `build_buildings.py`, `build_roads.py` (road graph, ADR 0002), `build_streets.py` (ground and road tiles, ADR 0003); a pure refactor of `tools/` must leave
   `data/` byte-identical (`git status data/`).
 - **Checks**: `npm ci` and `uv sync` once, `uv run pre-commit install`; then
   `npm run check` (Prettier, tsc, Vitest + coverage) and `uv run poe check` (ruff,

@@ -47,6 +47,7 @@ uv run python tools/build_map.py
 uv run python tools/build_terrain.py
 uv run python tools/build_buildings.py
 uv run python tools/build_roads.py
+uv run python tools/build_streets.py
 ```
 
 ## Documentation

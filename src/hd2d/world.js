@@ -10,6 +10,9 @@
 import * as THREE from 'three';
 import { tree, shelter, stopPole } from './sprites.js';
 
+/** @typedef {import('./ground.js').Ground} Ground */
+/** @typedef {import('./ground.js').TileData} TileData */
+
 /** @typedef {{ring: number[][], x0: number, y0: number, x1: number, y1: number}} Footprint */
 
 /** @param {THREE.Texture} t */
@@ -42,7 +45,6 @@ const GROUND = {
   park: '#7ea25a',
   forest: '#557c41',
   water: '#5d8fb5',
-  road: '#77746d',
   tram: '#8b8377',
 };
 
@@ -86,9 +88,6 @@ function groundTexture(map, b) {
     poly(map.polys.park, GROUND.park);
     poly(map.polys.water, GROUND.water);
     lines(map.lines.river, GROUND.water, 30);
-    lines(map.lines.minor, GROUND.road, 8);
-    lines(map.lines.secondary, GROUND.road, 11);
-    lines(map.lines.primary, GROUND.road, 15);
     lines(map.lines.rail, GROUND.tram, 5);
   }
   // grain pixel art : legeres variations aleatoires par pixel
@@ -108,28 +107,49 @@ function groundTexture(map, b) {
   return t;
 }
 
-/** @param {import('./heightfield.js').Heightfield} hf @param {import('../common/types.js').MapData | null} map */
-function terrainFine(hf, map) {
-  const g = hf.fine,
-    b = hf.bounds;
-  const geo = new THREE.PlaneGeometry(1, 1, g.nx - 1, g.ny - 1);
-  const pos = geo.attributes.position,
-    uv = geo.attributes.uv;
-  // PlaneGeometry : rangees du haut (y+) vers le bas ; on remplit nous-memes
-  for (let j = 0; j < g.ny; j++) {
-    for (let i = 0; i < g.nx; i++) {
-      const k = (g.ny - 1 - j) * g.nx + i; // rangee j depuis le sud
-      const x = g.x0 + i * g.step,
-        y = g.y0 + j * g.step;
-      pos.setXYZ(k, x, g.dm[j * g.nx + i] / 10, -y);
-      uv.setXY(k, (x - b.x0) / (b.x1 - b.x0), (y - b.y0) / (b.y1 - b.y0));
-    }
-  }
-  geo.computeVertexNormals();
+/**
+ * Ground of the tiles (10 m grid shaped by the roads), one mesh per tile, triangles split like Ground.h().
+ * @param {Ground} ground @param {Map<string, TileData>} tiles @param {import('../common/types.js').MapData | null} map
+ */
+function terrainTiles(ground, tiles, map) {
+  const grp = new THREE.Group();
+  const b = ground.bounds,
+    ix = ground.index,
+    n = ground.n;
   const mat = new THREE.MeshLambertMaterial({ map: groundTexture(map, b) });
-  const m = new THREE.Mesh(geo, mat);
-  m.receiveShadow = true;
-  return m;
+  for (const key of tiles.keys()) {
+    const [ti, tj] = key.split('_').map(Number);
+    const ox = ix.x0 + ti * ix.size,
+      oy = ix.y0 + tj * ix.size;
+    const grid = /** @type {Float32Array} */ (ground.grids.get(key));
+    const P = new Float32Array(n * n * 3),
+      U = new Float32Array(n * n * 2);
+    for (let j = 0; j < n; j++)
+      for (let i = 0; i < n; i++) {
+        const k = j * n + i,
+          x = ox + i * ix.step,
+          y = oy + j * ix.step;
+        P.set([x, grid[k], -y], k * 3);
+        U.set([(x - b.x0) / (b.x1 - b.x0), (y - b.y0) / (b.y1 - b.y0)], k * 2);
+      }
+    const I = [];
+    for (let j = 0; j + 1 < n; j++)
+      for (let i = 0; i + 1 < n; i++) {
+        const a = j * n + i,
+          c = a + n;
+        // (a, b, d) and (a, d, c): counter-clockwise seen from above (y is mapped to -z)
+        I.push(a, a + 1, c + 1, a, c + 1, c);
+      }
+    const geo = new THREE.BufferGeometry();
+    geo.setAttribute('position', new THREE.BufferAttribute(P, 3));
+    geo.setAttribute('uv', new THREE.BufferAttribute(U, 2));
+    geo.setIndex(I);
+    geo.computeVertexNormals();
+    const m = new THREE.Mesh(geo, mat);
+    m.receiveShadow = true;
+    grp.add(m);
+  }
+  return grp;
 }
 
 /** @param {import('./heightfield.js').Heightfield} hf */
@@ -171,80 +191,57 @@ function terrainCoarse(hf) {
 }
 
 // ------------------------------------------------------------------ rues
-/** texture d'une rue (travers u : trottoir | bordure | chaussee | bordure | trottoir), repetee en v */
-/** @param {string} kind */
-function roadTexture(kind) {
-  const { c, g } = canvas(64, 16);
-  const r = rng(kind.length * 31);
-  const SW = kind === 'minor' ? 10 : 8; // largeur du trottoir en px
-  for (let y = 0; y < 16; y++)
-    for (let x = 0; x < 64; x++) {
-      const side = x < SW || x >= 64 - SW;
-      const curb = x === SW || x === 63 - SW;
-      let v = side ? 178 : curb ? 205 : 92;
-      v += (r() - 0.5) * (side ? 10 : 8);
-      if (side && (y % 8 === 0 || x % 8 === 0)) v -= 14; // dalles
-      g.fillStyle = `rgb(${v},${v - (side ? 4 : 0)},${v - (side ? 10 : 4)})`;
+/**
+ * Height of the road mesh above the shaped ground (m). Road pieces are cut along the ground triangles
+ * (tools/streets.py), so they are coplanar with the ground; the lift only avoids depth fighting.
+ */
+const ROAD_LIFT = 0.05;
+
+/** asphalt texture, mapped in world metres (4 m per repeat) */
+function asphaltTexture() {
+  const { c, g } = canvas(32, 32);
+  const r = rng(11);
+  for (let y = 0; y < 32; y++)
+    for (let x = 0; x < 32; x++) {
+      const v = 88 + (r() - 0.5) * 10;
+      g.fillStyle = `rgb(${v},${v},${v + 3})`;
       g.fillRect(x, y, 1, 1);
     }
-  g.fillStyle = '#e9e6dc';
-  if (kind !== 'minor') {
-    g.fillRect(SW + 2, 0, 1, 16);
-    g.fillRect(61 - SW, 0, 1, 16); // lignes de rive
-    g.fillRect(31, 0, 2, 8); // axe discontinu
-  }
   const t = NEAREST(new THREE.CanvasTexture(c));
-  t.wrapS = THREE.ClampToEdgeWrapping;
-  t.wrapT = THREE.RepeatWrapping;
+  t.wrapS = t.wrapT = THREE.RepeatWrapping;
   return t;
 }
 
-/** rubans de rues poses sur le relief (un maillage par categorie) */
-/** @param {import('./heightfield.js').Heightfield} hf @param {number[][]} list @param {number} width @param {string} kind @param {number} order */
-function roads(hf, list, width, kind, order) {
+/**
+ * Carriageway of every tile, laid on the shaped ground. Junctions and roundabouts come from the union
+ * made by tools/build_streets.py, so there are no overlapping ribbons.
+ * @param {Ground} ground @param {Map<string, TileData>} tiles
+ */
+function roadSurface(ground, tiles) {
+  /** @type {number[]} */
   const P = [],
     U = [],
     I = [];
-  const MAXSEG = 8;
-  for (const p of list) {
-    // densifie la polyline (le ruban doit suivre le relief)
-    const pts = [];
-    for (let i = 0; i + 3 < p.length + 1 && i + 2 < p.length; i += 2) {
-      const x0 = p[i],
-        y0 = p[i + 1],
-        x1 = p[i + 2],
-        y1 = p[i + 3];
-      const L = Math.hypot(x1 - x0, y1 - y0),
-        n = Math.max(1, Math.ceil(L / MAXSEG));
-      for (let k = 0; k < n; k++) pts.push([x0 + ((x1 - x0) * k) / n, y0 + ((y1 - y0) * k) / n]);
-    }
-    pts.push([p[p.length - 2], p[p.length - 1]]);
-    if (pts.length < 2) continue;
-    const base = P.length / 3;
-    let v = 0;
-    for (let i = 0; i < pts.length; i++) {
-      const a = pts[Math.max(0, i - 1)],
-        b = pts[Math.min(pts.length - 1, i + 1)];
-      let dx = b[0] - a[0],
-        dy = b[1] - a[1];
-      const L = Math.hypot(dx, dy) || 1;
-      dx /= L;
-      dy /= L;
-      const nx = dy,
-        ny = -dx; // normale a droite
-      if (i > 0) v += Math.hypot(pts[i][0] - pts[i - 1][0], pts[i][1] - pts[i - 1][1]);
-      const [x, y] = pts[i];
-      const hw = width / 2;
-      const lx = x - nx * hw,
-        ly = y - ny * hw,
-        rx = x + nx * hw,
-        ry = y + ny * hw;
-      P.push(lx, hf.h(lx, ly) + 0.25, -ly, rx, hf.h(rx, ry) + 0.25, -ry);
-      U.push(0, v / 4, 1, v / 4);
-      if (i > 0) {
-        const q = base + (i - 1) * 2;
-        I.push(q, q + 1, q + 2, q + 1, q + 3, q + 2);
+  const ix = ground.index;
+  for (const [key, tile] of tiles) {
+    const [ti, tj] = key.split('_').map(Number);
+    const ox = ix.x0 + ti * ix.size,
+      oy = ix.y0 + tj * ix.size;
+    for (const rings of tile.road) {
+      const vec = rings.map((ring) => {
+        const out = [];
+        for (let k = 0; k + 1 < ring.length; k += 2)
+          out.push(new THREE.Vector2(ox + ring[k] / 10, oy + ring[k + 1] / 10));
+        return out;
+      });
+      const [contour, ...holes] = vec;
+      const base = P.length / 3;
+      for (const v of vec.flat()) {
+        P.push(v.x, ground.h(v.x, v.y) + ROAD_LIFT, -v.y);
+        U.push(v.x / 4, v.y / 4);
       }
+      for (const tri of THREE.ShapeUtils.triangulateShape(contour, holes))
+        I.push(base + tri[0], base + tri[2], base + tri[1]);
     }
   }
   const geo = new THREE.BufferGeometry();
@@ -253,20 +250,98 @@ function roads(hf, list, width, kind, order) {
   geo.setIndex(I);
   geo.computeVertexNormals();
   const mat = new THREE.MeshLambertMaterial({
-    map: roadTexture(kind),
-    depthWrite: false,
+    map: asphaltTexture(),
+    side: THREE.DoubleSide, // ring orientation from shapely is not guaranteed
     polygonOffset: true,
     polygonOffsetFactor: -2,
-    polygonOffsetUnits: -4 * order,
+    polygonOffsetUnits: -4,
   });
   const m = new THREE.Mesh(geo, mat);
-  m.renderOrder = order;
+  m.receiveShadow = true;
+  m.renderOrder = 1;
+  return m;
+}
+
+/**
+ * Bridge decks (flat across, straight between their ends) with parapets and piers.
+ * @param {Ground} ground
+ */
+function bridges(ground) {
+  /** @type {number[]} */
+  const P = [];
+  /** @type {number[]} */
+  const C = [];
+  const deckCol = new THREE.Color('#5f6168'),
+    sideCol = new THREE.Color('#b7b2a6'),
+    pierCol = new THREE.Color('#9d988c');
+  /** @param {number[][]} q quad corners @param {THREE.Color} col */
+  const quad = (q, col) => {
+    P.push(...q[0], ...q[1], ...q[2], ...q[0], ...q[2], ...q[3]);
+    for (let k = 0; k < 6; k++) C.push(col.r, col.g, col.b);
+  };
+  for (const deck of ground.decks) {
+    const w = deck.halfWidth;
+    let sinceLastPier = 15;
+    for (let i = 0; i + 1 < deck.x.length; i++) {
+      const dx = deck.x[i + 1] - deck.x[i],
+        dy = deck.y[i + 1] - deck.y[i];
+      const L = Math.hypot(dx, dy) || 1;
+      const nx = dy / L,
+        ny = -dx / L; // right of the direction of travel
+      /** @param {number} k @param {number} side @param {number} dz */
+      const p = (k, side, dz) => [deck.x[k] + nx * w * side, deck.z[k] + dz, -(deck.y[k] + ny * w * side)];
+      quad([p(i, -1, 0.05), p(i, 1, 0.05), p(i + 1, 1, 0.05), p(i + 1, -1, 0.05)], deckCol);
+      for (const side of [-1, 1]) {
+        // parapet (0.9 m above the deck) and deck edge (0.8 m deep); double-sided material
+        quad([p(i, side, -0.8), p(i + 1, side, -0.8), p(i + 1, side, 0.95), p(i, side, 0.95)], sideCol);
+      }
+      sinceLastPier += L;
+      const below = ground.h(deck.x[i], deck.y[i]);
+      if (sinceLastPier >= 25 && deck.z[i] - below > 2.5) {
+        // pier: a square column from the river bed or the road below up to the deck
+        sinceLastPier = 0;
+        const s = 0.6,
+          cx = deck.x[i],
+          cy = deck.y[i];
+        const top = deck.z[i] - 0.8,
+          bot = below - 1;
+        const corners = [
+          [cx - s, cy - s],
+          [cx + s, cy - s],
+          [cx + s, cy + s],
+          [cx - s, cy + s],
+        ];
+        for (let k = 0; k < 4; k++) {
+          const [ax, ay] = corners[k],
+            [bx, by] = corners[(k + 1) % 4];
+          quad(
+            [
+              [ax, bot, -ay],
+              [bx, bot, -by],
+              [bx, top, -by],
+              [ax, top, -ay],
+            ],
+            pierCol,
+          );
+        }
+      }
+    }
+  }
+  const geo = new THREE.BufferGeometry();
+  geo.setAttribute('position', new THREE.Float32BufferAttribute(P, 3));
+  geo.setAttribute('color', new THREE.Float32BufferAttribute(C, 3));
+  geo.computeVertexNormals();
+  const m = new THREE.Mesh(
+    geo,
+    new THREE.MeshLambertMaterial({ vertexColors: true, side: THREE.DoubleSide }),
+  );
+  m.castShadow = true;
   m.receiveShadow = true;
   return m;
 }
 
 /** trace de la ligne au sol : chevrons verts (guidage, touche G) */
-/** @param {import('./heightfield.js').Heightfield} hf @param {import('../world/track.js').Track} track */
+/** @param {Ground} hf @param {import('../world/track.js').Track} track */
 function routeStrip(hf, track) {
   const P = [],
     U = [],
@@ -357,7 +432,7 @@ function facadeTexture() {
 }
 
 /** batiments extrudes, fusionnes en deux maillages (murs, toits) ; renvoie aussi un index pour les collisions */
-/** @param {import('./heightfield.js').Heightfield} hf @param {import('../common/types.js').BuildingsData} data */
+/** @param {Ground} hf @param {import('../common/types.js').BuildingsData} data */
 function buildings(hf, data) {
   const WP = [],
     WU = [],
@@ -533,7 +608,7 @@ export class FootprintIndex {
 }
 
 // ------------------------------------------------------------------ arbres (sprites en billboard, un seul appel de dessin)
-/** @param {import('./heightfield.js').Heightfield} hf @param {number[]} positions flat [x, y, ...] */
+/** @param {Ground} hf @param {number[]} positions flat [x, y, ...] */
 function treeBillboards(hf, positions) {
   const VAR = 4,
     TW = 40,
@@ -607,7 +682,7 @@ function treeBillboards(hf, positions) {
 }
 
 /** arbres : OSM (natural=tree) + semis dans les parcs et bois */
-/** @param {import('../common/types.js').MapData | null} map @param {number[]} trees @param {import('./heightfield.js').Heightfield} hf */
+/** @param {import('../common/types.js').MapData | null} map @param {number[]} trees @param {Ground} hf */
 function treePositions(map, trees, hf) {
   const out = [];
   for (let i = 0; i < (trees || []).length; i += 2) out.push(trees[i] / 10, trees[i + 1] / 10);
@@ -652,7 +727,7 @@ function treePositions(map, trees, hf) {
 }
 
 // ------------------------------------------------------------------ arrets
-/** @param {import('./heightfield.js').Heightfield} hf @param {import('../world/track.js').Track} track */
+/** @param {Ground} hf @param {import('../world/track.js').Track} track */
 function stops(hf, track) {
   const grp = new THREE.Group();
   const sh = NEAREST(new THREE.CanvasTexture(shelter()));
@@ -694,17 +769,14 @@ function stops(hf, track) {
 
 // ------------------------------------------------------------------ assemblage
 /**
- * @param {THREE.Scene} scene @param {import('./heightfield.js').Heightfield} hf
- * @param {{map: import('../common/types.js').MapData | null, buildings: import('../common/types.js').BuildingsData | null}} data @param {import('../world/track.js').Track} track
+ * @param {THREE.Scene} scene @param {Ground} hf
+ * @param {{map: import('../common/types.js').MapData | null, buildings: import('../common/types.js').BuildingsData | null, tiles: Map<string, TileData>}} data @param {import('../world/track.js').Track} track
  */
 export function buildWorld(scene, hf, data, track) {
-  scene.add(terrainCoarse(hf));
-  scene.add(terrainFine(hf, data.map));
-  if (data.map) {
-    scene.add(roads(hf, data.map.lines.minor, 10, 'minor', 1));
-    scene.add(roads(hf, data.map.lines.secondary, 14, 'secondary', 2));
-    scene.add(roads(hf, data.map.lines.primary, 17, 'primary', 3));
-  }
+  scene.add(terrainCoarse(hf.natural));
+  scene.add(terrainTiles(hf, data.tiles, data.map));
+  scene.add(roadSurface(hf, data.tiles));
+  scene.add(bridges(hf));
   const route = routeStrip(hf, track);
   scene.add(route);
   /** @type {Footprint[]} */
