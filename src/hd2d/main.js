@@ -12,6 +12,7 @@ import { buildWorld } from './world.js';
 import { makeBus, BUS } from './bus3d.js';
 import { Drive } from './drive.js';
 import { Post } from './post.js';
+import { OrbitCamera } from './orbit.js';
 import { initI18n, t } from '../i18n/i18n.js';
 
 /** @param {string} id */
@@ -128,6 +129,7 @@ const CAMS = [
 let camMode = +(new URLSearchParams(location.search).get('cam') || 0) % 3,
   zoom = 1,
   camYaw = 0;
+const orbit = new OrbitCamera();
 
 /** @param {string} text */
 function toast(text, kind = 'info') {
@@ -335,13 +337,15 @@ function render(dt) {
   while (dy > Math.PI) dy -= 2 * Math.PI;
   while (dy < -Math.PI) dy += 2 * Math.PI;
   camYaw += dy * (1 - Math.exp(-dt / (camMode === 2 ? 1.2 : 0.45)));
+  const view = orbit.view(dt, camYaw, m.pitch);
   const D = m.dist * zoom;
   const tx = c.x + Math.cos(drive.h) * m.ahead,
     ty = c.y + Math.sin(drive.h) * m.ahead;
   const tz = hf.h(tx, ty) + 2;
-  const cx = tx - Math.cos(camYaw) * Math.cos(m.pitch) * D,
-    cy = ty - Math.sin(camYaw) * Math.cos(m.pitch) * D;
-  const cz = Math.max(tz + Math.sin(m.pitch) * D, hf.h(cx, cy) + 3);
+  const cx = tx - Math.cos(view.yaw) * Math.cos(view.pitch) * D,
+    cy = ty - Math.sin(view.yaw) * Math.cos(view.pitch) * D;
+  const cz = Math.max(tz + Math.sin(view.pitch) * D, hf.h(cx, cy) + 3);
+  $('camReset').hidden = orbit.state === 'auto';
   camera.position.set(cx, cz, -cy);
   camera.lookAt(tx, tz, -ty);
   if (camera.fov !== m.fov) {
@@ -443,8 +447,10 @@ addEventListener('keydown', (e) => {
   if (e.code === 'KeyC') {
     camMode = (camMode + 1) % CAMS.length;
     zoom = 1;
+    orbit.snap();
     toast(t('toast.camera', { name: t(CAMS[camMode].name) }));
   }
+  if (e.code === 'KeyV') orbit.reset();
   if (e.code === 'KeyG') {
     world.route.visible = !world.route.visible;
     toast(t(world.route.visible ? 'toast.guidanceOn' : 'toast.guidanceOff'));
@@ -461,6 +467,27 @@ addEventListener('keyup', (e) => {
 addEventListener('blur', () => {
   keys.up = keys.down = keys.left = keys.right = false;
 });
+// camera libre : glisser avec le bouton gauche sur la vue 3D
+/** @type {{x: number, y: number} | null} */
+let orbitDrag = null;
+canvas.addEventListener('pointerdown', (e) => {
+  if (e.button !== 0 || !running) return;
+  orbitDrag = { x: e.clientX, y: e.clientY };
+  canvas.setPointerCapture(e.pointerId);
+  canvas.classList.add('drag');
+});
+canvas.addEventListener('pointermove', (e) => {
+  if (!orbitDrag) return;
+  orbit.drag(e.clientX - orbitDrag.x, e.clientY - orbitDrag.y, camYaw, CAMS[camMode].pitch);
+  orbitDrag = { x: e.clientX, y: e.clientY };
+});
+const endOrbitDrag = () => {
+  orbitDrag = null;
+  canvas.classList.remove('drag');
+};
+canvas.addEventListener('pointerup', endOrbitDrag);
+canvas.addEventListener('pointercancel', endOrbitDrag);
+$('camReset').onclick = () => orbit.reset();
 canvas.addEventListener(
   'wheel',
   (e) => {

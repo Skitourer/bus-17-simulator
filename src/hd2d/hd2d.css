@@ -395,3 +395,30 @@ body {
 #pause[hidden] {
   display: none;
 }
+
+#view {
+  cursor: grab;
+}
+#view.drag {
+  cursor: grabbing;
+}
+#camReset {
+  position: fixed;
+  top: 76px;
+  right: 16px;
+  padding: 6px 12px;
+  font:
+    700 14px system-ui,
+    sans-serif;
+  color: #fff;
+  background: var(--panel);
+  border: 2px solid var(--line);
+  border-radius: 10px;
+  cursor: pointer;
+}
+#camReset:hover {
+  border-color: var(--green);
+}
+#camReset[hidden] {
+  display: none;
+}

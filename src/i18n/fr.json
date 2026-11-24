@@ -23,7 +23,7 @@
     "noDeparture": "Aucun départ ce jour-là.",
     "start": "Prendre le service ▶",
     "helpKeys": "<b>Z / ↑</b> accélérer · <b>S / ↓</b> freiner, puis reculer à l'arrêt · <b>Q D / ← →</b> tourner · <b>M</b> carte · <b>molette sur la carte</b> zoom · <b>glisser</b> déplacer la carte · <b>P / Échap</b> pause",
-    "helpCamera": "<b>molette</b> rapprocher / éloigner la caméra · <b>C</b> changer de caméra · <b>R</b> replacer le bus sur le parcours. Suis le tracé vert de la ligne : si tu t'en écartes, le jeu te le signale.",
+    "helpCamera": "<b>molette</b> rapprocher / éloigner la caméra · <b>glisser sur la vue</b> tourner autour du bus · <b>V</b> revenir à la vue · <b>C</b> changer de caméra · <b>R</b> replacer le bus sur le parcours. Suis le tracé vert de la ligne : si tu t'en écartes, le jeu te le signale.",
     "helpStops": "Pour desservir un arrêt : arrête-toi le long du trottoir, la porte avant à hauteur de l'abri. Les portes s'ouvrent toutes seules.",
     "credits": "Tracé, arrêts, horaires : GTFS M réso (SMMAG, ODbL). Fond de carte, bâtiments, arbres : © contributeurs OpenStreetMap (ODbL). Altitude : IGN RGE ALTI."
   },
@@ -42,7 +42,7 @@
     "zoomOut": "Dézoomer (-)",
     "follow": "Recentrer sur le bus",
     "mapSize": "Agrandir / réduire (M)",
-    "keys": "<b>Z/↑</b> accélérer · <b>S/↓</b> freiner/reculer · <b>Q D/← →</b> tourner · <b>C</b> caméra · <b>molette</b> zoom · <b>G</b> guidage · <b>M</b> carte · <b>R</b> replacer · <b>P</b> pause · <b>Échap</b> menu",
+    "keys": "<b>Z/↑</b> accélérer · <b>S/↓</b> freiner/reculer · <b>Q D/← →</b> tourner · <b>C</b> caméra · <b>souris</b> tourner la vue · <b>V</b> revenir à la vue · <b>molette</b> zoom · <b>G</b> guidage · <b>M</b> carte · <b>R</b> replacer · <b>P</b> pause · <b>Échap</b> menu",
     "loadingCity": "Construction de Grenoble…",
     "loadingStreets": "Construction des rues et des immeubles…",
     "loadError": "Erreur de chargement : {error}",
@@ -54,7 +54,8 @@
     "late": "retard {delta}",
     "early": "avance {delta}",
     "onTime": "à l'heure",
-    "terminus": "Terminus"
+    "terminus": "Terminus",
+    "resetView": "⟲ Revenir à la vue (V)"
   },
   "toast": {
     "serviceStart": "Service de {time} vers {stop}",
