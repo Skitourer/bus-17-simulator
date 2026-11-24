@@ -3,35 +3,157 @@
   --hud: #f4efe2;
   --green: #33a457;
   --soft: #9aa6c8;
-  --pixel: "Press Start 2P", ui-monospace, "Courier New", monospace;
+  --pixel: 'Press Start 2P', ui-monospace, 'Courier New', monospace;
   color-scheme: dark;
 }
-html, body { height: 100%; margin: 0; }
-body { background: var(--ink); color: var(--hud); font-family: var(--pixel); overflow: hidden; user-select: none; }
-#wrap { position: relative; height: 100%; display: flex; align-items: center; justify-content: center; }
-#game { display: block; width: min(100vw, calc(100vh * 16 / 9)); aspect-ratio: 16 / 9; image-rendering: pixelated; background: #000; }
+html,
+body {
+  height: 100%;
+  margin: 0;
+}
+body {
+  background: var(--ink);
+  color: var(--hud);
+  font-family: var(--pixel);
+  overflow: hidden;
+  user-select: none;
+}
+#wrap {
+  position: relative;
+  height: 100%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+#game {
+  display: block;
+  width: min(100vw, calc(100vh * 16 / 9));
+  aspect-ratio: 16 / 9;
+  image-rendering: pixelated;
+  background: #000;
+}
 
 /* ---- mini-carte ---- */
-#map { position: absolute; border: 3px solid var(--hud); box-shadow: 4px 4px 0 #000; background: #e9e4d6; overflow: hidden; }
-#map.small { right: 16px; bottom: 16px; width: min(300px, 32vw); height: min(300px, 32vw); }
-#map.large { inset: 6vh 6vw; }
-#map.hidden, #map[hidden] { display: none; }
-#mapc { display: block; width: 100%; height: 100%; cursor: grab; touch-action: none; }
-#mapc.drag { cursor: grabbing; }
-.mapbtns { position: absolute; top: 6px; right: 6px; display: flex; flex-direction: column; gap: 4px; }
-.mapbtns button { width: 28px; height: 28px; font: 14px var(--pixel); line-height: 1; padding: 0; border: 2px solid #222; background: #f4efe2; color: #222; cursor: pointer; }
-.mapbtns button:hover { background: #fff; }
-.mapbtns button.on { background: var(--green); color: #fff; }
-.attrib { position: absolute; left: 4px; bottom: 3px; font: 7px var(--pixel); color: #333; background: rgba(255,255,255,.7); padding: 2px 3px; }
+#map {
+  position: absolute;
+  border: 3px solid var(--hud);
+  box-shadow: 4px 4px 0 #000;
+  background: #e9e4d6;
+  overflow: hidden;
+}
+#map.small {
+  right: 16px;
+  bottom: 16px;
+  width: min(300px, 32vw);
+  height: min(300px, 32vw);
+}
+#map.large {
+  inset: 6vh 6vw;
+}
+#map.hidden,
+#map[hidden] {
+  display: none;
+}
+#mapc {
+  display: block;
+  width: 100%;
+  height: 100%;
+  cursor: grab;
+  touch-action: none;
+}
+#mapc.drag {
+  cursor: grabbing;
+}
+.mapbtns {
+  position: absolute;
+  top: 6px;
+  right: 6px;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+.mapbtns button {
+  width: 28px;
+  height: 28px;
+  font: 14px var(--pixel);
+  line-height: 1;
+  padding: 0;
+  border: 2px solid #222;
+  background: #f4efe2;
+  color: #222;
+  cursor: pointer;
+}
+.mapbtns button:hover {
+  background: #fff;
+}
+.mapbtns button.on {
+  background: var(--green);
+  color: #fff;
+}
+.attrib {
+  position: absolute;
+  left: 4px;
+  bottom: 3px;
+  font: 7px var(--pixel);
+  color: #333;
+  background: rgba(255, 255, 255, 0.7);
+  padding: 2px 3px;
+}
 
 /* ---- ecran de depart ---- */
-#start { position: absolute; inset: 0; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 18px;
-  background: rgba(14, 16, 32, .82); text-align: center; padding: 0 16px; }
-#start[hidden] { display: none; }
-#start h1 { margin: 0; font-size: clamp(24px, 6vw, 48px); color: var(--hud); text-shadow: 4px 4px 0 #000; }
-#start h1 span { background: var(--green); color: #fff; padding: 2px 12px; }
-#start p { margin: 0; color: var(--soft); line-height: 2; font-size: clamp(8px, 1.4vw, 11px); }
-#start .sub { color: var(--hud); }
-#dirs { display: flex; flex-wrap: wrap; gap: 12px; justify-content: center; }
-#dirs button { font: 11px var(--pixel); padding: 14px 18px; border: 3px solid var(--green); background: #1b1d38; color: var(--hud); cursor: pointer; box-shadow: 4px 4px 0 #000; line-height: 1.8; }
-#dirs button:hover, #dirs button:focus-visible { background: #24502f; outline: none; }
+#start {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 18px;
+  background: rgba(14, 16, 32, 0.82);
+  text-align: center;
+  padding: 0 16px;
+}
+#start[hidden] {
+  display: none;
+}
+#start h1 {
+  margin: 0;
+  font-size: clamp(24px, 6vw, 48px);
+  color: var(--hud);
+  text-shadow: 4px 4px 0 #000;
+}
+#start h1 span {
+  background: var(--green);
+  color: #fff;
+  padding: 2px 12px;
+}
+#start p {
+  margin: 0;
+  color: var(--soft);
+  line-height: 2;
+  font-size: clamp(8px, 1.4vw, 11px);
+}
+#start .sub {
+  color: var(--hud);
+}
+#dirs {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px;
+  justify-content: center;
+}
+#dirs button {
+  font: 11px var(--pixel);
+  padding: 14px 18px;
+  border: 3px solid var(--green);
+  background: #1b1d38;
+  color: var(--hud);
+  cursor: pointer;
+  box-shadow: 4px 4px 0 #000;
+  line-height: 1.8;
+}
+#dirs button:hover,
+#dirs button:focus-visible {
+  background: #24502f;
+  outline: none;
+}

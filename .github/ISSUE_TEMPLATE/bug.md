@@ -9,4 +9,5 @@ labels: bug
 ## What should happen
 
 ## How to reproduce
+
 (page, direction, day, departure, keys pressed, browser)

@@ -23,16 +23,22 @@ export class Track {
     this.h = new Float64Array(n);
     let prev = 0;
     for (let i = 0; i < n; i++) {
-      const a = Math.max(0, i - 1), b = Math.min(n - 1, i + 1);
+      const a = Math.max(0, i - 1),
+        b = Math.min(n - 1, i + 1);
       let h = Math.atan2(this.y[b] - this.y[a], this.x[b] - this.x[a]);
-      if (i > 0) { while (h - prev > Math.PI) h -= 2 * Math.PI; while (h - prev < -Math.PI) h += 2 * Math.PI; }
-      this.h[i] = h; prev = h;
+      if (i > 0) {
+        while (h - prev > Math.PI) h -= 2 * Math.PI;
+        while (h - prev < -Math.PI) h += 2 * Math.PI;
+      }
+      this.h[i] = h;
+      prev = h;
     }
     // courbure lissee (1/m, > 0 = virage a gauche)
     this.k = new Float64Array(n);
     const W = 4;
     for (let i = 0; i < n; i++) {
-      const a = Math.max(0, i - W), b = Math.min(n - 1, i + W);
+      const a = Math.max(0, i - W),
+        b = Math.min(n - 1, i + W);
       this.k[i] = b > a ? (this.h[b] - this.h[a]) / ((b - a) * step) : 0;
     }
     this.stops = dir.stops;
@@ -47,28 +53,42 @@ export class Track {
     const t = f - i;
     return arr[i] + (arr[i + 1] - arr[i]) * t;
   }
-  heading(s) { return this._lerp(this.h, Math.max(0, Math.min(this.length, s))); }
-  curv(s) { return this._lerp(this.k, Math.max(0, Math.min(this.length, s))); }
-  alt(s) { return this._lerp(this.z, Math.max(0, Math.min(this.length, s))); }
+  heading(s) {
+    return this._lerp(this.h, Math.max(0, Math.min(this.length, s)));
+  }
+  curv(s) {
+    return this._lerp(this.k, Math.max(0, Math.min(this.length, s)));
+  }
+  alt(s) {
+    return this._lerp(this.z, Math.max(0, Math.min(this.length, s)));
+  }
   /** pente (m/m) moyenne sur [s, s+span] */
-  slope(s, span = 10) { return (this.alt(s + span) - this.alt(s)) / span; }
+  slope(s, span = 10) {
+    return (this.alt(s + span) - this.alt(s)) / span;
+  }
 
   /** position monde d'un point a l'abscisse s, decale lateralement de d (m, > 0 = a droite) */
   pos(s, d = 0) {
     let x, y;
-    if (s < 0 || s > this.length) { // prolongement en ligne droite au-dela des terminus
-      const e = s < 0 ? 0 : this.length, h = this.heading(e);
+    if (s < 0 || s > this.length) {
+      // prolongement en ligne droite au-dela des terminus
+      const e = s < 0 ? 0 : this.length,
+        h = this.heading(e);
       x = this._lerp(this.x, e) + Math.cos(h) * (s - e);
       y = this._lerp(this.y, e) + Math.sin(h) * (s - e);
-    } else { x = this._lerp(this.x, s); y = this._lerp(this.y, s); }
+    } else {
+      x = this._lerp(this.x, s);
+      y = this._lerp(this.y, s);
+    }
     const h = this.heading(s);
     return { x: x + Math.sin(h) * d, y: y - Math.cos(h) * d, z: this.alt(s), h };
   }
 
   /** cap moyen sur [s, s+span] (pour une camera qui ne tremble pas) */
   meanHeading(s, span) {
-    let acc = 0; const N = 6;
-    for (let i = 0; i <= N; i++) acc += this.heading(s + span * i / N);
+    let acc = 0;
+    const N = 6;
+    for (let i = 0; i <= N; i++) acc += this.heading(s + (span * i) / N);
     return acc / (N + 1);
   }
 }

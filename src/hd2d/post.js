@@ -17,8 +17,11 @@ export class Post {
     this.rt.texture.generateMipmaps = false;
     this.mat = new THREE.ShaderMaterial({
       uniforms: {
-        tDiffuse: { value: this.rt.texture }, texel: { value: new THREE.Vector2() },
-        focus: { value: 0.58 }, band: { value: 0.22 }, blur: { value: 2.2 },
+        tDiffuse: { value: this.rt.texture },
+        texel: { value: new THREE.Vector2() },
+        focus: { value: 0.58 },
+        band: { value: 0.22 },
+        blur: { value: 2.2 },
       },
       vertexShader: 'varying vec2 vUv; void main(){ vUv = uv; gl_Position = vec4(position.xy, 0.0, 1.0); }',
       fragmentShader: `
@@ -46,7 +49,8 @@ export class Post {
           gl_FragColor = vec4(c, 1.0);
           #include <colorspace_fragment>
         }`,
-      depthTest: false, depthWrite: false,
+      depthTest: false,
+      depthWrite: false,
     });
     this.quad = new THREE.Mesh(new THREE.PlaneGeometry(2, 2), this.mat);
     this.quad.frustumCulled = false;
@@ -57,7 +61,8 @@ export class Post {
 
   /** taille de l'ecran (pixels CSS) -> resolution interne */
   resize(w, h) {
-    const ih = this.lines, iw = Math.round(ih * w / h);
+    const ih = this.lines,
+      iw = Math.round((ih * w) / h);
     this.rt.setSize(iw, ih);
     this.mat.uniforms.texel.value.set(1 / iw, 1 / ih);
     return { iw, ih };

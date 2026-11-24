@@ -1,6 +1,6 @@
 # Bus 17 simulator
 
-*[Français](README.fr.md)*
+_[Français](README.fr.md)_
 
 A bus-driving game in the browser, on the real route of Grenoble bus line 17
 (Verdun – Préfecture ⇄ Meylan, Lycée du Grésivaudan): real streets, real elevation,

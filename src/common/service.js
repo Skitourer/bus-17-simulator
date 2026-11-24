@@ -16,7 +16,8 @@ const ORDER = ['Semaine (école)', 'Semaine (vacances)', 'Samedi', 'Dimanche / f
 /** services tries dans un ordre naturel */
 export function sortedServices(services, cal) {
   return Object.keys(services).sort((a, b) => {
-    const ia = ORDER.indexOf(serviceLabel(a, cal)), ib = ORDER.indexOf(serviceLabel(b, cal));
+    const ia = ORDER.indexOf(serviceLabel(a, cal)),
+      ib = ORDER.indexOf(serviceLabel(b, cal));
     return (ia < 0 ? 99 : ia) - (ib < 0 ? 99 : ib) || a.localeCompare(b);
   });
 }
@@ -32,12 +33,19 @@ export function todayService(services, cal, now = new Date()) {
   return null;
 }
 
-export const toSec = (hm) => { const [h, m, s] = hm.split(':').map(Number); return h * 3600 + m * 60 + (s || 0); };
+export const toSec = (hm) => {
+  const [h, m, s] = hm.split(':').map(Number);
+  return h * 3600 + m * 60 + (s || 0);
+};
 const pad = (n) => String(n).padStart(2, '0');
-export const hms = (s) => { s = Math.max(0, Math.floor(s)); return `${pad(Math.floor(s / 3600) % 24)}:${pad(Math.floor(s / 60) % 60)}:${pad(s % 60)}`; };
+export const hms = (s) => {
+  s = Math.max(0, Math.floor(s));
+  return `${pad(Math.floor(s / 3600) % 24)}:${pad(Math.floor(s / 60) % 60)}:${pad(s % 60)}`;
+};
 export const hm = (s) => hms(s).slice(0, 5);
 /** ecart horaire lisible : +1:20 (retard) / -0:45 (avance) */
-export const delta = (s) => `${s >= 0 ? '+' : '−'}${Math.floor(Math.abs(s) / 60)}:${pad(Math.round(Math.abs(s)) % 60)}`;
+export const delta = (s) =>
+  `${s >= 0 ? '+' : '−'}${Math.floor(Math.abs(s) / 60)}:${pad(Math.round(Math.abs(s)) % 60)}`;
 
 /** Parametres de partie passes dans l'URL par la page d'accueil. */
 export function readParams() {
@@ -56,8 +64,15 @@ export function readParams() {
 
 /** Horloge de service : heure de depart + temps de jeu ecoule. */
 export class ServiceClock {
-  constructor(dep) { this.t0 = toSec(dep); this.t = this.t0; }
-  tick(dt) { this.t += dt; }
+  constructor(dep) {
+    this.t0 = toSec(dep);
+    this.t = this.t0;
+  }
+  tick(dt) {
+    this.t += dt;
+  }
   /** heure theorique de passage a un arret */
-  sched(stop) { return this.t0 + (stop.t || 0); }
+  sched(stop) {
+    return this.t0 + (stop.t || 0);
+  }
 }

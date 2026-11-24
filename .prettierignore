@@ -1,0 +1,13 @@
+# Third-party and generated files
+vendor/
+data/
+node_modules/
+coverage/
+package-lock.json
+uv.lock
+# Single-file proofs of concept kept as frozen references (see AGENTS.md)
+bus17-outrun.html
+bus17-simulateur-v2.html
+# Shared with the agent-conventions template; French requirements moved in #2
+AGENTS.md
+CAHIER_DES_CHARGES.md
