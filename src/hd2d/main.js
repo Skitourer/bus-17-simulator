@@ -7,7 +7,7 @@ import * as THREE from 'three';
 import { Track } from '../world/track.js';
 import { Minimap } from '../ui/minimap.js';
 import { readParams, ServiceClock, serviceLabel, hms, hm, delta } from '../common/service.js';
-import { Heightfield } from './heightfield.js';
+import { Ground } from './ground.js';
 import { buildWorld } from './world.js';
 import { makeBus, BUS } from './bus3d.js';
 import { Drive } from './drive.js';
@@ -103,8 +103,10 @@ const KEYMAP = {
   KeyD: 'right',
 };
 // assigned once by load(), before the first frame
-/** @type {Heightfield} */
+/** @type {Ground} */
 let hf;
+/** height of the bus on the drivable surface (decides between a bridge deck and the ground below) */
+let busZ = 0;
 /** @type {Track} */
 let track;
 /** @type {ReturnType<typeof buildWorld>} */
@@ -167,6 +169,7 @@ function nearest(x, y, hint, win) {
 function placeOnRoute(s) {
   const p = track.pos(s, 1.8);
   drive.place(p.x, p.y, p.h);
+  busZ = p.z; // route altitude: picks the deck when the route is on a bridge
   progress = s + BUS.REAR;
   camYaw = p.h;
 }
@@ -182,14 +185,23 @@ async function load() {
       if (!r.ok) throw new Error(f);
       return r.json();
     });
-  const [l, map, terrain, buildings] = await Promise.all([
+  const [l, map, terrain, buildings, tileIndex] = await Promise.all([
     get('17.json'),
     get('map.json').catch(() => null),
     get('terrain.json'),
     get('buildings.json').catch(() => null),
+    get('tiles/index.json'),
   ]);
+  /** @type {Map<string, import('./ground.js').TileData>} */
+  const tiles = new Map();
+  /** @type {Promise<void>[]} */
+  const loads = [];
+  for (let j = 0; j < tileIndex.ny; j++)
+    for (let i = 0; i < tileIndex.nx; i++)
+      loads.push(get(`tiles/t_${i}_${j}.json`).then((tile) => void tiles.set(`${i}_${j}`, tile)));
+  await Promise.all(loads);
   line = l;
-  hf = new Heightfield(terrain);
+  hf = new Ground(terrain, tileIndex, tiles);
   track = new Track(line.directions[P.dir], line.step);
   track.stops.forEach((s) => {
     s.served = false;
@@ -197,7 +209,7 @@ async function load() {
   });
   $('loadMsg').textContent = t('game.loadingStreets');
   await new Promise((r) => setTimeout(r, 30));
-  world = buildWorld(scene, hf, { map, buildings }, track);
+  world = buildWorld(scene, hf, { map, buildings, tiles }, track);
   bus = makeBus();
   scene.add(bus.group);
   minimap = new Minimap($('map'), map, line);
@@ -261,7 +273,7 @@ function update(dt) {
         next < track.stops.length ? 'info' : 'good',
       );
   }
-  const ev = drive.update(inp, dt, hf, world.index);
+  const ev = drive.update(inp, dt, { slope: (x, y, hd) => hf.slopeAt(x, y, hd, busZ) }, world.index);
   if (drive.bump === 0) bumps++;
   if (ev) toast(t('toast.' + ev), 'bad');
 
@@ -318,19 +330,21 @@ function render(dt) {
   // bus : position, cap, assiette selon le relief
   const g = bus.group,
     c = drive.center;
-  const z = hf.h(c.x, c.y);
-  g.position.set(drive.x, hf.h(drive.x, drive.y), -drive.y);
+  /** @param {number} x @param {number} y */
+  const sh = (x, y) => hf.surface(x, y, busZ);
+  busZ = sh(drive.x, drive.y);
+  const z = sh(c.x, c.y);
+  g.position.set(drive.x, busZ, -drive.y);
   g.rotation.set(0, drive.h, 0);
   const fr = drive.point(BUS.L - BUS.REAR, 0),
     rr = drive.point(-BUS.REAR, 0);
-  const pitch = Math.atan2(hf.h(fr.x, fr.y) - hf.h(rr.x, rr.y), BUS.L);
+  const pitch = Math.atan2(sh(fr.x, fr.y) - sh(rr.x, rr.y), BUS.L);
   const lt = drive.point(BUS.WB / 2, -1.2),
     rt = drive.point(BUS.WB / 2, 1.2);
   const roll =
-    Math.atan2(hf.h(lt.x, lt.y) - hf.h(rt.x, rt.y), 2.4) +
+    Math.atan2(sh(lt.x, lt.y) - sh(rt.x, rt.y), 2.4) +
     ((drive.v * drive.v * Math.tan(drive.delta)) / BUS.WB) * 0.012;
   bus.body.rotation.set(roll, 0, pitch);
-  bus.group.position.y = hf.h(drive.x, drive.y) + Math.sin(pitch) * 0;
   bus.setBrake(drive.braking || doors > 0);
   for (const w of bus.wheels) w.rotation.z -= (drive.v * dt) / 0.5;
 
@@ -344,7 +358,7 @@ function render(dt) {
   const D = m.dist * zoom;
   const tx = c.x + Math.cos(drive.h) * m.ahead,
     ty = c.y + Math.sin(drive.h) * m.ahead;
-  const tz = hf.h(tx, ty) + 2;
+  const tz = sh(tx, ty) + 2;
   const cx = tx - Math.cos(view.yaw) * Math.cos(view.pitch) * D,
     cy = ty - Math.sin(view.yaw) * Math.cos(view.pitch) * D;
   const cz = Math.max(tz + Math.sin(view.pitch) * D, hf.h(cx, cy) + 3);
@@ -376,8 +390,8 @@ function hud() {
   $('clk').textContent = hms(clock.t);
   $('spd').textContent = String(Math.round(Math.abs(drive.v) * 3.6));
   const c = drive.center;
-  $('alt').textContent = Math.round(hf.h(c.x, c.y)) + ' m';
-  const sl = hf.slope(c.x, c.y, drive.h, 10) * 100;
+  $('alt').textContent = Math.round(busZ) + ' m';
+  const sl = hf.slopeAt(c.x, c.y, drive.h, busZ, 10) * 100;
   $('slope').textContent = (sl > 0 ? '+' : '') + sl.toFixed(1) + ' %';
   const st = track.stops[next];
   if (st) {

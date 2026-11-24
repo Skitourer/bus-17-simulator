@@ -44,7 +44,7 @@ export class Drive {
 
   /**
    * @param {import('../common/types.js').DriveInput} inp @param {number} dt
-   * @param {import('./heightfield.js').Heightfield} hf @param {{hit:(x:number,y:number)=>boolean}} walls
+   * @param {{slope: (x: number, y: number, hd: number) => number}} hf surface slope along a heading @param {{hit:(x:number,y:number)=>boolean}} walls
    * @returns {'bump'|null} evenement eventuel (cle de traduction toast.bump)
    */
   update(inp, dt, hf, walls) {
