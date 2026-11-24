@@ -80,7 +80,7 @@ describe('Drive (HD-2D free driving)', () => {
       const ev = drive.update({ ...NO_INPUT, up: true }, DT, flat, wallAhead);
       if (ev) events.push(ev);
     }
-    expect(events).toEqual(['Accrochage !']);
+    expect(events).toEqual(['bump']);
     expect(drive.point(12 - 3).x).toBeLessThanOrEqual(9.6);
   });
 });

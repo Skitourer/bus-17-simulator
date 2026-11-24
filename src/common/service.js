@@ -1,31 +1,50 @@
 // @ts-check
-/** Services (jours, departs) tires du GTFS, partages par la page d'accueil et les deux moteurs. */
+/** Services (jours, departs) tires du GTFS, partages par la page d'accueil et le jeu. */
+import { t } from '../i18n/i18n.js';
+
+/** M réso day types, in menu order. */
+const DAY_TYPES = /** @type {const} */ (['school', 'holidays', 'saturday', 'sunday']);
+
+/**
+ * Day type encoded in an M réso service id (LVH = school weekdays, LVI = holiday weekdays), or null.
+ * @param {string} sid
+ * @returns {(typeof DAY_TYPES)[number] | null}
+ */
+export function serviceDayType(sid) {
+  if (/Dimanche/i.test(sid)) return 'sunday';
+  if (/Samedi/i.test(sid)) return 'saturday';
+  if (/LVI/.test(sid)) return 'holidays';
+  if (/LVH/.test(sid)) return 'school';
+  return null;
+}
 
 /**
  * Libelle lisible d'un service GTFS M reso.
  * @param {string} sid @param {import('./types.js').Calendar} cal
  */
 export function serviceLabel(sid, cal) {
+  const type = serviceDayType(sid);
+  if (type) return t('service.' + type);
   const c = cal[sid];
-  if (/Dimanche/i.test(sid)) return 'Dimanche / férié';
-  if (/Samedi/i.test(sid)) return 'Samedi';
-  if (/LVI/.test(sid)) return 'Semaine (vacances)';
-  if (/LVH/.test(sid)) return 'Semaine (école)';
-  if (c) return `Service ${c.start.slice(6)}/${c.start.slice(4, 6)} → ${c.end.slice(6)}/${c.end.slice(4, 6)}`;
+  if (c)
+    return t('service.period', {
+      start: `${c.start.slice(6)}/${c.start.slice(4, 6)}`,
+      end: `${c.end.slice(6)}/${c.end.slice(4, 6)}`,
+    });
   return sid;
 }
 
-const ORDER = ['Semaine (école)', 'Semaine (vacances)', 'Samedi', 'Dimanche / férié'];
 /**
- * services tries dans un ordre naturel
- * @param {Record<string, string[]>} services @param {import('./types.js').Calendar} cal
+ * services tries dans un ordre naturel (ecole, vacances, samedi, dimanche, puis les autres)
+ * @param {Record<string, string[]>} services
  */
-export function sortedServices(services, cal) {
-  return Object.keys(services).sort((a, b) => {
-    const ia = ORDER.indexOf(serviceLabel(a, cal)),
-      ib = ORDER.indexOf(serviceLabel(b, cal));
-    return (ia < 0 ? 99 : ia) - (ib < 0 ? 99 : ib) || a.localeCompare(b);
-  });
+export function sortedServices(services) {
+  /** @param {string} sid */
+  const rank = (sid) => {
+    const type = serviceDayType(sid);
+    return type ? DAY_TYPES.indexOf(type) : DAY_TYPES.length;
+  };
+  return Object.keys(services).sort((a, b) => rank(a) - rank(b) || a.localeCompare(b));
 }
 
 /**

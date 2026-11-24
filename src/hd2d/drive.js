@@ -45,9 +45,10 @@ export class Drive {
   /**
    * @param {import('../common/types.js').DriveInput} inp @param {number} dt
    * @param {import('./heightfield.js').Heightfield} hf @param {{hit:(x:number,y:number)=>boolean}} walls
-   * @returns {string|null} evenement eventuel
+   * @returns {'bump'|null} evenement eventuel (cle de traduction toast.bump)
    */
   update(inp, dt, hf, walls) {
+    /** @type {'bump'|null} */
     let ev = null;
     const v = this.v;
     let a = 0;
@@ -101,7 +102,7 @@ export class Drive {
         this.x = px;
         this.y = py;
         this.h = ph;
-        if (this.bump > 0.6 && Math.abs(this.v) > 1) ev = 'Accrochage !';
+        if (this.bump > 0.6 && Math.abs(this.v) > 1) ev = 'bump';
         this.v = -this.v * 0.25;
         this.bump = 0;
         break;

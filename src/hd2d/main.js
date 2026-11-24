@@ -12,6 +12,7 @@ import { buildWorld } from './world.js';
 import { makeBus, BUS } from './bus3d.js';
 import { Drive } from './drive.js';
 import { Post } from './post.js';
+import { initI18n, t } from '../i18n/i18n.js';
 
 /** @param {string} id */
 const $ = (id) => /** @type {HTMLElement} */ (document.getElementById(id));
@@ -120,9 +121,9 @@ let bumps = 0,
   paused = false,
   running = false;
 const CAMS = [
-  { name: 'HD-2D', dist: 52, pitch: 0.36, fov: 30, ahead: 16 },
-  { name: 'Poursuite', dist: 20, pitch: 0.24, fov: 48, ahead: 10 },
-  { name: 'Vue du ciel', dist: 140, pitch: 1.15, fov: 30, ahead: 0 },
+  { name: 'camera.hd2d', dist: 52, pitch: 0.36, fov: 30, ahead: 16 },
+  { name: 'camera.chase', dist: 20, pitch: 0.24, fov: 48, ahead: 10 },
+  { name: 'camera.sky', dist: 140, pitch: 1.15, fov: 30, ahead: 0 },
 ];
 let camMode = +(new URLSearchParams(location.search).get('cam') || 0) % 3,
   zoom = 1,
@@ -167,6 +168,9 @@ function placeOnRoute(s) {
 
 // ------------------------------------------------------------------ chargement
 async function load() {
+  await initI18n();
+  document.title = t('game.pageTitle');
+  $('loadMsg').textContent = t('game.loadingCity');
   /** @param {string} f */
   const get = (f) =>
     fetch('data/grenoble/' + f).then((r) => {
@@ -186,7 +190,7 @@ async function load() {
     s.served = false;
     s.missed = false;
   });
-  $('loadMsg').textContent = 'Construction des rues et des immeubles…';
+  $('loadMsg').textContent = t('game.loadingStreets');
   await new Promise((r) => setTimeout(r, 30));
   world = buildWorld(scene, hf, { map, buildings }, track);
   bus = makeBus();
@@ -195,7 +199,7 @@ async function load() {
   minimap.setTrack(track);
   if (P.map) minimap.zoomBy(P.map);
   buildSynoptic();
-  $('svc').textContent = `${serviceLabel(P.day, line.calendar)} · départ ${P.dep}`;
+  $('svc').textContent = t('game.serviceInfo', { day: serviceLabel(P.day, line.calendar), time: P.dep });
   placeOnRoute(P.s !== null ? P.s : Math.max(0, track.stops[0].s - 4));
   // arrets deja derriere le point de depart (mode test)
   while (next < track.stops.length && track.stops[next].s < progress - 5) {
@@ -219,7 +223,7 @@ async function load() {
     nearest(drive.center.x, drive.center.y, progress, 60).d.toFixed(1);
   $('loading').hidden = true;
   running = true;
-  toast(`Service de ${P.dep} vers ${track.stops[track.stops.length - 1].name}`, 'info');
+  toast(t('toast.serviceStart', { time: P.dep, stop: track.stops[track.stops.length - 1].name }), 'info');
 }
 
 function buildSynoptic() {
@@ -247,14 +251,14 @@ function update(dt) {
     if (doors <= 0)
       toast(
         next < track.stops.length
-          ? 'Prochain arrêt : ' + track.stops[next].name
-          : 'Terminus ! Fin du service.',
+          ? t('toast.nextStop', { stop: track.stops[next].name })
+          : t('toast.endOfService'),
         next < track.stops.length ? 'info' : 'good',
       );
   }
   const ev = drive.update(inp, dt, hf, world.index);
   if (drive.bump === 0) bumps++;
-  if (ev) toast(ev, 'bad');
+  if (ev) toast(t('toast.' + ev), 'bad');
 
   // suivi du parcours
   const c = drive.center;
@@ -277,11 +281,16 @@ function update(dt) {
       next++;
       doors = 3;
       const late = clock.t - clock.sched(st);
-      toast(st.name + (Math.abs(late) < 60 ? " · à l'heure !" : ` · ${delta(late)}`), 'good');
+      toast(
+        Math.abs(late) < 60
+          ? t('toast.servedOnTime', { stop: st.name })
+          : t('toast.servedDelta', { stop: st.name, delta: delta(late) }),
+        'good',
+      );
     } else if (progress > st.s + 25 && n.d < 25) {
       st.missed = true;
       next++;
-      toast('Arrêt manqué : ' + st.name, 'bad');
+      toast(t('toast.missedStop', { stop: st.name }), 'bad');
     }
   }
 }
@@ -368,13 +377,18 @@ function hud() {
     $('saeStop').textContent = st.name;
     const d = Math.max(0, st.s - progress - (BUS.L - BUS.REAR));
     $('saeDist').textContent = d > 1000 ? (d / 1000).toFixed(1) + ' km' : Math.round(d / 10) * 10 + ' m';
-    $('saeSched').textContent = 'prévu ' + hm(clock.sched(st));
+    $('saeSched').textContent = t('game.scheduled', { time: hm(clock.sched(st)) });
     const late = clock.t - clock.sched(st);
     const e = $('saeDelta');
-    e.textContent = late > 30 ? 'retard ' + delta(late) : late < -30 ? 'avance ' + delta(late) : "à l'heure";
+    e.textContent =
+      late > 30
+        ? t('game.late', { delta: delta(late) })
+        : late < -30
+          ? t('game.early', { delta: delta(late) })
+          : t('game.onTime');
     e.className = late > 60 ? 'late' : late < -60 ? 'early' : '';
   } else {
-    $('saeStop').textContent = 'Terminus';
+    $('saeStop').textContent = t('game.terminus');
     $('saeDist').textContent = '';
     $('saeSched').textContent = '';
     $('saeDelta').textContent = '';
@@ -429,15 +443,15 @@ addEventListener('keydown', (e) => {
   if (e.code === 'KeyC') {
     camMode = (camMode + 1) % CAMS.length;
     zoom = 1;
-    toast('Caméra : ' + CAMS[camMode].name);
+    toast(t('toast.camera', { name: t(CAMS[camMode].name) }));
   }
   if (e.code === 'KeyG') {
     world.route.visible = !world.route.visible;
-    toast(world.route.visible ? 'Guidage affiché' : 'Guidage masqué');
+    toast(t(world.route.visible ? 'toast.guidanceOn' : 'toast.guidanceOff'));
   }
   if (e.code === 'KeyR') {
     placeOnRoute(progress - BUS.REAR);
-    toast('Bus replacé sur le parcours');
+    toast(t('toast.busReplaced'));
   }
 });
 addEventListener('keyup', (e) => {
@@ -464,6 +478,12 @@ window.addEventListener('error', (e) => {
 });
 
 load().catch((e) => {
-  $('loadMsg').textContent = 'Erreur de chargement : ' + e.message;
+  let text = String(e.message);
+  try {
+    text = t('game.loadError', { error: text });
+  } catch {
+    // the language file itself is missing: show the raw error
+  }
+  $('loadMsg').textContent = text;
   document.body.dataset.error = String(e.message);
 });

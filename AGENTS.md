@@ -273,6 +273,10 @@ approved. An approval covers the proposed action only.
   `npm run check` (Prettier, tsc, Vitest + coverage) and `uv run poe check` (ruff,
   pyright, pytest + coverage), the same as CI.
 - **Decisions**: `docs/adr/` (English + French mirror).
+- **UI texts**: only in `src/i18n/<lang>.json` (French is the reference), read with
+  `t('screen.key', {param})` or `data-i18n*` attributes; never hard-coded in `.js` or
+  `.html`. A test checks that every language has the same keys and placeholders. Stop
+  names come from the data and are not translated.
 - **Ports**: 8017 (local static server).
 - **Glossary**: line (ligne) · direction (sens) · stop (arrêt) · service (a departure of
   the timetable) · route / track (tracé) · SAE (on-board passenger information panel) ·
