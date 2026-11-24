@@ -48,7 +48,10 @@ const sky = new THREE.Mesh(
     fragmentShader: `uniform vec3 top, mid, bot; varying vec3 vDir;
     void main(){ float h = vDir.y; vec3 c = h < 0.03 ? bot : (h < 0.25 ? mix(bot, mid, (h-0.03)/0.22) : mix(mid, top, min(1.0,(h-0.25)/0.5)));
     float band = floor(h * 40.0) / 40.0; c = mix(c, c * 0.985, step(0.5, fract(band * 20.0)));
-    gl_FragColor = vec4(c, 1.0); #include <colorspace_fragment> }`,
+    gl_FragColor = vec4(c, 1.0);
+    // a preprocessor directive must start its own line
+    #include <colorspace_fragment>
+    }`,
   }),
 );
 sky.renderOrder = -1;
