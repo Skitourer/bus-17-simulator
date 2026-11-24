@@ -2,8 +2,10 @@
 /** Page d'accueil : direction, bus, jour, depart reel (GTFS), moteur. Choix memorises localement. */
 import { serviceLabel, sortedServices, todayService, toSec } from './common/service.js';
 
+/** @param {string} id */
 const $ = (id) => /** @type {HTMLElement} */ (document.getElementById(id));
 const KEY = 'bus17.menu';
+/** @type {{dir?: number, eng?: string}} */
 let saved = {};
 try {
   saved = JSON.parse(localStorage.getItem(KEY) || '{}') || {};
@@ -19,8 +21,14 @@ const save = () => {
 };
 
 const sel = { dir: saved.dir ?? 1, bus: 'std', day: '', dep: '', eng: saved.eng || 'hd2d' };
+/** @type {import('./common/types.js').LineData} */
 let line;
 
+/**
+ * @template T
+ * @param {HTMLElement} root @param {{value: T, html: string}[]} items @param {T} current
+ * @param {(value: T) => void} onPick
+ */
 function chips(root, items, current, onPick) {
   root.innerHTML = '';
   for (const it of items) {

@@ -22,11 +22,14 @@ const PAL = {
 };
 
 // ---------------------------------------------------------------- melange de couleurs (cache)
+/** @type {Map<string, string>} */
 const _mix = new Map();
+/** @param {string} c "#rrggbb" */
 function hex(c) {
   return [parseInt(c.slice(1, 3), 16), parseInt(c.slice(3, 5), 16), parseInt(c.slice(5, 7), 16)];
 }
 const FOGRGB = hex(FOG);
+/** @param {string} c "#rrggbb" @param {number} t fog amount 0..1 */
 function fogged(c, t) {
   const q = Math.min(15, Math.max(0, Math.round(t * 15)));
   const key = c + q;
@@ -41,7 +44,7 @@ function fogged(c, t) {
 }
 
 export class Scene {
-  /** @param {CanvasRenderingContext2D} ctx @param {any} horizon */
+  /** @param {CanvasRenderingContext2D} ctx @param {import('../common/types.js').Horizon} horizon */
   constructor(ctx, horizon) {
     this.ctx = ctx;
     this.horizon = horizon;
@@ -148,6 +151,7 @@ export class Scene {
     if (busSeg < 0) this._bus(track, cam, bus);
   }
 
+  /** @param {number} j @param {number} i @param {boolean} beyond */
   _segment(j, i, beyond) {
     const g = this.ctx,
       NO = this.OFFS.length,
@@ -158,6 +162,7 @@ export class Scene {
     const t = Math.min(1, Math.max(0, (this.fz[j] - 30) / (DRAW_SEGS * 2 - 30)));
     const fog = t * t * 0.95;
     const alt = (i >> 1) & 1;
+    /** @param {number} l @param {number} r @param {string} color */
     const quad = (l, r, color) => {
       g.fillStyle = color;
       g.beginPath();
@@ -178,6 +183,10 @@ export class Scene {
     if (alt) quad(6, 7, lc);
   }
 
+  /**
+   * @param {import('../world/track.js').Track} track @param {import('./camera.js').Camera} cam
+   * @param {number} s @param {{key: string, d: number}} it
+   */
   _sprite(track, cam, s, it) {
     const S = this.spr[it.key];
     if (!S) return;
@@ -199,6 +208,10 @@ export class Scene {
     );
   }
 
+  /**
+   * @param {import('../world/track.js').Track} track @param {import('./camera.js').Camera} cam
+   * @param {import('../sim/bus.js').Bus} bus
+   */
   _bus(track, cam, bus) {
     const pt = track.pos(bus.s, bus.lat),
       p = this._p;
@@ -222,6 +235,7 @@ export class Scene {
     );
   }
 
+  /** @param {number[]} arr @param {number} azDeg */
   _azAngle(arr, azDeg) {
     const st = this.horizon.step,
       n = arr.length;
@@ -231,6 +245,7 @@ export class Scene {
     return arr[i % n] * (1 - t) + arr[(i + 1) % n] * t;
   }
 
+  /** @param {import('./camera.js').Camera} cam */
   _mountains(cam) {
     const g = this.ctx,
       hz = this.horizon;
@@ -274,6 +289,7 @@ export class Scene {
         d2 = d;
       }
     }
+    if (!v1) return; // no precomputed viewpoint: no near hills
     const w1 = 1 / (Math.sqrt(d1) + 1),
       w2 = v2 ? 1 / (Math.sqrt(d2) + 1) : 0;
     const dz = cam.z - (v1.z * w1 + (v2 ? v2.z : 0) * w2) / (w1 + w2);
@@ -292,6 +308,7 @@ export class Scene {
     }
   }
 
+  /** @param {import('./camera.js').Camera} cam @param {number} yH */
   _clouds(cam, yH) {
     const g = this.ctx;
     const yawDeg = (cam.yaw * 180) / Math.PI;

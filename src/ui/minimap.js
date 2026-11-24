@@ -19,7 +19,10 @@ const STYLE = {
 };
 
 export class Minimap {
-  /** @param {HTMLElement} root @param {any} map @param {any} line */
+  /**
+   * @param {HTMLElement} root @param {import('../common/types.js').MapData | null} map
+   * @param {import('../common/types.js').LineData} line
+   */
   constructor(root, map, line) {
     this.root = root;
     this.cv = /** @type {HTMLCanvasElement} */ (root.querySelector('canvas'));
@@ -29,14 +32,19 @@ export class Minimap {
     this.cx = 0;
     this.cy = 0; // centre de la vue (metres)
     this.follow = true;
+    /** @type {import('../world/track.js').Track | null} */
     this.track = null;
+    /** @type {Record<string, Path2D>} */
     this.paths = {};
+    this.route = new Path2D();
     if (map) this._build(map);
     this.attrib = map ? map.attribution : '';
     this._ui();
   }
 
+  /** @param {import('../common/types.js').MapData} map */
   _build(map) {
+    /** @param {number[][]} list */
     const mk = (list) => {
       const p = new Path2D();
       for (const a of list) {
@@ -61,6 +69,7 @@ export class Minimap {
   }
 
   _ui() {
+    /** @param {string} act */
     const btn = (act) => /** @type {HTMLButtonElement} */ (this.root.querySelector(`[data-act="${act}"]`));
     btn('in').onclick = () => this.zoomBy(1.5);
     btn('out').onclick = () => this.zoomBy(1 / 1.5);
@@ -78,6 +87,7 @@ export class Minimap {
       },
       { passive: false },
     );
+    /** @type {{x: number, y: number, cx: number, cy: number} | null} */
     let drag = null;
     this.cv.addEventListener('pointerdown', (e) => {
       drag = { x: e.clientX, y: e.clientY, cx: this.cx, cy: this.cy };
@@ -107,11 +117,14 @@ export class Minimap {
     if (b) b.classList.toggle('on', this.follow);
   }
 
-  /** zoom autour d'un point ecran (par defaut le centre) */
+  /**
+   * zoom autour d'un point ecran (par defaut le centre)
+   * @param {number} f @param {number} [sx] @param {number} [sy]
+   */
   zoomBy(f, sx, sy) {
     const w = this.cv.clientWidth,
       h = this.cv.clientHeight;
-    if (sx === undefined) {
+    if (sx === undefined || sy === undefined) {
       sx = w / 2;
       sy = h / 2;
     }
@@ -163,6 +176,7 @@ export class Minimap {
     g.lineJoin = 'round';
     g.lineCap = 'round';
     const P = this.paths;
+    /** @param {number} n */
     const px = (n) => n / z; // epaisseur en pixels -> metres
     if (P.forest) {
       g.fillStyle = STYLE.forest;
@@ -181,6 +195,7 @@ export class Minimap {
       g.lineWidth = Math.max(px(2), 12);
       g.stroke(P.l_river);
     }
+    /** @param {string} key @param {number} wm @param {string} col @param {number} minPx */
     const road = (key, wm, col, minPx) => {
       if (!P[key]) return;
       const lw = Math.max(px(minPx), wm);
@@ -217,6 +232,7 @@ export class Minimap {
 
     // retour en pixels pour arrets et bus
     g.setTransform(dpr, 0, 0, dpr, 0, 0);
+    /** @param {number} x @param {number} y */
     const toS = (x, y) => [w / 2 + (x - this.cx) * z, h / 2 - (y - this.cy) * z];
     g.font = '8px "Press Start 2P", monospace';
     tr.stops.forEach((st, i) => {

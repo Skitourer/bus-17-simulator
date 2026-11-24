@@ -59,7 +59,7 @@ export class Post {
     this.cam = new THREE.OrthographicCamera(-1, 1, 1, -1, 0, 1);
   }
 
-  /** taille de l'ecran (pixels CSS) -> resolution interne */
+  /** taille de l'ecran (pixels CSS) -> resolution interne @param {number} w @param {number} h */
   resize(w, h) {
     const ih = this.lines,
       iw = Math.round((ih * w) / h);
@@ -68,6 +68,7 @@ export class Post {
     return { iw, ih };
   }
 
+  /** @param {THREE.Scene} scene @param {THREE.Camera} camera */
   render(scene, camera) {
     this.r.setRenderTarget(this.rt);
     this.r.render(scene, camera);

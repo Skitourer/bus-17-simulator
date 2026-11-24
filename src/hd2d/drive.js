@@ -23,6 +23,7 @@ export class Drive {
     this.bump = 0; // temps depuis le dernier accrochage
   }
 
+  /** @param {number} x @param {number} y @param {number} h */
   place(x, y, h) {
     this.x = x;
     this.y = y;
@@ -31,7 +32,7 @@ export class Drive {
     this.delta = 0;
   }
 
-  /** point du bus a `f` m devant l'essieu arriere et `r` m a droite */
+  /** point du bus a `f` m devant l'essieu arriere et `r` m a droite @param {number} f */
   point(f, r = 0) {
     const c = Math.cos(this.h),
       s = Math.sin(this.h);
@@ -42,7 +43,7 @@ export class Drive {
   }
 
   /**
-   * @param {{up:boolean,down:boolean,left:boolean,right:boolean}} inp
+   * @param {import('../common/types.js').DriveInput} inp @param {number} dt
    * @param {import('./heightfield.js').Heightfield} hf @param {{hit:(x:number,y:number)=>boolean}} walls
    * @returns {string|null} evenement eventuel
    */

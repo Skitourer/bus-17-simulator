@@ -5,7 +5,7 @@
  * Repere local : x = est, y = nord (metres), z = altitude (metres). Cap `h` = angle math (0 = est, sens trigo).
  */
 export class Track {
-  /** @param {{pts:number[], length:number, stops:any[], headsign:string, services:Object}} dir @param {number} step */
+  /** @param {import('../common/types.js').Direction} dir @param {number} step */
   constructor(dir, step) {
     const n = dir.pts.length / 3;
     this.n = n;
@@ -46,28 +46,34 @@ export class Track {
     this.services = dir.services;
   }
 
-  /** valeur interpolee d'un tableau a l'abscisse s (extrapolation lineaire hors trace) */
+  /**
+   * valeur interpolee d'un tableau a l'abscisse s (extrapolation lineaire hors trace)
+   * @param {Float64Array} arr @param {number} s
+   */
   _lerp(arr, s) {
     const f = s / this.step;
     const i = Math.max(0, Math.min(this.n - 2, Math.floor(f)));
     const t = f - i;
     return arr[i] + (arr[i + 1] - arr[i]) * t;
   }
+  /** @param {number} s */
   heading(s) {
     return this._lerp(this.h, Math.max(0, Math.min(this.length, s)));
   }
+  /** @param {number} s */
   curv(s) {
     return this._lerp(this.k, Math.max(0, Math.min(this.length, s)));
   }
+  /** @param {number} s */
   alt(s) {
     return this._lerp(this.z, Math.max(0, Math.min(this.length, s)));
   }
-  /** pente (m/m) moyenne sur [s, s+span] */
+  /** pente (m/m) moyenne sur [s, s+span] @param {number} s */
   slope(s, span = 10) {
     return (this.alt(s + span) - this.alt(s)) / span;
   }
 
-  /** position monde d'un point a l'abscisse s, decale lateralement de d (m, > 0 = a droite) */
+  /** position monde d'un point a l'abscisse s, decale lateralement de d (m, > 0 = a droite) @param {number} s */
   pos(s, d = 0) {
     let x, y;
     if (s < 0 || s > this.length) {
@@ -84,7 +90,7 @@ export class Track {
     return { x: x + Math.sin(h) * d, y: y - Math.cos(h) * d, z: this.alt(s), h };
   }
 
-  /** cap moyen sur [s, s+span] (pour une camera qui ne tremble pas) */
+  /** cap moyen sur [s, s+span] (pour une camera qui ne tremble pas) @param {number} s @param {number} span */
   meanHeading(s, span) {
     let acc = 0;
     const N = 6;

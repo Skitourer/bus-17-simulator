@@ -11,3 +11,6 @@ bus17-simulateur-v2.html
 # Shared with the agent-conventions template; French requirements moved in #2
 AGENTS.md
 CAHIER_DES_CHARGES.md
+.venv/
+.pytest_cache/
+.ruff_cache/

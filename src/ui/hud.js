@@ -5,6 +5,7 @@ import { hms, hm, delta } from '../common/service.js';
 
 const FONT = '"Press Start 2P", monospace';
 
+/** @param {CanvasRenderingContext2D} g @param {number} x @param {number} y @param {number} w @param {number} h */
 function box(g, x, y, w, h) {
   g.fillStyle = 'rgba(14,16,32,0.78)';
   g.fillRect(x, y, w, h);
@@ -15,6 +16,10 @@ function box(g, x, y, w, h) {
   g.fillRect(x + w - 2, y, 2, h);
 }
 
+/**
+ * @param {CanvasRenderingContext2D} g @param {string} s @param {number} x @param {number} y
+ * @param {number} size
+ */
 function text(g, s, x, y, size, color = '#f4efe2', align = 'left') {
   g.font = `${size}px ${FONT}`;
   g.textAlign = /** @type {CanvasTextAlign} */ (align);
@@ -25,7 +30,19 @@ function text(g, s, x, y, size, color = '#f4efe2', align = 'left') {
   g.fillText(s, x, y);
 }
 
-/** @param {CanvasRenderingContext2D} g */
+/**
+ * @typedef {object} HudState
+ * @property {import('../sim/bus.js').Bus} bus
+ * @property {import('../world/track.js').Track} track
+ * @property {import('../common/types.js').Stop | null | undefined} next
+ * @property {number} served
+ * @property {string} msg
+ * @property {number} doors
+ * @property {boolean} paused
+ * @property {import('../common/service.js').ServiceClock | null} clock
+ */
+
+/** @param {CanvasRenderingContext2D} g @param {HudState} st */
 export function drawHud(g, st) {
   const { bus, track, next, served, msg, doors, paused, clock } = st;
   // prochain arret

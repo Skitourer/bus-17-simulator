@@ -9,5 +9,8 @@
 - Code, comments and commits in English. Docs in English with a French mirror
   (`page.md` / `page.fr.md`).
 - Never commit secrets, `.env` files, personal data or downloaded caches.
+- Before pushing, run the same checks as CI: `npm run check` and `uv run poe check`
+  (setup in the [README](README.md#development)); the pre-commit hooks run them on the
+  changed files.
 
 Coding agents: see [AGENTS.md](AGENTS.md).

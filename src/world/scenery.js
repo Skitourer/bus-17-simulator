@@ -8,6 +8,7 @@
  */
 import { ROAD } from './road_geom.js';
 
+/** @param {number} seed */
 function rng(seed) {
   let s = seed >>> 0 || 1;
   return () => (s = (s * 1664525 + 1013904223) >>> 0) / 4294967296;
@@ -15,7 +16,9 @@ function rng(seed) {
 
 /** index spatial grossier des polygones OSM pour tester l'occupation du sol */
 class LandUse {
+  /** @param {import('../common/types.js').MapData | null} map */
   constructor(map) {
+    /** @type {Map<string, {kind: string, p: number[], x0: number, y0: number, x1: number, y1: number}[]>} */
     this.cells = new Map();
     this.C = 200;
     if (!map) return;
@@ -35,13 +38,14 @@ class LandUse {
         for (let cx = Math.floor(x0 / this.C); cx <= Math.floor(x1 / this.C); cx++)
           for (let cy = Math.floor(y0 / this.C); cy <= Math.floor(y1 / this.C); cy++) {
             const key = cx + ',' + cy;
-            if (!this.cells.has(key)) this.cells.set(key, []);
-            this.cells.get(key).push(poly);
+            const cell = this.cells.get(key);
+            if (cell) cell.push(poly);
+            else this.cells.set(key, [poly]);
           }
       }
     }
   }
-  /** 'water' | 'park' | 'forest' | null */
+  /** 'water' | 'park' | 'forest' | null @param {number} x @param {number} y */
   at(x, y) {
     const list = this.cells.get(Math.floor(x / this.C) + ',' + Math.floor(y / this.C));
     if (!list) return null;
@@ -66,14 +70,16 @@ class LandUse {
   }
 }
 
-/** @param {import('./track.js').Track} track @param {any} map */
+/** @param {import('./track.js').Track} track @param {import('../common/types.js').MapData | null} map */
 export function buildScenery(track, map) {
   const land = new LandUse(map);
   const segs = Array.from({ length: track.n }, () => /** @type {{key:string,d:number}[]} */ ([]));
+  /** @param {number} s @param {string} key @param {number} d */
   const put = (s, key, d) => {
     const i = Math.round(s / track.step);
     if (i >= 0 && i < track.n) segs[i].push({ key, d });
   };
+  /** @param {number} s @param {number} m */
   const nearStop = (s, m) => track.stops.some((st) => Math.abs(st.s - s) < m);
   const r = rng(17);
 

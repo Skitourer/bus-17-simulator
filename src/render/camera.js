@@ -7,6 +7,8 @@ const FOV = (70 * Math.PI) / 180;
 export const F = W / 2 / Math.tan(FOV / 2); // focale en pixels
 const NEAR = 0.6;
 
+/** @typedef {{x: number, y: number, sc: number, f: number}} Projected */
+
 export class Camera {
   constructor() {
     this.x = 0;
@@ -48,7 +50,10 @@ export class Camera {
     this.ready = true;
   }
 
-  /** Projette un point monde. Ecrit dans out {x, y, sc, f}; renvoie false si derriere la camera. */
+  /**
+   * Projette un point monde. Ecrit dans out {x, y, sc, f}; renvoie false si derriere la camera.
+   * @param {number} X @param {number} Y @param {number} Z @param {Projected} out
+   */
   project(X, Y, Z, out) {
     const dx = X - this.x,
       dy = Y - this.y,
@@ -66,7 +71,7 @@ export class Camera {
     return true;
   }
 
-  /** ordonnee ecran d'une direction a l'infini d'elevation `a` (rad) */
+  /** ordonnee ecran d'une direction a l'infini d'elevation `a` (rad) @param {number} a */
   horizonY(a) {
     return HZ - Math.tan(a - this.pitch) * F;
   }

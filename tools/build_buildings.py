@@ -2,94 +2,75 @@
 
 Usage :  python tools/build_buildings.py      (apres build_line.py)
 Donnees (c) contributeurs OpenStreetMap, licence ODbL.
-Sortie : { "b": [[hauteur_dm, type, x0, y0, x1, y1, ...], ...], "trees": [x, y, ...] }  coordonnees locales en dm.
-  type : 0 = immeuble/autre, 1 = maison, 2 = commerce/industrie, 3 = edifice public/religieux
+Sortie (coordonnees locales en dm) :
+  { "b": [[hauteur_dm, type, x0, y0, x1, y1, ...], ...], "trees": [x, y, ...] }
+  type : voir geo.building_kind
 """
-import json, math, os, sys
 
-sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
-from build_line import make_proj, ROOT
-from build_map import overpass, dp_ring
+import os
+from typing import Any
+
+from geo import Projection, building_height, building_kind, dp_ring, make_proj, signed_area2
+from sources import ROOT, overpass, read_json, write_json
 
 LINE = os.path.join(ROOT, 'data', 'grenoble', '17.json')
 OUT = os.path.join(ROOT, 'data', 'grenoble', 'buildings.json')
-CORRIDOR = 450   # m de part et d'autre de la ligne
-
-KIND = {'house': 1, 'detached': 1, 'semidetached_house': 1, 'terrace': 1, 'bungalow': 1, 'garage': 1, 'garages': 1,
-        'shed': 1, 'commercial': 2, 'retail': 2, 'industrial': 2, 'warehouse': 2, 'supermarket': 2,
-        'church': 3, 'chapel': 3, 'cathedral': 3, 'public': 3, 'civic': 3, 'school': 3, 'university': 3,
-        'hospital': 3, 'government': 3, 'college': 3}
+CORRIDOR = 450  # m de part et d'autre de la ligne
+MIN_AREA_M2 = 12  # plus petit : abri, local technique... on ignore
 
 
-def height(tags, kind, seed):
-    for k in ('height', 'building:height'):
-        try:
-            return float(tags[k].replace('m', '').strip())
-        except (KeyError, ValueError):
-            pass
-    try:
-        lv = float(tags['building:levels'])
-        return lv * 3.0 + (1.5 if kind != 1 else 1.0)
-    except (KeyError, ValueError):
-        pass
-    r = (math.sin(seed * 12.9898) * 43758.5453) % 1
-    if kind == 1:
-        return 6 + r * 3
-    if kind == 2:
-        return 7 + r * 5
-    if tags.get('building') in ('garage', 'garages', 'shed', 'roof', 'carport'):
-        return 3
-    return 10 + r * 9   # immeuble grenoblois typique : R+3 a R+6
+def building_record(el: dict[str, Any], to_xy: Projection) -> list[int] | None:
+    """[height_dm, kind, x0, y0, ...] for an OSM building way (counter-clockwise ring), or None to skip it."""
+    if 'geometry' not in el:
+        return None
+    tags: dict[str, str] = el.get('tags', {})
+    if tags.get('building') in ('roof', 'carport', 'no'):
+        return None
+    ring = [to_xy(g['lat'], g['lon']) for g in el['geometry']]
+    if len(ring) < 4:
+        return None
+    ring = dp_ring(ring, 0.4)[:-1]
+    if len(ring) < 3:
+        return None
+    a = signed_area2(ring)
+    if abs(a) < 2 * MIN_AREA_M2:
+        return None
+    if a < 0:
+        ring.reverse()
+    kind = building_kind(tags)
+    rec = [int(building_height(tags, kind, el['id']) * 10), kind]
+    for x, y in ring:
+        rec += [round(x * 10), round(y * 10)]
+    return rec
 
 
-def main():
-    line = json.load(open(LINE, encoding='utf-8'))
+def main() -> None:
+    line = read_json(LINE)
     to_xy, to_ll = make_proj(*line['origin'])
-    pts = line['directions'][0]['pts']
-    poly = []
-    for i in range(0, len(pts) // 3, 40):   # un point tous les 80 m
+    pts: list[float] = line['directions'][0]['pts']
+    poly: list[str] = []
+    for i in range(0, len(pts) // 3, 40):  # un point tous les 80 m
         la, lo = to_ll(pts[i * 3], pts[i * 3 + 1])
-        poly += ['%.5f' % la, '%.5f' % lo]
-    q = '[out:json][timeout:300];way["building"](around:%d,%s);out geom qt;' % (CORRIDOR, ','.join(poly))
-    print('Requete Overpass (batiments a %d m de la ligne)...' % CORRIDOR)
-    res = overpass(q)
-    out = []
-    for el in res['elements']:
-        if 'geometry' not in el:
-            continue
-        tags = el.get('tags', {})
-        if tags.get('building') in ('roof', 'carport', 'no'):
-            continue
-        ring = [to_xy(g['lat'], g['lon']) for g in el['geometry']]
-        if len(ring) < 4:
-            continue
-        ring = dp_ring(ring, 0.4)[:-1]
-        if len(ring) < 3:
-            continue
-        # orientation anti-horaire (aire signee > 0)
-        a = sum(ring[i][0] * ring[(i + 1) % len(ring)][1] - ring[(i + 1) % len(ring)][0] * ring[i][1] for i in range(len(ring)))
-        if abs(a) < 2 * 12:   # < 12 m2 : on ignore
-            continue
-        if a < 0:
-            ring.reverse()
-        kind = KIND.get(tags.get('building'), 0)
-        if tags.get('amenity') in ('place_of_worship', 'townhall', 'school', 'university', 'hospital'):
-            kind = 3
-        h = height(tags, kind, el['id'])
-        rec = [int(h * 10), kind]
-        for x, y in ring:
-            rec += [int(round(x * 10)), int(round(y * 10))]
-        out.append(rec)
+        poly += [f'{la:.5f}', f'{lo:.5f}']
+    around = ','.join(poly)
+    print(f'Requete Overpass (batiments a {CORRIDOR} m de la ligne)...')
+    res = overpass(f'[out:json][timeout:300];way["building"](around:{CORRIDOR},{around});out geom qt;')
+    out = [rec for el in res['elements'] if (rec := building_record(el, to_xy)) is not None]
     # arbres reels (alignements, parcs) : natural=tree
-    qt = '[out:json][timeout:300];node["natural"="tree"](around:%d,%s);out skel qt;' % (CORRIDOR + 300, ','.join(poly))
     print('Requete Overpass (arbres)...')
-    trees = []
-    for el in overpass(qt)['elements']:
+    trees: list[int] = []
+    tree_query = (
+        f'[out:json][timeout:300];node["natural"="tree"](around:{CORRIDOR + 300},{around});out skel qt;'
+    )
+    for el in overpass(tree_query)['elements']:
         x, y = to_xy(el['lat'], el['lon'])
-        trees += [int(round(x * 10)), int(round(y * 10))]
-    print('%d arbres' % (len(trees) // 2))
-    json.dump({'attribution': '© contributeurs OpenStreetMap (ODbL)', 'b': out, 'trees': trees}, open(OUT, 'w'), separators=(',', ':'))
-    print('%d batiments, ecrit %s (%.0f ko)' % (len(out), OUT, os.path.getsize(OUT) / 1024))
+        trees += [round(x * 10), round(y * 10)]
+    print(f'{len(trees) // 2} arbres, {len(out)} batiments')
+    write_json(
+        OUT,
+        {'attribution': '© contributeurs OpenStreetMap (ODbL)', 'b': out, 'trees': trees},
+        ensure_ascii=True,
+    )
 
 
 if __name__ == '__main__':

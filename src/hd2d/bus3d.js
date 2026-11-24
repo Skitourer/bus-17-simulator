@@ -24,6 +24,9 @@ const C = {
   bumper: '#3a3d44',
 };
 
+/** @typedef {(g: CanvasRenderingContext2D, w: number, h: number) => void} Painter */
+
+/** @param {number} w @param {number} h @param {Painter} draw */
 function tex(w, h, draw) {
   const c = document.createElement('canvas');
   c.width = w;
@@ -39,6 +42,7 @@ function tex(w, h, draw) {
 }
 
 /** flanc : `doors` = cote droit (portes avant, milieu, arriere) */
+/** @param {boolean} doors */
 function side(doors) {
   return tex(BUS.L * PPM, Math.round(BUS.H * PPM), (g, w, h) => {
     g.fillStyle = C.white;
@@ -113,6 +117,7 @@ function front() {
   });
 }
 
+/** @param {boolean} brake */
 function rear(brake) {
   return tex(Math.round(BUS.W * PPM) * 2, Math.round(BUS.H * PPM) * 2, (g, w, h) => {
     g.fillStyle = C.white;
@@ -153,17 +158,18 @@ export function makeBus() {
   });
   const rearN = rear(false),
     rearB = rear(true);
+  const leftSide = side(false);
+  // la texture du flanc gauche est vue en miroir : on la retourne pour garder l'avant a l'avant
+  leftSide.wrapS = THREE.RepeatWrapping;
+  leftSide.repeat.x = -1;
   const mats = [
     new THREE.MeshLambertMaterial({ map: front() }), // +X avant
     new THREE.MeshLambertMaterial({ map: rearN }), // -X arriere
     new THREE.MeshLambertMaterial({ map: roofTex }), // +Y toit
     new THREE.MeshLambertMaterial({ color: '#222' }), // -Y dessous
     new THREE.MeshLambertMaterial({ map: side(true) }), // +Z droit (portes)
-    new THREE.MeshLambertMaterial({ map: side(false) }), // -Z gauche
+    new THREE.MeshLambertMaterial({ map: leftSide }), // -Z gauche
   ];
-  // la texture du flanc gauche est vue en miroir : on la retourne pour garder l'avant a l'avant
-  mats[5].map.wrapS = THREE.RepeatWrapping;
-  mats[5].map.repeat.x = -1;
   const geo = new THREE.BoxGeometry(BUS.L, BUS.H - 0.35, BUS.W);
   const box = new THREE.Mesh(geo, mats);
   box.position.set(BUS.L / 2 - BUS.REAR, 0.35 + (BUS.H - 0.35) / 2, 0);
@@ -186,6 +192,7 @@ export function makeBus() {
     group: grp,
     body,
     wheels,
+    /** @param {boolean} on */
     setBrake(on) {
       mats[1].map = on ? rearB : rearN;
     },

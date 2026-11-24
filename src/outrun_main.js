@@ -12,9 +12,12 @@ import { readParams, ServiceClock } from './common/service.js';
 
 const canvas = /** @type {HTMLCanvasElement} */ (document.getElementById('game'));
 const ctx = /** @type {CanvasRenderingContext2D} */ (canvas.getContext('2d', { alpha: false }));
+/** @param {string} id */
 const $ = (id) => /** @type {HTMLElement} */ (document.getElementById(id));
 
+/** @type {import('./common/types.js').DriveInput} */
 const keys = { up: false, down: false, left: false, right: false };
+/** @type {Record<string, keyof import('./common/types.js').DriveInput>} */
 const KEYMAP = {
   ArrowUp: 'up',
   KeyW: 'up',
@@ -26,7 +29,23 @@ const KEYMAP = {
   KeyD: 'right',
 };
 
-let line, map, scene, minimap, track, scenery, bus, cam;
+// assigned by load() and start(), before the game state becomes 'play'
+/** @type {import('./common/types.js').LineData} */
+let line;
+/** @type {import('./common/types.js').MapData | null} */
+let map;
+/** @type {Scene} */
+let scene;
+/** @type {Minimap} */
+let minimap;
+/** @type {Track} */
+let track;
+/** @type {{key: string, d: number}[][]} */
+let scenery;
+/** @type {Bus} */
+let bus;
+/** @type {Camera} */
+let cam;
 let state = 'menu',
   paused = false;
 let next = 0,
@@ -64,6 +83,7 @@ window.addEventListener('error', (e) => {
   document.body.dataset.error = String(e.message);
 });
 
+/** @param {number} i direction index */
 function start(i) {
   const d = line.directions[i];
   track = new Track(d, line.step);
@@ -85,11 +105,13 @@ function start(i) {
   $('map').hidden = false;
 }
 
+/** @param {string} t */
 function say(t, dur = 2.5) {
   msg = t;
   msgT = dur;
 }
 
+/** @param {number} dt */
 function update(dt) {
   clock.tick(dt);
   if (doors > 0) {
@@ -152,6 +174,7 @@ function render() {
 let last = performance.now(),
   acc = 0;
 const STEP = 1 / 60;
+/** @param {number} t */
 function frame(t) {
   requestAnimationFrame(frame);
   const el = Math.min(0.1, (t - last) / 1000);
@@ -194,7 +217,7 @@ addEventListener('keyup', (e) => {
   if (k) keys[k] = false;
 });
 addEventListener('blur', () => {
-  for (const k in keys) keys[k] = false;
+  keys.up = keys.down = keys.left = keys.right = false;
 });
 
 load().catch((e) => {

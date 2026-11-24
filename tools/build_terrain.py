@@ -5,44 +5,40 @@ Usage :  python tools/build_terrain.py      (apres build_line.py et build_map.py
   - grille large (300 m) sur 36 km : Belledonne, Vercors, Chartreuse en vrai relief a l'horizon.
 Altitudes en decimetres (entiers), ligne par ligne du sud au nord, d'ouest en est.
 """
-import json, math, os, sys
 
-sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
-from build_line import elevations, make_proj, ROOT  # meme cache et meme API
+import os
+from typing import Any
+
+from geo import Projection, fill_missing, make_proj
+from sources import ROOT, elevations, read_json, write_json
 
 LINE = os.path.join(ROOT, 'data', 'grenoble', '17.json')
 MAP = os.path.join(ROOT, 'data', 'grenoble', 'map.json')
 OUT = os.path.join(ROOT, 'data', 'grenoble', 'terrain.json')
+FINE_STEP = 40
+COARSE_STEP, COARSE_N = 300, 121
 
 
-def grid(to_ll, x0, y0, nx, ny, step):
+def grid(to_ll: Projection, x0: float, y0: float, nx: int, ny: int, step: int) -> dict[str, Any]:
+    """Elevation grid in decimetres; points outside IGN coverage repeat the previous value."""
     pts = [to_ll(x0 + i * step, y0 + j * step) for j in range(ny) for i in range(nx)]
-    el = elevations(pts)
-    fill = next((e for e in el if e is not None), 200)
-    out = []
-    for e in el:
-        if e is None:
-            e = fill
-        fill = e
-        out.append(int(round(e * 10)))
-    return {'x0': x0, 'y0': y0, 'nx': nx, 'ny': ny, 'step': step, 'dm': out}
+    values = fill_missing(elevations(pts), 200)
+    return {'x0': x0, 'y0': y0, 'nx': nx, 'ny': ny, 'step': step, 'dm': [round(e * 10) for e in values]}
 
 
-def main():
-    line = json.load(open(LINE, encoding='utf-8'))
-    mp = json.load(open(MAP, encoding='utf-8'))
+def main() -> None:
+    line = read_json(LINE)
+    mp = read_json(MAP)
     _, to_ll = make_proj(*line['origin'])
     bx0, by0, bx1, by1 = mp['bbox']
-    STEP = 40
-    nx, ny = int((bx1 - bx0) / STEP) + 2, int((by1 - by0) / STEP) + 2
-    print('grille fine %d x %d (%d points)' % (nx, ny, nx * ny))
-    fine = grid(to_ll, bx0, by0, nx, ny, STEP)
+    nx, ny = int((bx1 - bx0) / FINE_STEP) + 2, int((by1 - by0) / FINE_STEP) + 2
+    print(f'grille fine {nx} x {ny} ({nx * ny} points)')
+    fine = grid(to_ll, bx0, by0, nx, ny, FINE_STEP)
     cx, cy = (bx0 + bx1) / 2, (by0 + by1) / 2
-    CSTEP, CN = 300, 121
-    print('grille large %d x %d' % (CN, CN))
-    coarse = grid(to_ll, round(cx - CSTEP * (CN - 1) / 2), round(cy - CSTEP * (CN - 1) / 2), CN, CN, CSTEP)
-    json.dump({'fine': fine, 'coarse': coarse}, open(OUT, 'w'), separators=(',', ':'))
-    print('ecrit', OUT, '%.0f ko' % (os.path.getsize(OUT) / 1024))
+    print(f'grille large {COARSE_N} x {COARSE_N}')
+    half = COARSE_STEP * (COARSE_N - 1) / 2
+    coarse = grid(to_ll, round(cx - half), round(cy - half), COARSE_N, COARSE_N, COARSE_STEP)
+    write_json(OUT, {'fine': fine, 'coarse': coarse}, ensure_ascii=True)
 
 
 if __name__ == '__main__':

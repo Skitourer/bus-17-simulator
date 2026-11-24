@@ -10,6 +10,9 @@
 import * as THREE from 'three';
 import { tree, shelter, stopPole } from '../render/sprites.js';
 
+/** @typedef {{ring: number[][], x0: number, y0: number, x1: number, y1: number}} Footprint */
+
+/** @param {THREE.Texture} t */
 const NEAREST = (t) => {
   t.magFilter = THREE.NearestFilter;
   t.minFilter = THREE.NearestMipmapNearestFilter;
@@ -17,6 +20,7 @@ const NEAREST = (t) => {
   return t;
 };
 
+/** @param {number} w @param {number} h */
 function canvas(w, h) {
   const c = document.createElement('canvas');
   c.width = w;
@@ -26,6 +30,7 @@ function canvas(w, h) {
   return { c, g };
 }
 
+/** @param {number} seed */
 function rng(seed) {
   let s = seed >>> 0 || 1;
   return () => (s = (s * 1664525 + 1013904223) >>> 0) / 4294967296;
@@ -42,6 +47,7 @@ const GROUND = {
 };
 
 /** carte OSM peinte en texture de sol (1 pixel ~ 1,7 m) */
+/** @param {import('../common/types.js').MapData | null} map @param {{x0: number, y0: number, x1: number, y1: number}} b */
 function groundTexture(map, b) {
   const W = 4096,
     H = Math.round((4096 * (b.y1 - b.y0)) / (b.x1 - b.x0));
@@ -51,6 +57,7 @@ function groundTexture(map, b) {
   g.setTransform(sx, 0, 0, -sy, -b.x0 * sx, b.y1 * sy);
   g.fillStyle = GROUND.land;
   g.fillRect(b.x0, b.y0, b.x1 - b.x0, b.y1 - b.y0);
+  /** @param {number[][]} list @param {string} col */
   const poly = (list, col) => {
     g.fillStyle = col;
     g.beginPath();
@@ -61,6 +68,7 @@ function groundTexture(map, b) {
     }
     g.fill('evenodd');
   };
+  /** @param {number[][]} list @param {string} col @param {number} w */
   const lines = (list, col, w) => {
     g.strokeStyle = col;
     g.lineWidth = w;
@@ -100,6 +108,7 @@ function groundTexture(map, b) {
   return t;
 }
 
+/** @param {import('./heightfield.js').Heightfield} hf @param {import('../common/types.js').MapData | null} map */
 function terrainFine(hf, map) {
   const g = hf.fine,
     b = hf.bounds;
@@ -123,12 +132,14 @@ function terrainFine(hf, map) {
   return m;
 }
 
+/** @param {import('./heightfield.js').Heightfield} hf */
 function terrainCoarse(hf) {
   const g = hf.coarse,
     b = hf.bounds;
   const geo = new THREE.PlaneGeometry(1, 1, g.nx - 1, g.ny - 1);
   const pos = geo.attributes.position;
   const col = new Float32Array(pos.count * 3);
+  /** @param {string} h */
   const C = (h) => new THREE.Color(h);
   const cLow = C('#93a072'),
     cForest = C('#4b6b3e'),
@@ -161,6 +172,7 @@ function terrainCoarse(hf) {
 
 // ------------------------------------------------------------------ rues
 /** texture d'une rue (travers u : trottoir | bordure | chaussee | bordure | trottoir), repetee en v */
+/** @param {string} kind */
 function roadTexture(kind) {
   const { c, g } = canvas(64, 16);
   const r = rng(kind.length * 31);
@@ -188,6 +200,7 @@ function roadTexture(kind) {
 }
 
 /** rubans de rues poses sur le relief (un maillage par categorie) */
+/** @param {import('./heightfield.js').Heightfield} hf @param {number[][]} list @param {number} width @param {string} kind @param {number} order */
 function roads(hf, list, width, kind, order) {
   const P = [],
     U = [],
@@ -253,6 +266,7 @@ function roads(hf, list, width, kind, order) {
 }
 
 /** trace de la ligne au sol : chevrons verts (guidage, touche G) */
+/** @param {import('./heightfield.js').Heightfield} hf @param {import('../world/track.js').Track} track */
 function routeStrip(hf, track) {
   const P = [],
     U = [],
@@ -318,6 +332,7 @@ const WALLS = [
   '#bfb3a3',
   '#e2c7a6',
 ];
+/** @type {Record<number, string>} roof colour by building kind (see tools/build_buildings.py) */
 const ROOFS = { 0: '#8a8d93', 1: '#a0543c', 2: '#7c8086', 3: '#6e8a95' };
 
 function facadeTexture() {
@@ -342,6 +357,7 @@ function facadeTexture() {
 }
 
 /** batiments extrudes, fusionnes en deux maillages (murs, toits) ; renvoie aussi un index pour les collisions */
+/** @param {import('./heightfield.js').Heightfield} hf @param {import('../common/types.js').BuildingsData} data */
 function buildings(hf, data) {
   const WP = [],
     WU = [],
@@ -429,6 +445,7 @@ function buildings(hf, data) {
 }
 
 /** distance d'un point au contour d'un anneau */
+/** @param {number[][]} p @param {number} x @param {number} y */
 function edgeDist(p, x, y) {
   let best = 1e18;
   for (let i = 0, j = p.length - 1; i < p.length; j = i++) {
@@ -442,6 +459,7 @@ function edgeDist(p, x, y) {
   }
   return Math.sqrt(best);
 }
+/** @param {number[][]} p @param {number} x @param {number} y */
 function inside(p, x, y) {
   let r = false;
   for (let i = 0, j = p.length - 1; i < p.length; j = i++) {
@@ -461,14 +479,18 @@ function inside(p, x, y) {
  *  - un batiment ne bloque le bus que s'il y penetre de plus de 1 m.
  */
 export class FootprintIndex {
+  /** @param {Footprint[]} fps @param {import('../world/track.js').Track} track */
   constructor(fps, track) {
     this.C = 50;
+    /** @type {Map<number, Footprint[]>} */
     this.cells = new Map();
+    /** @type {Map<number, number[]>} */
     const tp = new Map(); // points du parcours par cellule
     for (let i = 0; i < track.n; i++) {
       const k = Math.floor(track.x[i] / this.C) * 100000 + Math.floor(track.y[i] / this.C);
-      if (!tp.has(k)) tp.set(k, []);
-      tp.get(k).push(i);
+      const cell = tp.get(k);
+      if (cell) cell.push(i);
+      else tp.set(k, [i]);
     }
     let skipped = 0;
     for (const f of fps) {
@@ -491,12 +513,14 @@ export class FootprintIndex {
       for (let cx = Math.floor(f.x0 / this.C); cx <= Math.floor(f.x1 / this.C); cx++)
         for (let cy = Math.floor(f.y0 / this.C); cy <= Math.floor(f.y1 / this.C); cy++) {
           const k = cx * 100000 + cy;
-          if (!this.cells.has(k)) this.cells.set(k, []);
-          this.cells.get(k).push(f);
+          const cell = this.cells.get(k);
+          if (cell) cell.push(f);
+          else this.cells.set(k, [f]);
         }
     }
     this.skipped = skipped;
   }
+  /** @param {number} x @param {number} y */
   hit(x, y) {
     const list = this.cells.get(Math.floor(x / this.C) * 100000 + Math.floor(y / this.C));
     if (!list) return false;
@@ -509,6 +533,7 @@ export class FootprintIndex {
 }
 
 // ------------------------------------------------------------------ arbres (sprites en billboard, un seul appel de dessin)
+/** @param {import('./heightfield.js').Heightfield} hf @param {number[]} positions flat [x, y, ...] */
 function treeBillboards(hf, positions) {
   const VAR = 4,
     TW = 40,
@@ -582,16 +607,19 @@ function treeBillboards(hf, positions) {
 }
 
 /** arbres : OSM (natural=tree) + semis dans les parcs et bois */
+/** @param {import('../common/types.js').MapData | null} map @param {number[]} trees @param {import('./heightfield.js').Heightfield} hf */
 function treePositions(map, trees, hf) {
   const out = [];
   for (let i = 0; i < (trees || []).length; i += 2) out.push(trees[i] / 10, trees[i + 1] / 10);
   if (!map) return out;
   const r = rng(5),
     b = hf.bounds;
-  for (const [kind, dens] of [
+  /** @type {[string, number][]} */
+  const densities = [
     ['park', 1 / 700],
     ['forest', 1 / 160],
-  ]) {
+  ];
+  for (const [kind, dens] of densities) {
     for (const p of map.polys[kind]) {
       let x0 = 1e9,
         y0 = 1e9,
@@ -624,6 +652,7 @@ function treePositions(map, trees, hf) {
 }
 
 // ------------------------------------------------------------------ arrets
+/** @param {import('./heightfield.js').Heightfield} hf @param {import('../world/track.js').Track} track */
 function stops(hf, track) {
   const grp = new THREE.Group();
   const sh = NEAREST(new THREE.CanvasTexture(shelter()));
@@ -664,7 +693,10 @@ function stops(hf, track) {
 }
 
 // ------------------------------------------------------------------ assemblage
-/** @param {any} data { map, buildings, line } @param {import('./heightfield.js').Heightfield} hf @param {any} track */
+/**
+ * @param {THREE.Scene} scene @param {import('./heightfield.js').Heightfield} hf
+ * @param {{map: import('../common/types.js').MapData | null, buildings: import('../common/types.js').BuildingsData | null}} data @param {import('../world/track.js').Track} track
+ */
 export function buildWorld(scene, hf, data, track) {
   scene.add(terrainCoarse(hf));
   scene.add(terrainFine(hf, data.map));
@@ -675,6 +707,7 @@ export function buildWorld(scene, hf, data, track) {
   }
   const route = routeStrip(hf, track);
   scene.add(route);
+  /** @type {Footprint[]} */
   let footprints = [];
   if (data.buildings) {
     const b = buildings(hf, data.buildings);

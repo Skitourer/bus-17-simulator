@@ -5,7 +5,9 @@
  * Chaque sprite : { img: canvas, w: largeur monde (m), h: hauteur monde (m), fog: [canvas par niveau de brouillard] }
  */
 
-/** @returns {[HTMLCanvasElement, CanvasRenderingContext2D]} */
+/** @typedef {{img: HTMLCanvasElement, w: number, h: number, fog: HTMLCanvasElement[]}} SceneSprite */
+
+/** @param {number} w @param {number} h @returns {[HTMLCanvasElement, CanvasRenderingContext2D]} */
 function cv(w, h) {
   const c = document.createElement('canvas');
   c.width = w;
@@ -15,6 +17,7 @@ function cv(w, h) {
   return [c, g];
 }
 
+/** @param {number} seed */
 function rng(seed) {
   let s = seed >>> 0 || 1;
   return () => (s = (s * 1664525 + 1013904223) >>> 0) / 4294967296;
@@ -22,6 +25,7 @@ function rng(seed) {
 
 export const FOG_LEVELS = 6;
 /** variantes pre-embrumees (evite tout filtre couteau a l'execution) */
+/** @param {HTMLCanvasElement} img @param {string} fogColor */
 export function withFog(img, fogColor) {
   const out = [img];
   for (let l = 1; l < FOG_LEVELS; l++) {
@@ -37,6 +41,7 @@ export function withFog(img, fogColor) {
 }
 
 // ---------------------------------------------------------------- police 3x5 pour les girouettes
+/** @type {Record<string, string>} */
 const DIG = {
   0: '111101101101111',
   1: '010110010010111',
@@ -49,6 +54,7 @@ const DIG = {
   8: '111101111101111',
   9: '111101111001111',
 };
+/** @param {CanvasRenderingContext2D} g @param {string} str @param {number} x @param {number} y @param {string} color */
 export function digits(g, str, x, y, color) {
   g.fillStyle = color;
   for (const ch of str) {
@@ -87,6 +93,7 @@ export const BUS_IMG_W = BW + 2 * BM,
 export const BUS_REAR_PX = BW; // largeur de la face arriere dans l'image (pour l'echelle)
 
 /** bandes horizontales de la caisse, en fraction de hauteur (0 = toit, 1 = bas de caisse) */
+/** @type {[number, number, keyof typeof P][]} */
 const BANDS = [
   [0.0, 0.06, 'roof'],
   [0.06, 0.62, 'glass'],
@@ -94,6 +101,10 @@ const BANDS = [
   [0.71, 1.0, 'white'],
 ];
 
+/**
+ * @param {CanvasRenderingContext2D} g @param {number} k @param {number} side @param {number} top
+ * @param {number} bot @param {number} xEdge
+ */
 function drawFlank(g, k, side, top, bot, xEdge) {
   // flanc vu en perspective : colonnes de pixels interpolees vers le point de fuite (au-dessus du bus)
   const fw = Math.round(Math.abs(k) * 15);
@@ -208,6 +219,7 @@ function busFrame(k, brake) {
 }
 
 export function makeBusFrames() {
+  /** @type {{normal: HTMLCanvasElement[], brake: HTMLCanvasElement[]}} */
   const frames = { normal: [], brake: [] };
   for (let i = 0; i < BUS_FRAMES; i++) {
     const k = i - 2;
@@ -218,6 +230,7 @@ export function makeBusFrames() {
 }
 
 // ---------------------------------------------------------------- decor
+/** @param {number} seed */
 export function tree(seed) {
   const r = rng(seed);
   const [c, g] = cv(40, 64);
@@ -292,6 +305,7 @@ export function stopPole() {
 }
 
 const FACADES = ['#e9d9b8', '#d9c3a0', '#ece6d8', '#c9b79c', '#e3cfae', '#bfc3c7', '#d8b48f', '#efe1c6'];
+/** @param {number} seed */
 function building(seed) {
   const r = rng(seed * 7919 + 13);
   const floors = 3 + Math.floor(r() * 4);
@@ -351,8 +365,11 @@ function building(seed) {
   return { img: c, w: w / 3, h: h / 3 }; // 3 px par metre (un etage = 9 px = 3 m)
 }
 
+/** @param {string} fogColor */
 export function makeSceneSprites(fogColor) {
+  /** @type {Record<string, SceneSprite>} */
   const S = {};
+  /** @param {string} key @param {HTMLCanvasElement} img @param {number} w @param {number} h */
   const add = (key, img, w, h) => {
     S[key] = { img, w, h, fog: withFog(img, fogColor) };
   };

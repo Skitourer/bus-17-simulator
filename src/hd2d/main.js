@@ -13,6 +13,7 @@ import { makeBus, BUS } from './bus3d.js';
 import { Drive } from './drive.js';
 import { Post } from './post.js';
 
+/** @param {string} id */
 const $ = (id) => /** @type {HTMLElement} */ (document.getElementById(id));
 const P = readParams();
 if (!location.search) location.replace('index.html');
@@ -83,7 +84,9 @@ addEventListener('resize', resize);
 resize();
 
 // ------------------------------------------------------------------ etat de jeu
+/** @type {import('../common/types.js').DriveInput} */
 const keys = { up: false, down: false, left: false, right: false };
+/** @type {Record<string, keyof import('../common/types.js').DriveInput>} */
 const KEYMAP = {
   ArrowUp: 'up',
   KeyW: 'up',
@@ -94,7 +97,19 @@ const KEYMAP = {
   ArrowRight: 'right',
   KeyD: 'right',
 };
-let hf, track, world, bus, minimap, line;
+// assigned once by load(), before the first frame
+/** @type {Heightfield} */
+let hf;
+/** @type {Track} */
+let track;
+/** @type {ReturnType<typeof buildWorld>} */
+let world;
+/** @type {ReturnType<typeof makeBus>} */
+let bus;
+/** @type {Minimap} */
+let minimap;
+/** @type {import('../common/types.js').LineData} */
+let line;
 const drive = new Drive();
 const clock = new ServiceClock(P.dep);
 let bumps = 0,
@@ -113,6 +128,7 @@ let camMode = +(new URLSearchParams(location.search).get('cam') || 0) % 3,
   zoom = 1,
   camYaw = 0;
 
+/** @param {string} text */
 function toast(text, kind = 'info') {
   const d = document.createElement('div');
   d.className = 'toast ' + kind;
@@ -121,7 +137,10 @@ function toast(text, kind = 'info') {
   setTimeout(() => d.remove(), 2800);
 }
 
-/** abscisse du point du trace le plus proche (recherche locale autour de `hint`, ou globale) */
+/**
+ * abscisse du point du trace le plus proche (recherche locale autour de `hint`, ou globale)
+ * @param {number} x @param {number} y @param {number} hint @param {number} win 0 = global search
+ */
 function nearest(x, y, hint, win) {
   const st = track.step;
   const i0 = win ? Math.max(0, Math.floor((hint - win) / st)) : 0;
@@ -138,6 +157,7 @@ function nearest(x, y, hint, win) {
   return { s: bi * st, d: Math.sqrt(best) };
 }
 
+/** @param {number} s */
 function placeOnRoute(s) {
   const p = track.pos(s, 1.8);
   drive.place(p.x, p.y, p.h);
@@ -147,6 +167,7 @@ function placeOnRoute(s) {
 
 // ------------------------------------------------------------------ chargement
 async function load() {
+  /** @param {string} f */
   const get = (f) =>
     fetch('data/grenoble/' + f).then((r) => {
       if (!r.ok) throw new Error(f);
@@ -215,6 +236,7 @@ function buildSynoptic() {
 }
 
 // ------------------------------------------------------------------ simulation
+/** @param {number} dt */
 function update(dt) {
   clock.tick(dt);
   let inp = keys;
@@ -277,6 +299,7 @@ function autopilot() {
 
 // ------------------------------------------------------------------ rendu
 const tmpV = new THREE.Vector3();
+/** @param {number} dt */
 function render(dt) {
   // bus : position, cap, assiette selon le relief
   const g = bus.group,
@@ -368,6 +391,7 @@ function hud() {
 let last = performance.now(),
   acc = 0;
 const STEP = 1 / 60;
+/** @param {number} t */
 function frame(t) {
   requestAnimationFrame(frame);
   const el = Math.min(0.1, (t - last) / 1000);
@@ -384,6 +408,7 @@ function frame(t) {
 }
 requestAnimationFrame(frame);
 
+/** @param {boolean} p */
 function setPause(p) {
   paused = p;
   $('pause').hidden = !p;
@@ -420,7 +445,7 @@ addEventListener('keyup', (e) => {
   if (k) keys[k] = false;
 });
 addEventListener('blur', () => {
-  for (const k in keys) keys[k] = false;
+  keys.up = keys.down = keys.left = keys.right = false;
 });
 canvas.addEventListener(
   'wheel',
