@@ -6,11 +6,8 @@ Un jeu de conduite de bus dans le navigateur, sur le vrai parcours de la ligne 1
 Grenoble (Verdun – Préfecture ⇄ Meylan, Lycée du Grésivaudan) : vraies rues, vrai relief,
 vrais arrêts et horaires. Pensé d'abord pour un passionné de bus de 12 ans, puis pour tous.
 
-C'est un prototype avec deux moteurs de rendu :
-
-- **HD-2D** : ville en 3D basse résolution au rendu pixel art, conduite libre dans les
-  rues (la piste principale) ;
-- **Pseudo-3D** : route façon OutRun qui suit le parcours.
+C'est un prototype en **HD-2D** : une ville en 3D basse résolution au rendu pixel art,
+où l'on conduit librement dans les rues.
 
 ![Prototype HD-2D : le bus à Verdun – Préfecture, avec le panneau du prochain arrêt et la mini-carte](docs/screenshot-hd2d.png)
 

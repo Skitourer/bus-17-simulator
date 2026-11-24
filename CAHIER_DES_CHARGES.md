@@ -12,6 +12,7 @@
 - Statuts : `FAIT` (présent dans le prototype), `À FAIRE`, `À DÉCIDER` (question ouverte : ne pas trancher seul, demander).
 - En cas de doute ou de conflit entre deux exigences, **demander au propriétaire** plutôt que de choisir.
 - Ordre de travail imposé : **le rendu graphique d'abord** (section 3), le gameplay ensuite.
+- **Abandon de la pseudo-3D façon OutRun (24/11/2026)** : seul le moteur **HD-2D** (Three.js, conduite libre) est conservé. Les passages de ce document qui décrivent la pseudo-3D (§3.1, GFX-01, GFX-03, §7, §8, §9) sont **obsolètes** et seront réécrits lors de la traduction du document (issue #2).
 - **Redémarrage du 22/11/2026** : la réalisation précédente (faite avec une autre IA) est abandonnée. Les colonnes « Statut » des tableaux ci-dessous ne sont **plus fiables** : seul le §10 (suivi d'avancement) fait foi.
 
 ---

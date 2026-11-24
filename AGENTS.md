@@ -245,27 +245,25 @@ approved. An approval covers the proposed action only.
 - Coverage: the 80 % floor applies to the pure logic modules listed in
   `vitest.config.js` and to `tools/geo.py`; rendering, UI and network code are checked in
   the browser or by rebuilding the data (see ADR 0001).
-- Frozen references: `bus17-outrun.html` and `bus17-simulateur-v2.html` are excluded from
-  formatting and checks.
+- Frozen reference: `bus17-simulateur-v2.html` (older single-file prototype, UI reference)
+  is excluded from formatting and checks.
 
 ## Project specifics
 
 - **What**: browser bus-driving game on the real route of Grenoble bus line 17
-  (Verdun – Préfecture ⇄ Meylan, Lycée du Grésivaudan). Two rendering prototypes: HD-2D
-  (Three.js, free driving in the city, the priority) and pseudo-3D OutRun style.
+  (Verdun – Préfecture ⇄ Meylan, Lycée du Grésivaudan). Rendered in HD-2D (Three.js,
+  free driving in the city); the pseudo-3D OutRun prototype was dropped on 2026-11-24.
   Requirements: `CAHIER_DES_CHARGES.md` (French); feature wishlist: `idees.txt`.
 - **Start-of-project answers (2026-11-24)**: personal project · public repo
   `Skitourer/bus-17-simulator` · licence MIT for code; data in `data/` stays ODbL (OSM,
   GTFS M réso) and Licence Ouverte (IGN) with attribution · no accounts (no 2FA) · no
-  Linux server, no professional network · deliverable: static site (GitHub Pages, to
-  decide) · API reference: not needed yet.
+  Linux server, no professional network · deliverable: static site on GitHub Pages · API reference: not needed yet.
 - **Architecture**: plain JavaScript ES modules served as static files, no build step.
   Three.js is vendored in `vendor/` (MIT). Python scripts in `tools/` (standard library
-  only) download OSM / GTFS / IGN data and write the JSON files in `data/grenoble/`.
-- **Layout**: `index.html` menu · `hd2d.html` + `src/hd2d/` · `outrun.html` +
-  `src/outrun_main.js`, `src/render/`, `src/world/` · shared `src/common/`, `src/sim/`,
-  `src/ui/` · `bus17-outrun.html` and `bus17-simulateur-v2.html`: older single-file
-  proofs of concept kept as reference.
+  plus `geo.py` / `sources.py`) download OSM / GTFS / IGN data and write the JSON files in `data/grenoble/`.
+- **Layout**: `index.html` + `src/menu.js` menu · `hd2d.html` + `src/hd2d/` game · shared
+  `src/common/`, `src/world/track.js`, `src/ui/minimap.js` · `tests/js/`, `tests/python/` ·
+  `bus17-simulateur-v2.html`: older single-file prototype kept as UI reference.
 - **Commands**: run `python -m http.server 8017` at the root, open
   `http://localhost:8017/`. Rebuild data (network needed, cached in `tools/cache/`,
   git-ignored): `uv run python tools/build_line.py`, then `build_map.py`,
@@ -278,4 +276,4 @@ approved. An approval covers the proposed action only.
 - **Ports**: 8017 (local static server).
 - **Glossary**: line (ligne) · direction (sens) · stop (arrêt) · service (a departure of
   the timetable) · route / track (tracé) · SAE (on-board passenger information panel) ·
-  HD-2D (low-res 3D world with 2D sprites) · OutRun (pseudo-3D segment road).
+  HD-2D (low-res 3D world with 2D sprites).
