@@ -26,6 +26,10 @@ const DECK_CATCH = 2.5;
  * @property {number[]} ground n x n heights (dm), row by row from the south
  * @property {number[][][]} road carriageway polygons: rings [x, y, ...] (dm, relative to the tile origin)
  * @property {number[][]} bridges [width, x, y, z, x, y, z, ...] (dm, x and y relative to the tile origin)
+ * @property {number[][][]} sidewalks sidewalk polygons, like `road`
+ * @property {number[][]} kerbs carriageway outline along sidewalks: [x, y, ...] (dm, relative to the tile origin)
+ * @property {number[][]} centre_lines dashed centre lines: [x, y, ...] (dm, relative)
+ * @property {number[][]} crossings zebra stripes: [x, y, x, y, x, y, x, y] (dm, relative)
  * @property {number[][]} buildings [height, kind, x, y, ...] (dm; clipped off the carriageway, counter-clockwise)
  * @property {number[]} trees [x, y, ...] (dm, relative to the tile origin)
  */

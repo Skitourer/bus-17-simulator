@@ -2,20 +2,26 @@
 
 import numpy as np
 import pytest
-from shapely import MultiPolygon, Point, Polygon
+from shapely import LineString, MultiPolygon, Point, Polygon
 from streets import (
     BANK,
     BUILDING_CLEARANCE,
+    CROSSING_DEPTH,
     SIDEWALK,
+    STRIPE,
     TREE_CLEARANCE,
     TREE_DENSITY,
     RoadEdge,
     RoadHeights,
     TerrainGrid,
     carriageway,
+    centre_lines,
     clear_trees,
     clip_building,
+    crossings,
+    junction_radii,
     keep_out_zone,
+    kerb_lines,
     load_edges,
     natural_profiles,
     node_heights,
@@ -24,7 +30,9 @@ from streets import (
     sample_positions,
     seeded_trees,
     shaped_ground,
+    sidewalk_zone,
     smoothstep,
+    trimmed,
 )
 
 
@@ -45,6 +53,7 @@ def edge(
 def test_load_edges_decodes_the_compact_format() -> None:
     data = {
         'flags': ['oneway', 'roundabout', 'bridge'],
+        'classes': ['busway', 'minor', 'primary'],
         'edges': [[0, 1, 2, 65, 1, 0b101, 0, 0, 100, 50]],
     }
     (e,) = load_edges(data)
@@ -52,6 +61,7 @@ def test_load_edges_decodes_the_compact_format() -> None:
     assert e.flags == {'oneway', 'bridge'}
     assert e.level == 'bridge'
     assert e.coords == [(0.0, 0.0), (10.0, 5.0)]
+    assert e.cls == 'primary'
     assert edge(0, 1, [(0, 0), (1, 0)], frozenset({'tunnel'})).level == 'tunnel'
 
 
@@ -170,3 +180,56 @@ def test_trees_are_seeded_in_parks_and_kept_off_roads_and_buildings() -> None:
     assert all(abs(y - 50) > 4 + TREE_CLEARANCE - 1e-6 for _, y in kept)
     assert not any(house.contains(Point(x, y)) for x, y in kept)
     assert clear_trees([], road, []) == []
+
+
+def cross_junction() -> list[RoadEdge]:
+    """Four 8 m roads meeting at node 0 (origin): west, east, south (primary) and north (service)."""
+    return [
+        edge(1, 0, [(-100.0, 0.0), (0.0, 0.0)], width=8.0),
+        edge(0, 2, [(0.0, 0.0), (100.0, 0.0)], width=8.0),
+        RoadEdge(3, 0, 8.0, frozenset(), [(0.0, -100.0), (0.0, 0.0)], 'primary'),
+        RoadEdge(0, 4, 4.0, frozenset(), [(0.0, 0.0), (0.0, 100.0)], 'service'),
+    ]
+
+
+def test_sidewalks_and_kerbs_follow_streets_with_sidewalks() -> None:
+    edges = cross_junction()
+    surface = carriageway(edges)
+    walks = sidewalk_zone(edges, surface)
+    assert not walks.intersects(surface.buffer(-0.01))
+    assert walks.contains(Point(-50, 5.5))  # beside the west road
+    assert not walks.contains(Point(3.5, 60))  # the service road has none
+    kerbs = kerb_lines(surface, walks)
+    assert kerbs and all(len(k) >= 2 for k in kerbs)
+    assert sum(LineString(k).length for k in kerbs) > 300
+
+
+def test_junction_radii_and_trimmed_lines() -> None:
+    edges = cross_junction()
+    radii = junction_radii(edges)
+    assert radii == {0: 5.0}
+    west = trimmed(edges[0], radii)
+    assert west is not None and west.length == pytest.approx(95.0)
+    assert trimmed(edge(0, 0, [(0.0, 0.0), (6.0, 0.0)]), radii) is None
+
+
+def test_centre_lines_skip_one_way_narrow_and_service_roads() -> None:
+    edges = [
+        *cross_junction(),
+        edge(5, 6, [(0.0, 200.0), (100.0, 200.0)], frozenset({'oneway'})),
+        edge(7, 8, [(0.0, 300.0), (100.0, 300.0)], width=4.0),
+        edge(9, 10, [(0.0, 400.0), (100.0, 400.0)], frozenset({'tunnel'})),
+    ]
+    lines = centre_lines(edges, junction_radii(edges))
+    assert len(lines) == 3  # west, east and south (primary) of the junction
+    assert all(LineString(line).length == pytest.approx(95.0) for line in lines)
+
+
+def test_crossings_cross_main_roads_next_to_junctions() -> None:
+    stripes = crossings(cross_junction(), junction_radii(cross_junction()))
+    assert len(stripes) == 7  # 8 m road: 0.5 m stripes every metre across the 7 m painted width
+    for s in stripes:
+        poly = Polygon(s)
+        assert poly.area == pytest.approx(STRIPE * CROSSING_DEPTH)
+        assert -10 < poly.centroid.y < -5  # just south of the junction, on the primary road
+    assert crossings([RoadEdge(0, 1, 8.0, frozenset(), [(0.0, 0.0), (0.0, 5.0)], 'primary')], {0: 5.0}) == []
