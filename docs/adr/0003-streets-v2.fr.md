@@ -21,7 +21,11 @@ correspondait pas à ce qui était dessiné.
   - la chaussée : union de tous les tronçons à leur vraie largeur (carrefours et
     ronds-points propres), découpée selon les triangles du sol pour que chaque morceau
     soit dans le même plan que le sol ;
-  - les tabliers des ponts, sous forme d'axes avec hauteurs.
+  - les tabliers des ponts, sous forme d'axes avec hauteurs ;
+  - les bâtiments recoupés à 0,3 m de la chaussée, et les arbres (OSM et semés dans les
+    parcs et bois) gardés à 1 m de la chaussée et hors des bâtiments. Les bâtiments
+    reposent sur un socle en pierre depuis leur point le plus bas, donc aucun mur n'est
+    coupé par la pente.
 - Dans le jeu, `Ground` (`src/hd2d/ground.js`) est la seule source de hauteur : triangles
   du sol exactement comme affichés, tablier des ponts quand le véhicule est à leur niveau,
   grille IGN large hors des tuiles.

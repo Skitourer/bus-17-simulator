@@ -2,20 +2,27 @@
 
 import numpy as np
 import pytest
-from shapely import MultiPolygon, Polygon
+from shapely import MultiPolygon, Point, Polygon
 from streets import (
     BANK,
+    BUILDING_CLEARANCE,
     SIDEWALK,
+    TREE_CLEARANCE,
+    TREE_DENSITY,
     RoadEdge,
     RoadHeights,
     TerrainGrid,
     carriageway,
+    clear_trees,
+    clip_building,
+    keep_out_zone,
     load_edges,
     natural_profiles,
     node_heights,
     road_pieces,
     road_profiles,
     sample_positions,
+    seeded_trees,
     shaped_ground,
     smoothstep,
 )
@@ -133,3 +140,33 @@ def test_road_pieces_follow_the_ground_triangles() -> None:
         sides = {np.sign(round((x - cell_x) - (y - cell_y), 9)) for x, y in p.exterior.coords}
         assert not ({1.0, -1.0} <= sides)
     assert road_pieces(MultiPolygon(), 0.0, 0.0, 3, 10.0) == []
+
+
+def test_clip_building_removes_the_part_on_the_carriageway() -> None:
+    road = carriageway([edge(1, 2, [(-50.0, 0.0), (50.0, 0.0)], width=8.0)])  # y in [-4, 4]
+    zone = keep_out_zone(road, BUILDING_CLEARANCE)
+    overlapping = [(0.0, 2.0), (10.0, 2.0), (10.0, 12.0), (0.0, 12.0)]
+    (part,) = clip_building(overlapping, zone)
+    assert min(y for _, y in part) == pytest.approx(4 + BUILDING_CLEARANCE, abs=0.05)
+    assert Polygon(part).exterior.is_ccw
+    away = [(0.0, 20.0), (10.0, 20.0), (10.0, 30.0), (0.0, 30.0)]
+    assert clip_building(away, zone) == [away]
+    sliver = [(0.0, 3.0), (10.0, 3.0), (10.0, 5.0), (0.0, 5.0)]  # what is left is under 12 m2
+    assert clip_building(sliver, zone) == []
+    bowtie = [(20.0, 2.0), (40.0, 22.0), (40.0, 2.0), (20.0, 22.0)]  # invalid ring on the road: repaired
+    assert sum(Polygon(p).area for p in clip_building(bowtie, zone)) > 0
+
+
+def test_trees_are_seeded_in_parks_and_kept_off_roads_and_buildings() -> None:
+    park = [0.0, 0.0, 100.0, 0.0, 100.0, 100.0, 0.0, 100.0]
+    trees = seeded_trees({'park': [park], 'forest': [[0.0, 0.0, 1.0, 1.0]]}, seed=5)
+    assert len(trees) == round(100 * 100 * TREE_DENSITY['park'])
+    assert all(0 <= x <= 100 and 0 <= y <= 100 for x, y in trees)
+    assert seeded_trees({'park': [park]}, seed=5) == trees  # deterministic
+    road = carriageway([edge(1, 2, [(-50.0, 50.0), (150.0, 50.0)], width=8.0)])
+    house = Polygon([(10, 10), (30, 10), (30, 30), (10, 30)])
+    kept = clear_trees(trees, keep_out_zone(road, TREE_CLEARANCE), [house])
+    assert 0 < len(kept) < len(trees)
+    assert all(abs(y - 50) > 4 + TREE_CLEARANCE - 1e-6 for _, y in kept)
+    assert not any(house.contains(Point(x, y)) for x, y in kept)
+    assert clear_trees([], road, []) == []

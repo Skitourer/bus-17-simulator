@@ -185,11 +185,10 @@ async function load() {
       if (!r.ok) throw new Error(f);
       return r.json();
     });
-  const [l, map, terrain, buildings, tileIndex] = await Promise.all([
+  const [l, map, terrain, tileIndex] = await Promise.all([
     get('17.json'),
     get('map.json').catch(() => null),
     get('terrain.json'),
-    get('buildings.json').catch(() => null),
     get('tiles/index.json'),
   ]);
   /** @type {Map<string, import('./ground.js').TileData>} */
@@ -209,7 +208,7 @@ async function load() {
   });
   $('loadMsg').textContent = t('game.loadingStreets');
   await new Promise((r) => setTimeout(r, 30));
-  world = buildWorld(scene, hf, { map, buildings, tiles }, track);
+  world = buildWorld(scene, hf, { map, tiles }, track);
   bus = makeBus();
   scene.add(bus.group);
   minimap = new Minimap($('map'), map, line);

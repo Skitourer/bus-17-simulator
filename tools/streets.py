@@ -12,10 +12,14 @@ from typing import Any
 import numpy as np
 import shapely
 from geo import Point, gauss_smooth
-from shapely import LineString, MultiPolygon, Polygon, STRtree
+from shapely import LineString, MultiPolygon, Polygon, STRtree, box, prepare
+from shapely.geometry.base import BaseGeometry
+from shapely.geometry.polygon import orient
 from shapes import (
     FloatArray,
     GeometryArray,
+    clip,
+    contains,
     coordinates,
     distances,
     interpolate,
@@ -212,3 +216,69 @@ def road_pieces(surface: Polygon | MultiPolygon, ox: float, oy: float, n: int, s
         parts = list(geom.geoms) if isinstance(geom, MultiPolygon) else [geom]
         pieces += [g for g in parts if isinstance(g, Polygon) and g.area > 0.05]
     return pieces
+
+
+MIN_BUILDING_AREA = 12.0  # m2, same threshold as build_buildings.py
+BUILDING_CLEARANCE = 0.3  # m kept between a clipped building and the carriageway
+TREE_CLEARANCE = 1.0  # m: no tree trunk closer than this to the carriageway
+TREE_DENSITY = {'park': 1 / 700, 'forest': 1 / 160}  # trees per m2 seeded in OSM parks and woods
+MAX_SEEDED_TREES = 800  # per OSM area, keeps big forests cheap to draw
+
+
+def keep_out_zone(surface: BaseGeometry, clearance: float) -> BaseGeometry:
+    """Carriageway grown by `clearance`, prepared for many intersection tests."""
+    zone = surface.buffer(clearance, quad_segs=2)
+    prepare(zone)
+    return zone
+
+
+def clip_building(ring: Sequence[Point], keep_out: BaseGeometry) -> list[list[Point]]:
+    """Footprint minus `keep_out` (see keep_out_zone): CCW rings of the parts big enough to keep."""
+    footprint = Polygon(ring)
+    if not footprint.is_valid:
+        footprint = footprint.buffer(0)
+    if not footprint.intersects(keep_out):
+        return [list(ring)]
+    local = clip(keep_out, box(*footprint.buffer(1.0).bounds))
+    rest = footprint.difference(local)
+    parts = list(rest.geoms) if isinstance(rest, MultiPolygon) else [rest]
+    out: list[list[Point]] = []
+    for part in parts:
+        if isinstance(part, Polygon) and part.area >= MIN_BUILDING_AREA:
+            exterior = orient(part).exterior
+            out.append([(float(x), float(y)) for x, y in list(exterior.coords)[:-1]])
+    return out
+
+
+def seeded_trees(polys: dict[str, list[list[float]]], seed: int) -> list[Point]:
+    """Random trees inside OSM parks and woods, deterministic for a given seed."""
+    rnd = np.random.default_rng(seed)
+    out: list[Point] = []
+    for kind, density in TREE_DENSITY.items():
+        for flat in polys.get(kind, []):
+            ring = [(flat[i], flat[i + 1]) for i in range(0, len(flat) - 1, 2)]
+            if len(ring) < 3:
+                continue
+            area = Polygon(ring)
+            x0, y0, x1, y1 = area.bounds
+            count = min(MAX_SEEDED_TREES, round((x1 - x0) * (y1 - y0) * density))
+            xs = rnd.uniform(x0, x1, count)
+            ys = rnd.uniform(y0, y1, count)
+            if count:
+                inside = contains(area, points(xs, ys))
+                out += [(float(x), float(y)) for x, y in zip(xs[inside], ys[inside], strict=True)]
+    return out
+
+
+def clear_trees(trees: Sequence[Point], keep_out: BaseGeometry, footprints: Sequence[Polygon]) -> list[Point]:
+    """Trees outside `keep_out` (carriageway + TREE_CLEARANCE, see keep_out_zone) and every building."""
+    if not trees:
+        return []
+    xs = np.array([t[0] for t in trees])
+    ys = np.array([t[1] for t in trees])
+    pts = points(xs, ys)
+    keep = ~intersects(keep_out, pts)
+    if footprints:
+        hit, _ = STRtree(list(footprints)).query(pts, predicate='within')
+        keep[np.asarray(hit, dtype=np.int64)] = False
+    return [(float(x), float(y)) for x, y in zip(xs[keep], ys[keep], strict=True)]
