@@ -45,6 +45,13 @@
       "max": 3,
       "doc": "Distance from the front of the bus to the middle of the front door, which must face the stop."
     },
+    "steeringRatio": {
+      "value": 18,
+      "unit": "ratio",
+      "min": 5,
+      "max": 40,
+      "doc": "Steering wheel turn per front wheel turn (cabin view)."
+    },
     "texturePixelsPerMetre": {
       "value": 8,
       "unit": "px/m",
@@ -398,6 +405,121 @@
         "max": 8,
         "doc": "Sky view: largest tilt-shift blur radius, in internal pixels."
       }
+    },
+    "cabin": {
+      "eyeFromFront": {
+        "value": 1.0,
+        "unit": "m",
+        "min": 0.3,
+        "max": 11,
+        "doc": "Cabin view: distance of the eye behind the front of the bus."
+      },
+      "eyeHeight": {
+        "value": 2.25,
+        "unit": "m",
+        "min": 0.8,
+        "max": 3,
+        "doc": "Cabin view: height of the eye above the road."
+      },
+      "eyeSide": {
+        "value": -0.65,
+        "unit": "m",
+        "min": -1.2,
+        "max": 1.2,
+        "doc": "Cabin view: side offset of the eye from the middle of the bus (negative = left)."
+      },
+      "pitch": {
+        "value": 0.12,
+        "unit": "rad",
+        "min": 0.06,
+        "max": 0.8,
+        "doc": "Cabin view: angle of the view below the horizon."
+      },
+      "fov": { "value": 70, "unit": "°", "min": 30, "max": 100, "doc": "Cabin view: vertical field of view." }
+    },
+    "passenger": {
+      "eyeFromFront": {
+        "value": 6.5,
+        "unit": "m",
+        "min": 0.3,
+        "max": 11,
+        "doc": "Passenger view: distance of the eye behind the front of the bus."
+      },
+      "eyeHeight": {
+        "value": 1.75,
+        "unit": "m",
+        "min": 0.8,
+        "max": 3,
+        "doc": "Passenger view: height of the eye above the road."
+      },
+      "eyeSide": {
+        "value": 0.6,
+        "unit": "m",
+        "min": -1.2,
+        "max": 1.2,
+        "doc": "Passenger view: side offset of the eye from the middle of the bus (negative = left)."
+      },
+      "pitch": {
+        "value": 0.06,
+        "unit": "rad",
+        "min": 0.06,
+        "max": 0.8,
+        "doc": "Passenger view: angle of the view below the horizon."
+      },
+      "fov": {
+        "value": 70,
+        "unit": "°",
+        "min": 30,
+        "max": 100,
+        "doc": "Passenger view: vertical field of view."
+      }
+    },
+    "mirrors": {
+      "lines": {
+        "value": 72,
+        "unit": "px",
+        "min": 24,
+        "max": 240,
+        "integer": true,
+        "doc": "Mirrors: height of their internal image (HD-2D pixels)."
+      },
+      "aspect": { "value": 0.8, "unit": "ratio", "min": 0.4, "max": 2, "doc": "Mirrors: width / height." },
+      "fov": { "value": 28, "unit": "°", "min": 10, "max": 90, "doc": "Mirrors: vertical field of view." },
+      "widthShare": {
+        "value": 0.1,
+        "unit": "screen width",
+        "min": 0.05,
+        "max": 0.3,
+        "doc": "Mirrors: width on the screen."
+      },
+      "top": {
+        "value": 0.29,
+        "unit": "screen height",
+        "min": 0,
+        "max": 0.8,
+        "doc": "Mirrors: top edge, from the top of the screen."
+      },
+      "height": {
+        "value": 2.2,
+        "unit": "m",
+        "min": 1,
+        "max": 3.5,
+        "doc": "Mirrors: height of the mirror heads above the road."
+      },
+      "outward": {
+        "value": 1.5,
+        "unit": "m",
+        "min": 0,
+        "max": 5,
+        "doc": "Mirrors: the view aims this far outwards 10 m behind the mirror, to show the side of the road."
+      }
+    },
+    "interiorNear": {
+      "value": 0.3,
+      "unit": "m",
+      "min": 0.05,
+      "max": 1,
+      "doc": "Near clipping distance in the views from inside the bus (1 m outside)."
     },
     "targetHeight": {
       "value": 2,

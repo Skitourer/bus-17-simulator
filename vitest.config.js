@@ -23,6 +23,7 @@ export default defineConfig({
         'src/hd2d/shore.js',
         'src/hd2d/debug.js',
         'src/hd2d/stops.js',
+        'src/hd2d/views.js',
         'src/settings/settings.js',
       ],
       thresholds: { lines: 80, functions: 80, branches: 80, statements: 80 },

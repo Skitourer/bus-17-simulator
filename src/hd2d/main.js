@@ -15,6 +15,8 @@ import { Post } from './post.js';
 import { OrbitCamera } from './orbit.js';
 import { FreeFly, findStop, stepStop, turboDrive } from './debug.js';
 import { Doors, StopService, drawRequests, serviceSeed } from './stops.js';
+import { Mirrors } from './mirrors.js';
+import { eyePosition, lookTarget, steeringWheelAngle } from './views.js';
 /** @typedef {import('./stops.js').StopEvent} StopEvent */
 import { initI18n, t } from '../i18n/i18n.js';
 import { loadSettings } from '../settings/settings.js';
@@ -143,7 +145,11 @@ const CAMS = /** @type {const} */ (['hd2d', 'chase', 'sky']).map((id) => ({
   name: 'camera.' + id,
   ...S.camera[id],
 }));
-let camMode = +(new URLSearchParams(location.search).get('cam') || 0) % CAMS.length,
+/** Views from inside the bus, after the exterior cameras in the C cycle. */
+const INTERIOR = /** @type {const} */ (['cabin', 'passenger']);
+const VIEW_COUNT = CAMS.length + INTERIOR.length;
+const mirrors = new Mirrors(renderer, S.camera.mirrors, B);
+let camMode = +(new URLSearchParams(location.search).get('cam') || 0) % VIEW_COUNT,
   zoom = 1,
   camYaw = 0;
 const orbit = new OrbitCamera(S.camera.orbit);
@@ -397,13 +403,22 @@ function render(dt) {
   for (const w of bus.wheels) w.rotation.z -= (drive.v * dt) / 0.5;
 
   // camera
-  const m = CAMS[camMode];
+  const inside = flying ? null : interiorView();
+  const m = CAMS[Math.min(camMode, CAMS.length - 1)];
   if (flying) flyCamera(dt);
+  else if (inside) insideCamera(dt, inside);
   else followCamera(dt, m, sh);
-  if (camera.fov !== m.fov) {
-    camera.fov = m.fov;
+  bus.interior.visible = inside !== null;
+  document.body.classList.toggle('cabin', inside === 'cabin');
+  const fov = inside ? S.camera[inside].fov : m.fov,
+    near = inside ? S.camera.interiorNear : 1;
+  if (camera.fov !== fov || camera.near !== near) {
+    camera.fov = fov;
+    camera.near = near;
     camera.updateProjectionMatrix();
   }
+  if (inside === 'cabin')
+    $('wheel').style.transform = `rotate(${-steeringWheelAngle(drive.delta, B.steeringRatio)}rad)`;
   sky.position.copy(camera.position);
   world.water.uniforms.time.value += dt;
 
@@ -411,11 +426,57 @@ function render(dt) {
   sun.target.position.set(c.x, z, -c.y);
   sun.position.copy(tmpV.copy(sunDir).multiplyScalar(400).add(sun.target.position));
   post.mat.uniforms.focus.value = m.focus;
-  post.mat.uniforms.blur.value = m.blur;
+  // no tilt-shift blur from inside the bus
+  post.mat.uniforms.blur.value = inside ? 0 : m.blur;
   post.render(scene, camera);
+  if (inside === 'cabin') {
+    mirrors.render(scene, bus.body, innerWidth, innerHeight);
+    const rects = mirrors.rects(innerWidth, innerHeight);
+    placeFrame($('mirrorL'), rects.left);
+    placeFrame($('mirrorR'), rects.right);
+  }
 
   hud();
   minimap.draw({ x: c.x, y: c.y, h: drive.h }, service.next);
+}
+
+/**
+ * Put an HTML frame over a screen rectangle.
+ * @param {HTMLElement} el @param {{x: number, y: number, w: number, h: number}} r
+ */
+function placeFrame(el, r) {
+  Object.assign(el.style, { left: r.x + 'px', top: r.y + 'px', width: r.w + 'px', height: r.h + 'px' });
+}
+
+/** The view from inside the bus currently selected, or null for an exterior camera. */
+function interiorView() {
+  return camMode >= CAMS.length ? INTERIOR[camMode - CAMS.length] : null;
+}
+
+/** Automatic yaw and pitch of the current view (start and end of a mouse drag). */
+function autoView() {
+  const inside = interiorView();
+  return inside
+    ? { yaw: drive.h, pitch: S.camera[inside].pitch }
+    : { yaw: camYaw, pitch: CAMS[camMode].pitch };
+}
+
+/**
+ * Camera at an eye inside the bus, moving with the body (slope and roll), looking ahead or where the mouse
+ * turned it.
+ * @param {number} dt @param {(typeof INTERIOR)[number]} id
+ */
+function insideCamera(dt, id) {
+  const eye = eyePosition(S.camera[id], B);
+  bus.group.updateMatrixWorld();
+  const p = bus.body.localToWorld(tmpV.set(eye.x, eye.y, eye.z));
+  const view = orbit.view(dt, drive.h, S.camera[id].pitch);
+  const look = lookTarget({ x: p.x, y: -p.z, z: p.y }, view.yaw, view.pitch);
+  $('camReset').hidden = orbit.state === 'auto';
+  camera.position.copy(p);
+  camera.lookAt(look.x, look.z, -look.y);
+  // keep the exterior cameras turned with the bus for when the player switches back
+  camYaw = drive.h;
 }
 
 /**
@@ -480,6 +541,9 @@ function hud() {
   $('saeBoard').classList.toggle('on', request.board);
   $('doorsState').textContent = t('game.doors.' + doors.state);
   $('doorsState').className = 'doors ' + doors.state;
+  $('cabSpeed').textContent = String(Math.round(Math.abs(drive.v) * 3.6));
+  $('cabStop').classList.toggle('on', request.alight);
+  $('cabDoors').classList.toggle('on', !doors.closed);
   if (st) {
     $('saeStop').textContent = st.name;
     const d = Math.max(0, st.s - progress - (B.bodyLength - B.rearOverhang));
@@ -651,10 +715,11 @@ addEventListener('keydown', (e) => {
     else setPause(true);
   }
   if (e.code === 'KeyC') {
-    camMode = (camMode + 1) % CAMS.length;
+    camMode = (camMode + 1) % VIEW_COUNT;
     zoom = 1;
     orbit.snap();
-    toast(t('toast.camera', { name: t(CAMS[camMode].name) }));
+    const id = interiorView();
+    toast(t('toast.camera', { name: t(id ? 'camera.' + id : CAMS[camMode].name) }));
   }
   if (e.code === 'KeyV') orbit.reset();
   if (e.code === 'KeyG') {
@@ -687,7 +752,10 @@ canvas.addEventListener('pointerdown', (e) => {
 canvas.addEventListener('pointermove', (e) => {
   if (!orbitDrag) return;
   if (flying) fly.turn(e.clientX - orbitDrag.x, e.clientY - orbitDrag.y);
-  else orbit.drag(e.clientX - orbitDrag.x, e.clientY - orbitDrag.y, camYaw, CAMS[camMode].pitch);
+  else {
+    const auto = autoView();
+    orbit.drag(e.clientX - orbitDrag.x, e.clientY - orbitDrag.y, auto.yaw, auto.pitch);
+  }
   orbitDrag = { x: e.clientX, y: e.clientY };
 });
 const endOrbitDrag = () => {
