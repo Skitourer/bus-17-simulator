@@ -824,5 +824,62 @@
       "max": 50,
       "doc": "Debug mode: the free-flying camera stays this high above the ground."
     }
+  },
+  "passengers": {
+    "initialMax": {
+      "value": 8,
+      "unit": "people",
+      "min": 0,
+      "max": 40,
+      "integer": true,
+      "doc": "Most people on board at the start of a service."
+    },
+    "alightMax": {
+      "value": 3,
+      "unit": "people",
+      "min": 1,
+      "max": 20,
+      "integer": true,
+      "doc": "Most people getting off at a requested stop."
+    },
+    "boardMax": {
+      "value": 4,
+      "unit": "people",
+      "min": 1,
+      "max": 20,
+      "integer": true,
+      "doc": "Most people waiting at a stop."
+    },
+    "interval": {
+      "value": 1.0,
+      "unit": "s",
+      "min": 0.2,
+      "max": 5,
+      "doc": "Time between two people getting off or on."
+    },
+    "walkSpeed": {
+      "value": 1.3,
+      "unit": "m/s",
+      "min": 0.5,
+      "max": 3,
+      "doc": "Walking speed of the people.",
+      "source": "Usual walking speed of adults (about 1.3 m/s)"
+    },
+    "walkAway": {
+      "value": 4,
+      "unit": "m",
+      "min": 1,
+      "max": 15,
+      "doc": "How far people walk away from the bus after getting off."
+    },
+    "looks": {
+      "value": 12,
+      "unit": "sprites",
+      "min": 1,
+      "max": 64,
+      "integer": true,
+      "doc": "Number of different people drawn (clothes, skin and hair picked per look)."
+    },
+    "height": { "value": 1.7, "unit": "m", "min": 1, "max": 2.2, "doc": "Height of the people sprites." }
   }
 }

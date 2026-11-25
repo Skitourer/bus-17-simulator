@@ -107,3 +107,41 @@ export function stopPole() {
   g.fillRect(3, 13, 7, 1);
   return c;
 }
+
+/** Colours of the people: skin tones, hair, tops and trousers (picked by seed). */
+const PEOPLE = {
+  skin: ['#f1c7a5', '#d9a27a', '#a8714d', '#6e4630'],
+  hair: ['#2b1d14', '#5a3a22', '#c9a15a', '#8b8b8b', '#111111'],
+  top: ['#c0262e', '#2f57a8', '#33a457', '#ffa41b', '#7b4fa8', '#e9e9e9', '#2a2e38'],
+  legs: ['#283445', '#3a3d44', '#6b5a43', '#1f3d6b'],
+};
+
+/**
+ * A standing person, 12 x 24 px (anchor bottom-centre), colours picked by `seed`.
+ * @param {number} seed
+ */
+export function person(seed) {
+  const [c, g] = cv(12, 24);
+  const r = rng(seed * 7919 + 1);
+  /** @param {string[]} list */
+  const pick = (list) => list[Math.floor(r() * list.length)];
+  const skin = pick(PEOPLE.skin),
+    hair = pick(PEOPLE.hair),
+    top = pick(PEOPLE.top),
+    legs = pick(PEOPLE.legs);
+  g.fillStyle = hair;
+  g.fillRect(3, 0, 6, 3);
+  g.fillStyle = skin;
+  g.fillRect(3, 2, 6, 5);
+  g.fillStyle = top;
+  g.fillRect(2, 7, 8, 8);
+  g.fillStyle = skin;
+  g.fillRect(1, 9, 1, 5);
+  g.fillRect(10, 9, 1, 5);
+  g.fillStyle = legs;
+  g.fillRect(3, 15, 6, 7);
+  g.fillStyle = '#111111';
+  g.fillRect(3, 22, 2, 2);
+  g.fillRect(7, 22, 2, 2);
+  return c;
+}

@@ -64,7 +64,8 @@
       "open": "Portes ouvertes",
       "closing": "Fermeture…"
     },
-    "doorsLamp": "PORTES"
+    "doorsLamp": "PORTES",
+    "onBoard": "{count} voyageurs à bord"
   },
   "toast": {
     "serviceStart": "Service de {time} vers {stop}",
