@@ -4,12 +4,19 @@
  * Repere local : x est, y nord, cap h = angle math (0 = est, sens trigo).
  */
 
+import { Trailer } from './trailer.js';
+
 /** @typedef {import('../settings/settings.js').Settings} Settings */
 
 export class Drive {
-  /** @param {Settings['drive']} params @param {Settings['bus']} bus */
+  /**
+   * @param {Settings['drive']} params
+   * @param {Settings['bus'] & {trailer?: import('./trailer.js').TrailerGeometry | null}} bus
+   */
   constructor(params, bus) {
     this.bus = bus;
+    /** rear body of an articulated bus, null for a standard bus */
+    this.trailer = bus.trailer ? new Trailer(bus.trailer, bus.bodyWidth) : null;
     this.p = params;
     this.maxSpeed = 0;
     this.reverseMaxSpeed = 0;
@@ -42,6 +49,7 @@ export class Drive {
     this.v = 0;
     this.delta = 0;
     this.brakeHeld = 0;
+    this.trailer?.align(x, y, h);
   }
 
   /**
@@ -61,8 +69,12 @@ export class Drive {
       s = Math.sin(this.h);
     return { x: this.x + c * f + s * r, y: this.y + s * f - c * r };
   }
-  /** Points of the bus outline tested against obstacles (corners, front middle, sides at mid-wheelbase). */
-  probes() {
+  /**
+   * Points of the bus outline tested against obstacles (corners, front middle, sides at mid-wheelbase), and
+   * those of the rear body of an articulated bus.
+   * @param {import('./trailer.js').TrailerState} [trailerState]
+   */
+  probes(trailerState = this.trailer?.state) {
     const bus = this.bus;
     const F = bus.bodyLength - bus.rearOverhang,
       R = -bus.rearOverhang,
@@ -75,7 +87,9 @@ export class Drive {
       [R, HW],
       [bus.wheelbase / 2, -HW],
       [bus.wheelbase / 2, HW],
-    ].map(([f, r]) => this.point(f, r));
+    ]
+      .map(([f, r]) => this.point(f, r))
+      .concat(this.trailer && trailerState ? this.trailer.probes(trailerState) : []);
   }
 
   /** Stand still with the brake on (doors open). */
@@ -151,9 +165,12 @@ export class Drive {
     this.y += Math.sin(this.h) * this.v * dt;
 
     // collision : contour du bus contre les emprises des batiments
+    const trailerState = this.trailer?.follow(this.x, this.y, this.h);
     this.bump += dt;
-    for (const probe of this.probes()) {
+    let hit = false;
+    for (const probe of this.probes(trailerState)) {
       if (walls.hit(probe.x, probe.y)) {
+        hit = true;
         this.x = px;
         this.y = py;
         this.h = ph;
@@ -163,6 +180,7 @@ export class Drive {
         break;
       }
     }
+    if (!hit && trailerState) this.trailer?.commit(trailerState);
     return ev;
   }
 }

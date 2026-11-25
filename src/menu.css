@@ -107,10 +107,6 @@ button {
   border-color: var(--green);
   color: #fff;
 }
-.chip.lock {
-  opacity: 0.5;
-  cursor: default;
-}
 .chip small {
   font-weight: 400;
   opacity: 0.85;

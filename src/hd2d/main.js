@@ -10,6 +10,7 @@ import { readParams, ServiceClock, serviceLabel, hms, hm, delta } from '../commo
 import { Ground } from './ground.js';
 import { buildWorld } from './world.js';
 import { makeBus } from './bus3d.js';
+import { busGeometry } from './trailer.js';
 import { Drive, obstacles } from './drive.js';
 import { Post } from './post.js';
 import { OrbitCamera } from './orbit.js';
@@ -32,7 +33,7 @@ if (!location.search) location.replace('index.html');
 const preferences = loadPreferences(storage(), LANGUAGES);
 const bindings = bindingsWith(preferences.keys);
 const S = await boot();
-const B = S.bus;
+const B = busGeometry(S, P.bus);
 
 // ------------------------------------------------------------------ rendu
 const canvas = /** @type {HTMLCanvasElement} */ ($('view'));
@@ -271,6 +272,7 @@ async function load() {
   world = buildWorld(scene, hf, { map, tiles, stops: places, lane }, track, S);
   bus = makeBus(B);
   scene.add(bus.group);
+  if (bus.trailer) scene.add(bus.trailer.group);
   minimap = new Minimap($('map'), map, line);
   minimap.setTrack(track);
   if (P.map) minimap.zoomBy(P.map);
@@ -425,6 +427,25 @@ function announceNextStop() {
 
 // ------------------------------------------------------------------ rendu
 const tmpV = new THREE.Vector3();
+
+/**
+ * Rear body of an articulated bus: at the joint, along the trailer heading, tilted with the ground.
+ * @param {number} dt @param {(x: number, y: number) => number} surface ground height under the bus
+ */
+function renderRearBody(dt, surface) {
+  const rear = bus.trailer,
+    trailer = drive.trailer;
+  if (!rear || !trailer) return;
+  const joint = trailer.hitch(drive.x, drive.y, drive.h);
+  const axle = trailer.state;
+  const zJoint = surface(joint.x, joint.y);
+  rear.group.position.set(joint.x, zJoint, -joint.y);
+  rear.group.rotation.set(0, axle.h, 0);
+  const back = trailer.point(-trailer.g.trailerRearOverhang);
+  const length = trailer.g.trailerWheelbase + trailer.g.trailerRearOverhang;
+  rear.body.rotation.set(0, 0, Math.atan2(zJoint - surface(back.x, back.y), length));
+  for (const w of rear.wheels) w.rotation.z -= (drive.v * dt) / 0.5;
+}
 /** @param {number} dt */
 function render(dt) {
   // bus : position, cap, assiette selon le relief
@@ -447,6 +468,7 @@ function render(dt) {
   bus.body.rotation.set(roll, 0, pitch);
   bus.setBrake(drive.braking || !doors.closed);
   for (const w of bus.wheels) w.rotation.z -= (drive.v * dt) / 0.5;
+  renderRearBody(dt, sh);
 
   // camera
   const inside = flying ? null : interiorView();

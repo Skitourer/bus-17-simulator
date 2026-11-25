@@ -1,13 +1,14 @@
 // @ts-check
 /**
- * Bus standard 12 m en volume, habille de textures pixel art (8 px par metre).
+ * Bus standard 12 m en volume, habille de textures pixel art (8 px par metre), et bus articule 18 m (#54) :
+ * caisse avant, soufflet et caisse arriere qui suit l'articulation.
  * Repere du modele : +X = avant, +Y = haut, +Z = cote droit (portes). Origine = essieu arriere, au sol.
  */
 import * as THREE from 'three';
 import { digits } from './sprites.js';
 import { makeInterior } from './interior.js';
 
-/** @typedef {import('../settings/settings.js').Settings['bus']} BusSettings */
+/** @typedef {import('./trailer.js').BusGeometry} BusSettings */
 const C = {
   white: '#f1f1ec',
   shade: '#d4d7dc',
@@ -41,11 +42,24 @@ function tex(w, h, draw) {
   return t;
 }
 
-/** flanc : `doors` = cote droit (portes avant, milieu, arriere) */
-/** @param {BusSettings} bus @param {boolean} doors */
-function side(bus, doors) {
+/**
+ * @typedef {object} SideSpec
+ * @property {number} length length of the body (m)
+ * @property {number[]} doors door positions, m from the front of the body (right side); empty on the left
+ * @property {number[]} arches wheel arch centres, m from the back of the body
+ */
+
+/** Right side doors: front, middle and rear doors of a 12 m bus (m from the front). */
+const STANDARD_DOORS = [0.6, 5.2, 9.0];
+/** Articulated bus: two doors on each body (m from the front of the body). */
+const FRONT_BODY_DOORS = [0.6, 5.2];
+const REAR_BODY_DOORS = [0.8, 5.6];
+
+/** @param {BusSettings} bus @param {SideSpec} spec */
+function side(bus, spec) {
   const PPM = bus.texturePixelsPerMetre;
-  return tex(bus.bodyLength * PPM, Math.round(bus.bodyHeight * PPM), (g, w, h) => {
+  const doors = spec.doors.length > 0;
+  return tex(Math.round(spec.length * PPM), Math.round(bus.bodyHeight * PPM), (g, w, h) => {
     g.fillStyle = C.white;
     g.fillRect(0, 0, w, h);
     g.fillStyle = C.shade;
@@ -64,8 +78,8 @@ function side(bus, doors) {
     g.fillRect(0, 17, w, 1);
     // portes (cote droit) : x en metres depuis l'avant -> la texture va de l'arriere (u=0) vers l'avant (u=1)
     if (doors) {
-      for (const xm of [0.6, 5.2, 9.0]) {
-        const x = Math.round((bus.bodyLength - xm) * PPM) - 9;
+      for (const xm of spec.doors) {
+        const x = Math.round((spec.length - xm) * PPM) - 9;
         g.fillStyle = C.door;
         g.fillRect(x, 3, 9, h - 4);
         g.fillStyle = C.glassHi;
@@ -80,7 +94,7 @@ function side(bus, doors) {
     }
     // passages de roues
     g.fillStyle = C.dark;
-    for (const xm of [bus.rearOverhang, bus.rearOverhang + bus.wheelbase]) {
+    for (const xm of spec.arches) {
       const x = Math.round(xm * PPM);
       g.fillRect(x - 6, h - 6, 12, 6);
     }
@@ -166,17 +180,17 @@ export function makeBus(bus) {
   });
   const rearN = rear(bus, false),
     rearB = rear(bus, true);
-  const leftSide = side(bus, false);
-  // la texture du flanc gauche est vue en miroir : on la retourne pour garder l'avant a l'avant
-  leftSide.wrapS = THREE.RepeatWrapping;
-  leftSide.repeat.x = -1;
+  const arches = [bus.rearOverhang, bus.rearOverhang + bus.wheelbase];
+  const doors = bus.trailer ? FRONT_BODY_DOORS : STANDARD_DOORS;
+  const rearMat = new THREE.MeshLambertMaterial({ map: rearN });
+  const joint = new THREE.MeshLambertMaterial({ color: C.bumper });
   const mats = [
     new THREE.MeshLambertMaterial({ map: front(bus) }), // +X avant
-    new THREE.MeshLambertMaterial({ map: rearN }), // -X arriere
+    bus.trailer ? joint : rearMat, // -X arriere (soufflet pour un bus articule)
     new THREE.MeshLambertMaterial({ map: roofTex }), // +Y toit
     new THREE.MeshLambertMaterial({ color: '#222' }), // -Y dessous
-    new THREE.MeshLambertMaterial({ map: side(bus, true) }), // +Z droit (portes)
-    new THREE.MeshLambertMaterial({ map: leftSide }), // -Z gauche
+    new THREE.MeshLambertMaterial({ map: side(bus, { length: bus.bodyLength, doors, arches }) }), // +Z droit
+    new THREE.MeshLambertMaterial({ map: leftSide(bus, { length: bus.bodyLength, doors: [], arches }) }), // -Z
   ];
   const geo = new THREE.BoxGeometry(bus.bodyLength, bus.bodyHeight - 0.35, bus.bodyWidth);
   const box = new THREE.Mesh(geo, mats);
@@ -201,9 +215,68 @@ export function makeBus(bus) {
     body,
     interior,
     wheels,
+    trailer: bus.trailer ? makeRearBody(bus, bus.trailer, rearMat, joint, wg, wm) : null,
     /** @param {boolean} on */
     setBrake(on) {
-      mats[1].map = on ? rearB : rearN;
+      rearMat.map = on ? rearB : rearN;
     },
   };
+}
+
+/** Left side: the texture is seen mirrored, so it is flipped to keep the front at the front. @param {BusSettings} bus @param {SideSpec} spec */
+function leftSide(bus, spec) {
+  const texture = side(bus, spec);
+  texture.wrapS = THREE.RepeatWrapping;
+  texture.repeat.x = -1;
+  return texture;
+}
+
+/**
+ * Bellows and rear body of an articulated bus. Frame: origin at the joint on the road, +X towards the front
+ * body along the rear body, +Z right.
+ * @param {BusSettings} bus @param {import('./trailer.js').TrailerGeometry} t
+ * @param {THREE.MeshLambertMaterial} rearMat back face, shared with the brake lights
+ * @param {THREE.MeshLambertMaterial} joint @param {THREE.BufferGeometry} wheelGeometry
+ * @param {THREE.Material} wheelMaterial
+ */
+function makeRearBody(bus, t, rearMat, joint, wheelGeometry, wheelMaterial) {
+  const PPM = bus.texturePixelsPerMetre;
+  const group = new THREE.Group();
+  const body = new THREE.Group(); // tilted with the ground like the front body
+  group.add(body);
+  const length = t.trailerWheelbase - t.bellowsLength / 2 + t.trailerRearOverhang;
+  const arches = [t.trailerRearOverhang];
+  const roof = tex(Math.round(length * PPM), Math.round(bus.bodyWidth * PPM), (g, w, h) => {
+    g.fillStyle = '#e4e6ea';
+    g.fillRect(0, 0, w, h);
+    g.fillStyle = '#c9ccd2';
+    g.fillRect(6, 4, 18, h - 8); // moteur (a l'arriere sur un articule pousseur)
+  });
+  const mats = [
+    joint, // +X soufflet
+    rearMat, // -X arriere
+    new THREE.MeshLambertMaterial({ map: roof }),
+    new THREE.MeshLambertMaterial({ color: '#222' }),
+    new THREE.MeshLambertMaterial({ map: side(bus, { length, doors: REAR_BODY_DOORS, arches }) }),
+    new THREE.MeshLambertMaterial({ map: leftSide(bus, { length, doors: [], arches }) }),
+  ];
+  const height = bus.bodyHeight - 0.35;
+  const box = new THREE.Mesh(new THREE.BoxGeometry(length, height, bus.bodyWidth), mats);
+  box.position.set(-t.bellowsLength / 2 - length / 2, 0.35 + height / 2, 0);
+  box.castShadow = true;
+  // soufflet : un peu plus etroit et plus bas que les caisses
+  const bellows = new THREE.Mesh(
+    new THREE.BoxGeometry(t.bellowsLength + 0.2, height - 0.3, bus.bodyWidth - 0.2),
+    new THREE.MeshLambertMaterial({ color: '#30343c' }),
+  );
+  bellows.position.set(0, 0.35 + height / 2, 0);
+  body.add(box, bellows);
+  const wheels = [-1.05, 1.05].map((z) => {
+    const wheel = new THREE.Mesh(wheelGeometry, wheelMaterial);
+    wheel.position.set(-t.trailerWheelbase, 0.5, z);
+    wheel.castShadow = true;
+    group.add(wheel);
+    return wheel;
+  });
+  return { group, body, wheels };
 }

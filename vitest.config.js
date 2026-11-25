@@ -19,6 +19,7 @@ export default defineConfig({
         'src/world/track.js',
         'src/hd2d/heightfield.js',
         'src/hd2d/drive.js',
+        'src/hd2d/trailer.js',
         'src/hd2d/ground.js',
         'src/hd2d/orbit.js',
         'src/hd2d/shore.js',
