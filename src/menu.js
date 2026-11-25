@@ -19,7 +19,7 @@ import {
 /** @param {string} id */
 const $ = (id) => /** @type {HTMLElement} */ (document.getElementById(id));
 const KEY = 'bus17.menu';
-/** @type {{dir?: number}} */
+/** @type {{dir?: number, bus?: string}} */
 let saved = {};
 try {
   saved = JSON.parse(localStorage.getItem(KEY) || '{}') || {};
@@ -34,7 +34,7 @@ const save = () => {
   }
 };
 
-const sel = { dir: saved.dir ?? 1, bus: 'std', day: '', dep: '' };
+const sel = { dir: saved.dir ?? 1, bus: saved.bus === 'art' ? 'art' : 'std', day: '', dep: '' };
 /** @type {import('./common/types.js').LineData} */
 let line;
 
@@ -118,6 +118,15 @@ function render() {
     box.appendChild(b);
   }
   if (!deps.length) box.append(emptyNote(t('menu.noDeparture')));
+
+  for (const chip of $('busChips').querySelectorAll('[data-bus]')) {
+    const button = /** @type {HTMLButtonElement} */ (chip);
+    button.classList.toggle('on', button.dataset.bus === sel.bus);
+    button.onclick = () => {
+      sel.bus = button.dataset.bus || 'std';
+      render();
+    };
+  }
 
   /** @type {HTMLButtonElement} */ ($('goBtn')).disabled = !sel.dep;
   save();

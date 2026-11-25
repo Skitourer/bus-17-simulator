@@ -61,6 +61,68 @@
       "doc": "Pixel density of the bus pixel-art textures."
     }
   },
+  "articulated": {
+    "bodyLength": {
+      "value": 9.75,
+      "unit": "m",
+      "min": 6,
+      "max": 14,
+      "doc": "Articulated bus: length of the front body, up to the bellows (front overhang 2.8 m + wheelbase + rearOverhang).",
+      "source": "Mercedes-Benz Citaro G (18.1 m) data sheet, rounded: overhangs 2.8 and 3.5 m, wheelbases 5.85 and 5.99 m"
+    },
+    "wheelbase": {
+      "value": 5.85,
+      "unit": "m",
+      "min": 3,
+      "max": 10,
+      "doc": "Articulated bus: distance between the front and the middle axle; the middle axle is the reference point of the bus.",
+      "source": "Mercedes-Benz Citaro G (18.1 m) data sheet, rounded: overhangs 2.8 and 3.5 m, wheelbases 5.85 and 5.99 m"
+    },
+    "rearOverhang": {
+      "value": 1.1,
+      "unit": "m",
+      "min": 0.3,
+      "max": 4,
+      "doc": "Articulated bus: distance from the middle axle to the back of the front body (hitchOffset minus half the bellows)."
+    },
+    "hitchOffset": {
+      "value": 1.5,
+      "unit": "m",
+      "min": 0.5,
+      "max": 4,
+      "doc": "Articulated bus: distance from the middle axle back to the joint between the two bodies."
+    },
+    "bellowsLength": {
+      "value": 0.8,
+      "unit": "m",
+      "min": 0.2,
+      "max": 2,
+      "doc": "Articulated bus: length of the bellows, centred on the joint."
+    },
+    "trailerWheelbase": {
+      "value": 4.49,
+      "unit": "m",
+      "min": 2,
+      "max": 10,
+      "doc": "Articulated bus: distance from the joint to the rear axle (middle-to-rear wheelbase minus hitchOffset).",
+      "source": "Mercedes-Benz Citaro G (18.1 m) data sheet, rounded: overhangs 2.8 and 3.5 m, wheelbases 5.85 and 5.99 m"
+    },
+    "trailerRearOverhang": {
+      "value": 3.49,
+      "unit": "m",
+      "min": 0.5,
+      "max": 5,
+      "doc": "Articulated bus: distance from the rear axle to the back of the bus; the whole bus is 18.1 m long.",
+      "source": "Mercedes-Benz Citaro G (18.1 m) data sheet, rounded: overhangs 2.8 and 3.5 m, wheelbases 5.85 and 5.99 m"
+    },
+    "maxArticulation": {
+      "value": 0.85,
+      "unit": "rad",
+      "min": 0.2,
+      "max": 1.2,
+      "doc": "Articulated bus: largest angle between the two bodies (about 49°); the joint stops the rear body beyond it."
+    }
+  },
   "drive": {
     "maxSpeed": {
       "value": 50,
