@@ -38,6 +38,13 @@ uv run poe check     # ruff, pyright, tests Python
 uv run poe serve     # http://localhost:8017/ sans cache navigateur
 ```
 
+Mode debug, pour tester la carte : ouvrir
+`http://localhost:8017/hd2d.html?debug&stop=saint-laurent` (n'importe quel nom d'arrêt de
+la ligne ; `dir=1` pour l'autre sens). Maj : turbo · N / B : arrêt suivant / précédent ·
+clic sur la mini-carte : téléporter · K : collisions oui/non · F : vol libre (flèches ou
+ZQSD, Espace / X pour monter et descendre, souris pour regarder, Entrée pose le bus sous la
+caméra).
+
 Les fichiers JSON de `data/grenoble/` sont produits par les scripts de `tools/` (accès
 réseau nécessaire ; les téléchargements sont mis en cache dans `tools/cache/`) :
 

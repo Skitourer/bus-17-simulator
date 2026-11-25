@@ -32,6 +32,8 @@ export class Minimap {
     this.cx = 0;
     this.cy = 0; // centre de la vue (metres)
     this.follow = true;
+    /** @type {((x: number, y: number) => void) | null} called with the world point of a click (debug mode) */
+    this.onPick = null;
     /** @type {import('../world/track.js').Track | null} */
     this.track = null;
     /** @type {Record<string, Path2D>} */
@@ -108,7 +110,17 @@ export class Minimap {
       drag = null;
       this.cv.classList.remove('drag');
     };
-    this.cv.addEventListener('pointerup', end);
+    this.cv.addEventListener('pointerup', (e) => {
+      // a click (no drag) picks a world point
+      if (drag && this.onPick && Math.hypot(e.clientX - drag.x, e.clientY - drag.y) < 4) {
+        const r = this.cv.getBoundingClientRect();
+        this.onPick(
+          this.cx + (e.clientX - r.left - r.width / 2) / this.zoom,
+          this.cy - (e.clientY - r.top - r.height / 2) / this.zoom,
+        );
+      }
+      end();
+    });
     this.cv.addEventListener('pointercancel', end);
   }
 

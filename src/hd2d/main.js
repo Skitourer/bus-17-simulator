@@ -13,6 +13,7 @@ import { makeBus } from './bus3d.js';
 import { Drive } from './drive.js';
 import { Post } from './post.js';
 import { OrbitCamera } from './orbit.js';
+import { FreeFly, findStop, stepStop, turboDrive } from './debug.js';
 import { initI18n, t } from '../i18n/i18n.js';
 import { loadSettings } from '../settings/settings.js';
 
@@ -146,6 +147,14 @@ let camMode = +(new URLSearchParams(location.search).get('cam') || 0) % CAMS.len
   zoom = 1,
   camYaw = 0;
 const orbit = new OrbitCamera(S.camera.orbit);
+// debug mode: free flight, collisions off (ghost), turbo
+const fly = new FreeFly(S.debug, S.camera.orbit);
+const turboParams = turboDrive(S.drive, S.debug);
+const flyKeys = { up: false, down: false, fast: false };
+const noWalls = { hit: () => false };
+let flying = false,
+  ghost = false,
+  fps = 60;
 
 /** @param {string} text */
 function toast(text, kind = 'info') {
@@ -228,9 +237,20 @@ async function load() {
   $('svc').textContent = t('game.serviceInfo', { day: serviceLabel(P.day, line.calendar), time: P.dep });
   placeOnRoute(P.s !== null ? P.s : Math.max(0, track.stops[0].s - 4));
   // arrets deja derriere le point de depart (mode test)
-  while (next < track.stops.length && track.stops[next].s < progress - 5) {
-    track.stops[next].missed = true;
-    next++;
+  syncStops();
+  if (P.stop) {
+    const i = findStop(track.stops, P.stop);
+    if (i >= 0) placeAtStop(i);
+    else
+      toast(
+        t('debug.unknownStop', { stop: P.stop, stops: track.stops.map((st) => st.name).join(', ') }),
+        'bad',
+      );
+  }
+  if (P.debug) {
+    $('debug').hidden = false;
+    minimap.onPick = teleport;
+    toast(t('debug.on'), 'info');
   }
   // mode test : ?auto&ff=40 -> simule 40 s d'un coup (pilote automatique)
   const ff = +(new URLSearchParams(location.search).get('ff') || 0);
@@ -270,7 +290,8 @@ function buildSynoptic() {
 function update(dt) {
   const G = S.gameplay;
   clock.tick(dt);
-  let inp = keys;
+  /** @type {import('../common/types.js').DriveInput} */
+  let inp = flying ? { up: false, down: false, left: false, right: false } : keys;
   if (P.auto) inp = autopilot();
   if (doors > 0) {
     doors -= dt;
@@ -283,7 +304,8 @@ function update(dt) {
         next < track.stops.length ? 'info' : 'good',
       );
   }
-  const ev = drive.update(inp, dt, { slope: (x, y, hd) => hf.slopeAt(x, y, hd, busZ) }, world.index);
+  const walls = ghost ? noWalls : world.index;
+  const ev = drive.update(inp, dt, { slope: (x, y, hd) => hf.slopeAt(x, y, hd, busZ) }, walls);
   if (drive.bump === 0) bumps++;
   if (ev) toast(t('toast.' + ev), 'bad');
 
@@ -360,21 +382,8 @@ function render(dt) {
 
   // camera
   const m = CAMS[camMode];
-  let dy = drive.h - camYaw;
-  while (dy > Math.PI) dy -= 2 * Math.PI;
-  while (dy < -Math.PI) dy += 2 * Math.PI;
-  camYaw += dy * (1 - Math.exp(-dt / m.followTime));
-  const view = orbit.view(dt, camYaw, m.pitch);
-  const D = m.distance * zoom;
-  const tx = c.x + Math.cos(drive.h) * m.ahead,
-    ty = c.y + Math.sin(drive.h) * m.ahead;
-  const tz = sh(tx, ty) + S.camera.targetHeight;
-  const cx = tx - Math.cos(view.yaw) * Math.cos(view.pitch) * D,
-    cy = ty - Math.sin(view.yaw) * Math.cos(view.pitch) * D;
-  const cz = Math.max(tz + Math.sin(view.pitch) * D, hf.h(cx, cy) + S.camera.groundClearance);
-  $('camReset').hidden = orbit.state === 'auto';
-  camera.position.set(cx, cz, -cy);
-  camera.lookAt(tx, tz, -ty);
+  if (flying) flyCamera(dt);
+  else followCamera(dt, m, sh);
   if (camera.fov !== m.fov) {
     camera.fov = m.fov;
     camera.updateProjectionMatrix();
@@ -393,11 +402,56 @@ function render(dt) {
   minimap.draw({ x: c.x, y: c.y, h: drive.h }, next);
 }
 
+/**
+ * Camera following the bus in the current camera mode, or orbiting it after a mouse drag.
+ * @param {number} dt @param {(typeof CAMS)[number]} m @param {(x: number, y: number) => number} sh
+ */
+function followCamera(dt, m, sh) {
+  const c = drive.center;
+  let dy = drive.h - camYaw;
+  while (dy > Math.PI) dy -= 2 * Math.PI;
+  while (dy < -Math.PI) dy += 2 * Math.PI;
+  camYaw += dy * (1 - Math.exp(-dt / m.followTime));
+  const view = orbit.view(dt, camYaw, m.pitch);
+  const D = m.distance * zoom;
+  const tx = c.x + Math.cos(drive.h) * m.ahead,
+    ty = c.y + Math.sin(drive.h) * m.ahead;
+  const tz = sh(tx, ty) + S.camera.targetHeight;
+  const cx = tx - Math.cos(view.yaw) * Math.cos(view.pitch) * D,
+    cy = ty - Math.sin(view.yaw) * Math.cos(view.pitch) * D;
+  const cz = Math.max(tz + Math.sin(view.pitch) * D, hf.h(cx, cy) + S.camera.groundClearance);
+  $('camReset').hidden = orbit.state === 'auto';
+  camera.position.set(cx, cz, -cy);
+  camera.lookAt(tx, tz, -ty);
+}
+
+/** Debug free flight: arrows / ZQSD move, Space / X rise and sink, Shift goes faster. @param {number} dt */
+function flyCamera(dt) {
+  fly.update(
+    {
+      forward: keys.up,
+      back: keys.down,
+      left: keys.left,
+      right: keys.right,
+      up: flyKeys.up,
+      down: flyKeys.down,
+      fast: flyKeys.fast,
+    },
+    dt,
+    (x, y) => hf.h(x, y),
+  );
+  const look = fly.target;
+  $('camReset').hidden = true;
+  camera.position.set(fly.x, fly.z, -fly.y);
+  camera.lookAt(look.x, look.z, -look.y);
+}
+
 let lastHud = 0;
 function hud() {
   const now = performance.now();
   if (now - lastHud < 100) return;
   lastHud = now;
+  if (P.debug) debugPanel();
   $('clk').textContent = hms(clock.t);
   $('spd').textContent = String(Math.round(Math.abs(drive.v) * 3.6));
   const c = drive.center;
@@ -435,6 +489,96 @@ function hud() {
   });
 }
 
+// ------------------------------------------------------------------ debug (?debug, src/hd2d/debug.js)
+/** Stops behind the bus are missed, the others still to serve. */
+function syncStops() {
+  next = track.stops.findIndex((st) => st.s >= progress - 5);
+  if (next < 0) next = track.stops.length;
+  track.stops.forEach((st, i) => {
+    st.served = false;
+    st.missed = i < next;
+  });
+}
+
+/** Distance along the route of the front door when the bus stands at a stop. */
+const doorAhead = () => B.bodyLength - B.rearOverhang - B.frontDoorSetback;
+
+/** Place the bus with its front door at stop `i`. @param {number} i */
+function placeAtStop(i) {
+  placeOnRoute(Math.max(0, track.stops[i].s - doorAhead()));
+  syncStops();
+  doors = 0;
+  toast(t('debug.teleported', { stop: track.stops[i].name }));
+}
+
+/** Place the bus on the route point nearest to (x, y). @param {number} x @param {number} y */
+function teleport(x, y) {
+  placeOnRoute(Math.max(0, nearest(x, y, 0, 0).s - B.rearOverhang));
+  syncStops();
+  doors = 0;
+  const st = track.stops[next];
+  toast(t('debug.teleported', { stop: st ? st.name : t('game.terminus') }));
+}
+
+/** @param {boolean} on */
+function setFlying(on) {
+  flying = on;
+  if (on) {
+    const dir = camera.getWorldDirection(new THREE.Vector3());
+    fly.start(
+      camera.position.x,
+      -camera.position.z,
+      camera.position.y,
+      Math.atan2(-dir.z, dir.x),
+      -Math.asin(dir.y),
+    );
+  } else orbit.snap();
+  toast(t(on ? 'debug.flyOn' : 'debug.flyOff'));
+}
+
+/** Debug keys; returns true when the key was used. @param {KeyboardEvent} e */
+function debugKey(e) {
+  if (e.code === 'ShiftLeft' || e.code === 'ShiftRight') {
+    flyKeys.fast = true;
+    drive.tune(turboParams);
+  } else if (e.code === 'KeyN' || e.code === 'KeyB') {
+    placeAtStop(stepStop(track.stops, progress - B.rearOverhang + doorAhead(), e.code === 'KeyN' ? 1 : -1));
+  } else if (e.code === 'KeyK') {
+    ghost = !ghost;
+    toast(t(ghost ? 'debug.ghostOn' : 'debug.ghostOff'));
+  } else if (e.code === 'KeyF') setFlying(!flying);
+  else if (e.code === 'Space') flyKeys.up = true;
+  else if (e.code === 'KeyX') flyKeys.down = true;
+  else if (e.code === 'Enter' && flying) {
+    teleport(fly.x, fly.y);
+    setFlying(false);
+  } else return false;
+  return true;
+}
+
+/** @param {KeyboardEvent} e */
+function debugKeyUp(e) {
+  if (e.code === 'ShiftLeft' || e.code === 'ShiftRight') {
+    flyKeys.fast = false;
+    drive.tune(S.drive);
+  }
+  if (e.code === 'Space') flyKeys.up = false;
+  if (e.code === 'KeyX') flyKeys.down = false;
+}
+
+function debugPanel() {
+  const c = drive.center,
+    water = hf.waterLevel(c.x, c.y);
+  $('debugInfo').textContent = t('debug.panel', {
+    x: c.x.toFixed(1),
+    y: c.y.toFixed(1),
+    s: progress.toFixed(0),
+    ground: hf.h(c.x, c.y).toFixed(1),
+    water: water === null ? t('debug.noWater') : water.toFixed(1) + ' m',
+    fps: Math.round(fps),
+  });
+}
+
 // ------------------------------------------------------------------ boucle
 let last = performance.now(),
   acc = 0;
@@ -443,6 +587,7 @@ const STEP = 1 / S.simulation.stepsPerSecond;
 function frame(t) {
   requestAnimationFrame(frame);
   const el = Math.min(0.1, (t - last) / 1000);
+  if (el > 0) fps += (1 / el - fps) * 0.05;
   last = t;
   if (!running) return;
   if (!paused) {
@@ -489,10 +634,12 @@ addEventListener('keydown', (e) => {
     placeOnRoute(progress - B.rearOverhang);
     toast(t('toast.busReplaced'));
   }
+  if (P.debug && debugKey(e)) e.preventDefault();
 });
 addEventListener('keyup', (e) => {
   const k = KEYMAP[e.code];
   if (k) keys[k] = false;
+  if (P.debug) debugKeyUp(e);
 });
 addEventListener('blur', () => {
   keys.up = keys.down = keys.left = keys.right = false;
@@ -508,7 +655,8 @@ canvas.addEventListener('pointerdown', (e) => {
 });
 canvas.addEventListener('pointermove', (e) => {
   if (!orbitDrag) return;
-  orbit.drag(e.clientX - orbitDrag.x, e.clientY - orbitDrag.y, camYaw, CAMS[camMode].pitch);
+  if (flying) fly.turn(e.clientX - orbitDrag.x, e.clientY - orbitDrag.y);
+  else orbit.drag(e.clientX - orbitDrag.x, e.clientY - orbitDrag.y, camYaw, CAMS[camMode].pitch);
   orbitDrag = { x: e.clientX, y: e.clientY };
 });
 const endOrbitDrag = () => {
