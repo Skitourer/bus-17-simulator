@@ -37,3 +37,15 @@ the pure modules imported the bus size from a rendering module (#28).
 - **Values only in the JSON, documentation in a separate page**: the two would drift.
 - **JSON imported as a module** (`import … with { type: 'json' }`): a broken file fails
   silently, before any error can be shown.
+
+## Update 2026-11-25: player preferences (#46)
+
+- The settings screen stores the player's choices (language, graphics quality, view
+  distance, difficulty, main key of each action) in the browser (`localStorage`,
+  `src/settings/preferences.js`); a missing, blocked or broken entry falls back to the
+  defaults.
+- Each choice has three levels. The middle one keeps the `game.json` values; the two
+  others are presets documented in the `presets` group of `game.json` and copied over
+  the values they replace, so every tunable value still lives in one file.
+- Rejected: one full set of values per level (the middle level would duplicate the base
+  values and drift from them).

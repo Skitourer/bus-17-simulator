@@ -42,3 +42,16 @@ rendu (#28).
   divergeraient.
 - **JSON importé comme module** (`import … with { type: 'json' }`) : un fichier invalide
   échoue en silence, avant qu'une erreur puisse s'afficher.
+
+## Mise à jour du 2026-11-25 : préférences du joueur (#46)
+
+- L'écran des réglages garde les choix du joueur (langue, qualité graphique, distance
+  d'affichage, difficulté, touche principale de chaque action) dans le navigateur
+  (`localStorage`, `src/settings/preferences.js`) ; une entrée absente, bloquée ou
+  invalide revient aux valeurs par défaut.
+- Chaque choix a trois niveaux. Celui du milieu garde les valeurs de `game.json` ; les
+  deux autres sont des préréglages documentés dans le groupe `presets` de `game.json` et
+  recopiés sur les valeurs qu'ils remplacent : toutes les valeurs réglables restent dans
+  un seul fichier.
+- Rejeté : un jeu complet de valeurs par niveau (le niveau du milieu dupliquerait les
+  valeurs de base et finirait par en diverger).
