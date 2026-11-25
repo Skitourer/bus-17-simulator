@@ -6,7 +6,7 @@
 import * as THREE from 'three';
 import { Track } from '../world/track.js';
 import { Minimap } from '../ui/minimap.js';
-import { readParams, ServiceClock, serviceLabel, hms, hm, delta } from '../common/service.js';
+import { readParams, ServiceClock, serviceLabel, hms, hm, delta, toSec } from '../common/service.js';
 import { Ground } from './ground.js';
 import { buildWorld } from './world.js';
 import { makeBus } from './bus3d.js';
@@ -18,6 +18,8 @@ import { FreeFly, findStop, stepStop, turboDrive } from './debug.js';
 import { Doors, StopService, drawService, serviceSeed } from './stops.js';
 import { Crowd } from './crowd.js';
 import { StressTest } from './stress.js';
+import { Fleet } from './fleet.js';
+import { OtherBuses } from './otherBuses.js';
 import { SegmentGrid, kerbSegments, laneOffsets, offsetAt, placeStops } from './kerb.js';
 import { Mirrors } from './mirrors.js';
 import { eyePosition, lookTarget, steeringWheelAngle } from './views.js';
@@ -147,6 +149,14 @@ let minimap;
 /** @type {import('../common/types.js').LineData} */
 let line;
 const drive = new Drive(S.drive, B);
+/** overall length of the player's bus, both bodies of an articulated bus (m) */
+const playerLength = B.trailer
+  ? B.bodyLength -
+    B.rearOverhang +
+    B.trailer.hitchOffset +
+    B.trailer.trailerWheelbase +
+    B.trailer.trailerRearOverhang
+  : B.bodyLength;
 const clock = new ServiceClock(P.dep);
 let bumps = 0,
   progress = 0,
@@ -172,6 +182,12 @@ let service;
 let crowd;
 /** dummy traffic of the performance test (?debug&stress=N) @type {StressTest | null} */
 let stress = null;
+/** the other buses of the line, set by load() @type {Fleet} */
+let fleet;
+/** @type {OtherBuses} */
+let otherBuses;
+/** what stops the player's bus besides the water: buildings and the other buses @type {{hit: (x: number, y: number) => boolean}} */
+let solid;
 // debug mode: free flight, collisions off (ghost), turbo
 const fly = new FreeFly(S.debug, S.camera.orbit);
 const turboParams = turboDrive(S.drive, S.debug);
@@ -252,12 +268,24 @@ async function load() {
   track = new Track(line.directions[P.dir], line.step);
   // 16 m cells: a ray is at most kerbSearch (12 m) long, so it looks at a few cells only
   const kerbs = new SegmentGrid(kerbSegments(tiles, tileIndex), 16);
-  lane = laneOffsets(track, kerbs, {
+  const laneParams = {
     kerbSearch: S.world.kerbSearch,
     laneOffset: S.gameplay.laneOffset,
     bodyWidth: B.bodyWidth,
     kerbMargin: S.gameplay.kerbMargin,
+  };
+  lane = laneOffsets(track, kerbs, laneParams);
+  // the other services of the day, in both directions (the player's direction shares its route and lane)
+  const fleetDirections = line.directions.map((direction, i) => {
+    const route = i === P.dir ? track : new Track(direction, line.step);
+    const profile = i === P.dir ? lane : laneOffsets(route, kerbs, laneParams);
+    return {
+      track: route,
+      departures: (direction.services[P.day] ?? []).map(toSec),
+      lane: (/** @type {number} */ s) => offsetAt(profile, route.step, s),
+    };
   });
+  fleet = new Fleet(fleetDirections, S.fleet, S.bus, { dir: P.dir, dep: toSec(P.dep) });
   const places = placeStops(track, kerbs, {
     kerbSearch: S.world.kerbSearch,
     shelterSetback: S.world.shelterSetback,
@@ -274,6 +302,8 @@ async function load() {
   $('loadMsg').textContent = t('game.loadingStreets');
   await new Promise((r) => setTimeout(r, 30));
   world = buildWorld(scene, hf, { map, tiles, stops: places, lane }, track, S);
+  otherBuses = new OtherBuses(scene, busGeometry(S, 'std'), S.budget);
+  solid = { hit: (x, y) => world.index.hit(x, y) || fleet.hit(x, y) };
   bus = makeBus(B);
   scene.add(bus.group);
   if (bus.trailer) scene.add(bus.trailer.group);
@@ -359,7 +389,7 @@ function update(dt) {
   const wasClosed = doors.closed;
   doors.update(dt);
   if (!wasClosed && doors.closed) announceNextStop();
-  const walls = obstacles(world.index, hf, () => busZ, ghost);
+  const walls = obstacles(solid, hf, () => busZ, ghost);
   // the bus stands still until the doors are closed again (brake on, even on a slope)
   /** @type {'bump' | null} */
   let ev = null;
@@ -368,6 +398,8 @@ function update(dt) {
   // height on the drivable surface, kept by the simulation (fast-forward runs without rendering)
   busZ = hf.surface(drive.x, drive.y, busZ);
   if (drive.bump === 0) bumps++;
+  const centre = drive.center;
+  fleet.update(clock.t, dt, { x: centre.x, y: centre.y, h: drive.h, length: playerLength });
   if (ev) toast(t('toast.' + ev), 'bad');
 
   // suivi du parcours
@@ -498,6 +530,7 @@ function render(dt) {
   world.water.uniforms.time.value += dt;
   crowd.update(dt, service.onBoard);
   crowd.draw(camera.position.x, -camera.position.z);
+  otherBuses.draw(fleet.buses, camera.position.x, -camera.position.z);
   if (stress) {
     stress.update(dt, { x: c.x, y: c.y, h: drive.h });
     stress.draw(camera.position.x, -camera.position.z);
@@ -519,7 +552,7 @@ function render(dt) {
   }
 
   hud();
-  minimap.draw({ x: c.x, y: c.y, h: drive.h }, service.next);
+  minimap.draw({ x: c.x, y: c.y, h: drive.h }, service.next, fleet.buses);
 }
 
 /**
@@ -679,7 +712,7 @@ function teleport(x, y, h = drive.h) {
   drive.placeCentre(x, y, h);
   // on a bridge the deck wins over the ground below (within reach of the ground height)
   busZ = hf.surface(x, y, hf.h(x, y));
-  if (drive.blocked(obstacles(world.index, hf, () => busZ, ghost))) {
+  if (drive.blocked(obstacles(solid, hf, () => busZ, ghost))) {
     drive.place(before.x, before.y, before.h);
     busZ = before.z;
     toast(t('debug.blocked'), 'bad');
@@ -753,7 +786,8 @@ function debugPanel() {
     fps: Math.round(fps),
     calls: renderer.info.render.calls,
     triangles: Math.round(renderer.info.render.triangles / 1000),
-    models: stress?.shown.models ?? 0,
+    models: (stress?.shown.models ?? 0) + otherBuses.shown,
+    buses: fleet.buses.length,
     sprites: (stress?.shown.sprites ?? 0) + crowd.pool.geometry.instanceCount,
   });
 }

@@ -995,6 +995,57 @@
     },
     "height": { "value": 1.7, "unit": "m", "min": 1, "max": 2.2, "doc": "Height of the people sprites." }
   },
+  "fleet": {
+    "dwellTime": {
+      "value": 20,
+      "unit": "s",
+      "min": 0,
+      "max": 120,
+      "doc": "Time the other buses of the line stand at each stop, doors open."
+    },
+    "maxDwellShare": {
+      "value": 0.4,
+      "unit": "ratio",
+      "min": 0,
+      "max": 0.9,
+      "doc": "The dwell never takes more than this share of the scheduled time to the next stop."
+    },
+    "catchUpSpeed": {
+      "value": 14,
+      "unit": "m/s",
+      "min": 1,
+      "max": 30,
+      "doc": "Fastest progress of a late bus catching up with its timetable (50 km/h)."
+    },
+    "gap": {
+      "value": 4,
+      "unit": "m",
+      "min": 1,
+      "max": 30,
+      "doc": "Distance a bus keeps behind the player's bus or the bus ahead of it when it has to wait."
+    },
+    "laneTolerance": {
+      "value": 4,
+      "unit": "m",
+      "min": 1,
+      "max": 15,
+      "doc": "The player's bus blocks a direction when its centre is within this distance of that route."
+    },
+    "headingTolerance": {
+      "value": 0.8,
+      "unit": "rad",
+      "min": 0.1,
+      "max": 1.6,
+      "doc": "The player's bus blocks a direction only when it heads the same way as that route, within this angle."
+    },
+    "searchWindow": {
+      "value": 80,
+      "unit": "m",
+      "min": 10,
+      "max": 500,
+      "doc": "The player's bus is looked for along each route within this distance of where it was last found."
+    }
+  },
   "budget": {
     "modelDistance": {
       "value": 150,
