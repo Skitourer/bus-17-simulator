@@ -1,5 +1,5 @@
 // @ts-check
-import { guessLayout, keyLabel, keyPlaceholders } from '../common/keys.js';
+import { BINDINGS, guessLayout, keyLabel, keyPlaceholders } from '../common/keys.js';
 
 /**
  * Translations: every player-facing text lives in src/i18n/<lang>.json, looked up by a dotted key.
@@ -69,16 +69,16 @@ export function t(key, params = {}) {
  * Key labels of the player's keyboard layout (#44), as placeholders. The browser layout map
  * (`navigator.keyboard`, Chromium only) may be missing or refused (e.g. in a frame); the layout is then
  * guessed from the language.
- * @returns {Promise<Record<string, string>>}
+ * @param {import('../common/keys.js').Bindings} [bindings] @returns {Promise<Record<string, string>>}
  */
-export async function keyLabelParams() {
+export async function keyLabelParams(bindings = BINDINGS) {
   /** @type {{getLayoutMap?: () => Promise<Map<string, string>>} | undefined} */
   const keyboard = /** @type {any} */ (navigator).keyboard;
   /** @type {Map<string, string> | null} */
   let layoutMap = null;
   if (keyboard?.getLayoutMap) layoutMap = await keyboard.getLayoutMap().catch(() => null);
   const layout = guessLayout(navigator.languages);
-  return keyPlaceholders((code) => keyLabel(code, layoutMap, layout, (c) => lookup('keys.' + c)));
+  return keyPlaceholders((code) => keyLabel(code, layoutMap, layout, (c) => lookup('keys.' + c)), bindings);
 }
 
 /**
@@ -95,14 +95,19 @@ export function translatePage(root) {
     /** @type {HTMLElement} */ (el).title = t(/** @type {HTMLElement} */ (el).dataset.i18nTitle || '');
 }
 
-/** Load the player's language file and translate the page; resolves once texts are ready. */
-export async function initI18n() {
-  const lang = pickLanguage(location.search, navigator.languages);
+/**
+ * Load the player's language file and translate the page; resolves once texts are ready.
+ * @param {{language?: string, bindings?: import('../common/keys.js').Bindings}} [options] language chosen in
+ * the settings ('' or none: the browser's), and the player's key bindings for the key labels
+ */
+export async function initI18n(options = {}) {
+  const preferred = options.language ? [options.language, ...navigator.languages] : navigator.languages;
+  const lang = pickLanguage(location.search, preferred);
   const res = await fetch(new URL(`./${lang}.json`, import.meta.url));
   if (!res.ok) throw new Error(`language file ${lang}.json: HTTP ${res.status}`);
   const dev = ['localhost', '127.0.0.1'].includes(location.hostname);
   setMessages(await res.json(), { strict: dev });
-  setGlobalParams(await keyLabelParams());
+  setGlobalParams(await keyLabelParams(options.bindings));
   document.documentElement.lang = lang;
   translatePage(document);
 }

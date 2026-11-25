@@ -1,7 +1,20 @@
 // @ts-check
-/** Page d'accueil : direction, bus, jour, depart reel (GTFS). Choix memorises localement. */
+/**
+ * Title screen (#46) with its three screens: the service choice (direction, bus, day, real GTFS
+ * departure), the settings (preferences kept in the browser) and the credits. Choices are remembered
+ * locally.
+ */
 import { serviceLabel, sortedServices, todayService, toSec } from './common/service.js';
-import { initI18n, t } from './i18n/i18n.js';
+import { LANGUAGES, initI18n, keyLabelParams, t } from './i18n/i18n.js';
+import {
+  CHOICES,
+  DEFAULT_PREFERENCES,
+  REMAPPABLE,
+  bindingsWith,
+  keyConflict,
+  loadPreferences,
+  savePreferences,
+} from './settings/preferences.js';
 
 /** @param {string} id */
 const $ = (id) => /** @type {HTMLElement} */ (document.getElementById(id));
@@ -123,9 +136,157 @@ function emptyNote(text) {
   return span;
 }
 
-async function start() {
-  await initI18n();
+// ------------------------------------------------------------------ screens
+const SCREENS = ['title', 'play', 'settings', 'credits'];
+
+/** Show the screen named in the URL hash (title by default), so that the browser back button works. */
+function showScreen() {
+  const name = SCREENS.includes(location.hash.slice(1)) ? location.hash.slice(1) : 'title';
+  for (const screen of SCREENS) $('screen-' + screen).hidden = screen !== name;
+  // keyboard players land on the first button of the screen
+  const first = /** @type {HTMLElement | null} */ (
+    $('screen-' + name).querySelector('button:not(:disabled)')
+  );
+  first?.focus();
+}
+
+for (const button of document.querySelectorAll('[data-screen]'))
+  /** @type {HTMLElement} */ (button).addEventListener('click', () => {
+    const name = /** @type {HTMLElement} */ (button).dataset.screen || 'title';
+    location.hash = name === 'title' ? '' : name;
+  });
+addEventListener('hashchange', showScreen);
+addEventListener('keydown', (e) => {
+  if (e.code === 'Escape' && !listening && location.hash) location.hash = '';
+});
+
+// ------------------------------------------------------------------ settings
+/** The browser storage, or null where it is blocked (some private modes throw on access). */
+function storage() {
+  try {
+    return localStorage;
+  } catch {
+    return null;
+  }
+}
+
+let preferences = loadPreferences(storage(), LANGUAGES);
+/** Action waiting for its new key, if any. @type {import('./common/keys.js').Action | null} */
+let listening = null;
+
+/** Store the preferences and redraw the settings. */
+async function changePreferences(/** @type {Partial<typeof preferences>} */ change) {
+  const languageChanged = 'language' in change && change.language !== preferences.language;
+  preferences = { ...preferences, ...change };
+  const saved = savePreferences(storage(), preferences);
+  if (languageChanged || 'keys' in change) await translate();
+  renderSettings();
+  $('saveMessage').textContent = t(saved ? 'settings.saved' : 'settings.notSaved');
+}
+
+/** Translate the page in the chosen language, with the labels of the chosen keys. */
+async function translate() {
+  await initI18n({ language: preferences.language, bindings: bindingsWith(preferences.keys) });
   document.title = t('menu.pageTitle');
+  if (line) render();
+}
+
+function renderSettings() {
+  chips(
+    $('languageChips'),
+    [
+      { value: '', label: t('settings.languageAuto') },
+      // each language is named in itself; only French exists so far
+      ...LANGUAGES.map((lang) => ({ value: lang, label: t('settings.languageName') })),
+    ],
+    preferences.language,
+    (language) => changePreferences({ language }),
+  );
+  const labels = {
+    quality: { low: 'settings.low', medium: 'settings.medium', high: 'settings.high' },
+    viewDistance: { near: 'settings.near', medium: 'settings.mediumDistance', far: 'settings.far' },
+    difficulty: { easy: 'settings.easy', normal: 'settings.normal', hard: 'settings.hard' },
+  };
+  chips(
+    $('qualityChips'),
+    CHOICES.quality.map((value) => ({ value, label: t(labels.quality[value]) })),
+    preferences.quality,
+    (quality) => changePreferences({ quality }),
+  );
+  chips(
+    $('viewDistanceChips'),
+    CHOICES.viewDistance.map((value) => ({ value, label: t(labels.viewDistance[value]) })),
+    preferences.viewDistance,
+    (viewDistance) => changePreferences({ viewDistance }),
+  );
+  chips(
+    $('difficultyChips'),
+    CHOICES.difficulty.map((value) => ({ value, label: t(labels.difficulty[value]) })),
+    preferences.difficulty,
+    (difficulty) => changePreferences({ difficulty }),
+  );
+  renderKeys();
+}
+
+async function renderKeys() {
+  const bindings = bindingsWith(preferences.keys);
+  const labels = await keyLabelParams(bindings);
+  const list = $('keyList');
+  list.replaceChildren();
+  for (const action of REMAPPABLE) {
+    const row = document.createElement('label');
+    row.className = 'key-row';
+    row.textContent = t('settings.action.' + action);
+    const button = document.createElement('button');
+    button.className = 'key' + (listening === action ? ' listening' : '');
+    button.textContent =
+      listening === action
+        ? t('settings.pressKey')
+        : labels['key' + action[0].toUpperCase() + action.slice(1)];
+    button.onclick = () => {
+      listening = action;
+      $('keyMessage').textContent = '';
+      renderKeys();
+    };
+    row.append(button);
+    list.append(row);
+    if (listening === action) button.focus();
+  }
+}
+
+// the new key of the action being changed: captured before the page reacts to it
+addEventListener(
+  'keydown',
+  (e) => {
+    if (!listening) return;
+    e.preventDefault();
+    e.stopPropagation();
+    const action = listening;
+    listening = null;
+    if (e.code === 'Escape') {
+      renderKeys();
+      return;
+    }
+    const taken = keyConflict(bindingsWith(preferences.keys), action, e.code);
+    if (taken) {
+      $('keyMessage').textContent = t('settings.keyTaken', { action: t('settings.action.' + taken) });
+      renderKeys();
+      return;
+    }
+    changePreferences({ keys: { ...preferences.keys, [action]: e.code } });
+  },
+  { capture: true },
+);
+
+$('resetBtn').onclick = () => {
+  $('keyMessage').textContent = '';
+  changePreferences({ ...DEFAULT_PREFERENCES, keys: {} });
+};
+
+async function start() {
+  await translate();
+  renderSettings();
+  showScreen();
   try {
     const res = await fetch('data/grenoble/17.json');
     if (!res.ok) throw new Error(`HTTP ${res.status}`);

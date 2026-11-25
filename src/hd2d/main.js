@@ -20,14 +20,17 @@ import { SegmentGrid, kerbSegments, laneOffsets, offsetAt, placeStops } from './
 import { Mirrors } from './mirrors.js';
 import { eyePosition, lookTarget, steeringWheelAngle } from './views.js';
 /** @typedef {import('./stops.js').StopEvent} StopEvent */
-import { initI18n, t } from '../i18n/i18n.js';
+import { LANGUAGES, initI18n, t } from '../i18n/i18n.js';
 import { isAction } from '../common/keys.js';
 import { loadSettings } from '../settings/settings.js';
+import { applyPreferences, bindingsWith, loadPreferences } from '../settings/preferences.js';
 
 /** @param {string} id */
 const $ = (id) => /** @type {HTMLElement} */ (document.getElementById(id));
 const P = readParams();
 if (!location.search) location.replace('index.html');
+const preferences = loadPreferences(storage(), LANGUAGES);
+const bindings = bindingsWith(preferences.keys);
 const S = await boot();
 const B = S.bus;
 
@@ -117,10 +120,10 @@ const keys = { up: false, down: false, left: false, right: false };
  * @param {string} code @returns {keyof import('../common/types.js').DriveInput | null}
  */
 function driveKey(code) {
-  if (isAction('accelerate', code)) return 'up';
-  if (isAction('brake', code)) return 'down';
-  if (isAction('left', code)) return 'left';
-  if (isAction('right', code)) return 'right';
+  if (isAction('accelerate', code, bindings)) return 'up';
+  if (isAction('brake', code, bindings)) return 'down';
+  if (isAction('left', code, bindings)) return 'left';
+  if (isAction('right', code, bindings)) return 'right';
   return null;
 }
 // assigned once by load(), before the first frame
@@ -674,7 +677,7 @@ function setFlying(on) {
 
 /** Debug keys; returns true when the key was used. @param {KeyboardEvent} e */
 function debugKey(e) {
-  const is = (/** @type {import('../common/keys.js').Action} */ action) => isAction(action, e.code);
+  const is = (/** @type {import('../common/keys.js').Action} */ action) => isAction(action, e.code, bindings);
   if (is('turbo')) {
     flyKeys.fast = true;
     drive.tune(turboParams);
@@ -695,12 +698,12 @@ function debugKey(e) {
 
 /** @param {KeyboardEvent} e */
 function debugKeyUp(e) {
-  if (isAction('turbo', e.code)) {
+  if (isAction('turbo', e.code, bindings)) {
     flyKeys.fast = false;
     drive.tune(S.drive);
   }
-  if (isAction('flyUp', e.code)) flyKeys.up = false;
-  if (isAction('flyDown', e.code)) flyKeys.down = false;
+  if (isAction('flyUp', e.code, bindings)) flyKeys.up = false;
+  if (isAction('flyDown', e.code, bindings)) flyKeys.down = false;
 }
 
 function debugPanel() {
@@ -750,7 +753,7 @@ addEventListener('keydown', (e) => {
     e.preventDefault();
   }
   if (!running) return;
-  const is = (/** @type {import('../common/keys.js').Action} */ action) => isAction(action, e.code);
+  const is = (/** @type {import('../common/keys.js').Action} */ action) => isAction(action, e.code, bindings);
   if (is('doors') && !flying) {
     if (doors.toggle(drive.v)) toast(t('toast.doorsTooFast'), 'bad');
     e.preventDefault();
@@ -832,10 +835,19 @@ window.addEventListener('error', (e) => {
 load().catch(showLoadError);
 
 /** Language and settings, needed before anything is built; a failure stays on the loading screen. */
+/** The browser storage, or null where it is blocked (some private modes throw on access). */
+function storage() {
+  try {
+    return localStorage;
+  } catch {
+    return null;
+  }
+}
+
 async function boot() {
   try {
-    await initI18n();
-    return await loadSettings();
+    await initI18n({ language: preferences.language, bindings });
+    return applyPreferences(await loadSettings(), preferences);
   } catch (e) {
     showLoadError(e);
     throw e;
