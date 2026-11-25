@@ -1,6 +1,15 @@
 // @ts-check
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { LANGUAGES, initI18n, pickLanguage, setMessages, t, translatePage } from '../../src/i18n/i18n.js';
+import {
+  LANGUAGES,
+  initI18n,
+  keyLabelParams,
+  pickLanguage,
+  setGlobalParams,
+  setMessages,
+  t,
+  translatePage,
+} from '../../src/i18n/i18n.js';
 import fr from '../../src/i18n/fr.json';
 
 /** @typedef {import('../../src/i18n/i18n.js').Messages} Messages */
@@ -43,6 +52,13 @@ describe('t', () => {
     setMessages({ a: { b: 'Arrêt {stop} à {time}' } });
     expect(t('a.b', { stop: 'Chavant', time: '08:30' })).toBe('Arrêt Chavant à 08:30');
     expect(t('a.b', { stop: 'Chavant' })).toBe('Arrêt Chavant à {time}');
+  });
+
+  it('fills the global placeholders unless the call overrides them', () => {
+    setMessages({ a: { b: '{keyDoors} {stop}' } });
+    setGlobalParams({ keyDoors: 'Espace', stop: 'X' });
+    expect(t('a.b', { stop: 'Chavant' })).toBe('Espace Chavant');
+    setGlobalParams({});
   });
 
   it('fails loudly on a missing key in strict mode, shows the key otherwise', () => {
@@ -100,7 +116,34 @@ describe('translatePage and initI18n', () => {
     await initI18n();
     expect(documentElement.lang).toBe('fr');
     expect(page.text.textContent).toBe('PAUSE');
+    expect(page.html.innerHTML).toContain('<b>Z / ↑</b>');
     expect(t('no.such.key')).toBe('[no.such.key]'); // not a development host: lenient
+  });
+
+  it('labels the keys from the browser layout map, or from the language without one', async () => {
+    setMessages(fr);
+    vi.stubGlobal('navigator', {
+      languages: ['en-US'],
+      keyboard: {
+        getLayoutMap: async () =>
+          new Map([
+            ['KeyW', 'z'],
+            ['KeyA', 'q'],
+            ['KeyS', 's'],
+            ['KeyD', 'd'],
+          ]),
+      },
+    });
+    expect((await keyLabelParams()).keyMove).toBe('ZQSD / ↑←↓→');
+    vi.stubGlobal('navigator', {
+      languages: ['en-US'],
+      keyboard: { getLayoutMap: () => Promise.reject(new Error('frame')) },
+    });
+    expect((await keyLabelParams()).keyMove).toBe('WASD / ↑←↓→');
+    vi.stubGlobal('navigator', { languages: ['fr-FR'] });
+    const keys = await keyLabelParams();
+    expect(keys.keyMove).toBe('ZQSD / ↑←↓→');
+    expect(keys.keyDoors).toBe('Espace');
   });
 
   it('reports a missing language file', async () => {
