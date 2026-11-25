@@ -248,7 +248,7 @@ async function load() {
   }
   if (P.debug) {
     $('debug').hidden = false;
-    minimap.onPick = teleport;
+    minimap.onPick = (x, y) => void teleport(x, y);
     toast(t('debug.on'), 'info');
   }
   // mode test : ?auto&ff=40 -> simule 40 s d'un coup (pilote automatique)
@@ -513,13 +513,29 @@ function placeAtStop(i) {
   toast(t('debug.teleported', { stop: track.stops[i].name }));
 }
 
-/** Place the bus on the route point nearest to (x, y). @param {number} x @param {number} y */
-function teleport(x, y) {
-  placeOnRoute(Math.max(0, nearest(x, y, 0, 0).s - B.rearOverhang));
+/**
+ * Move the bus anywhere: its centre at (x, y), heading `h` (by default its own); refused where a building or
+ * the water touches it, unless collisions are off (K). Returns whether the bus moved.
+ * @param {number} x @param {number} y @param {number} [h]
+ */
+function teleport(x, y, h = drive.h) {
+  const before = { x: drive.x, y: drive.y, h: drive.h, z: busZ };
+  drive.placeCentre(x, y, h);
+  // on a bridge the deck wins over the ground below (within reach of the ground height)
+  busZ = hf.surface(x, y, hf.h(x, y));
+  if (drive.blocked(obstacles(world.index, hf, () => busZ, ghost))) {
+    drive.place(before.x, before.y, before.h);
+    busZ = before.z;
+    toast(t('debug.blocked'), 'bad');
+    return false;
+  }
+  progress = nearest(x, y, 0, 0).s;
+  camYaw = drive.h;
   syncStops();
   doors = 0;
   const st = track.stops[next];
-  toast(t('debug.teleported', { stop: st ? st.name : t('game.terminus') }));
+  toast(t('debug.moved', { stop: st ? st.name : t('game.terminus') }));
+  return true;
 }
 
 /** @param {boolean} on */
@@ -552,8 +568,8 @@ function debugKey(e) {
   else if (e.code === 'Space') flyKeys.up = true;
   else if (e.code === 'KeyX') flyKeys.down = true;
   else if (e.code === 'Enter' && flying) {
-    teleport(fly.x, fly.y);
-    setFlying(false);
+    // the bus lands below the camera, facing where the camera looks
+    if (teleport(fly.x, fly.y, fly.yaw)) setFlying(false);
   } else return false;
   return true;
 }

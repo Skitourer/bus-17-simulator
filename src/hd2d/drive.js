@@ -48,6 +48,40 @@ export class Drive {
       s = Math.sin(this.h);
     return { x: this.x + c * f + s * r, y: this.y + s * f - c * r };
   }
+  /** Points of the bus outline tested against obstacles (corners, front middle, sides at mid-wheelbase). */
+  probes() {
+    const bus = this.bus;
+    const F = bus.bodyLength - bus.rearOverhang,
+      R = -bus.rearOverhang,
+      HW = bus.bodyWidth / 2;
+    return [
+      [F, -HW],
+      [F, HW],
+      [F, 0],
+      [R, -HW],
+      [R, HW],
+      [bus.wheelbase / 2, -HW],
+      [bus.wheelbase / 2, HW],
+    ].map(([f, r]) => this.point(f, r));
+  }
+
+  /**
+   * Whether an obstacle touches the bus where it stands.
+   * @param {{hit:(x:number,y:number)=>boolean}} walls
+   */
+  blocked(walls) {
+    return this.probes().some((p) => walls.hit(p.x, p.y));
+  }
+
+  /**
+   * Put the centre of the bus at (x, y), heading `h`, stopped.
+   * @param {number} x @param {number} y @param {number} h
+   */
+  placeCentre(x, y, h) {
+    const back = this.bus.bodyLength / 2 - this.bus.rearOverhang;
+    this.place(x - Math.cos(h) * back, y - Math.sin(h) * back, h);
+  }
+
   get center() {
     return this.point(this.bus.bodyLength / 2 - this.bus.rearOverhang);
   }
@@ -97,20 +131,7 @@ export class Drive {
 
     // collision : contour du bus contre les emprises des batiments
     this.bump += dt;
-    const F = bus.bodyLength - bus.rearOverhang,
-      R = -bus.rearOverhang,
-      HW = bus.bodyWidth / 2;
-    const probes = [
-      [F, -HW],
-      [F, HW],
-      [F, 0],
-      [R, -HW],
-      [R, HW],
-      [bus.wheelbase / 2, -HW],
-      [bus.wheelbase / 2, HW],
-    ];
-    for (const [f, r] of probes) {
-      const probe = this.point(f, r);
+    for (const probe of this.probes()) {
       if (walls.hit(probe.x, probe.y)) {
         this.x = px;
         this.y = py;
