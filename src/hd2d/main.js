@@ -16,6 +16,7 @@ import { OrbitCamera } from './orbit.js';
 import { FreeFly, findStop, stepStop, turboDrive } from './debug.js';
 import { Doors, StopService, drawService, serviceSeed } from './stops.js';
 import { Crowd } from './crowd.js';
+import { kerbSegments, placeStops } from './kerb.js';
 import { Mirrors } from './mirrors.js';
 import { eyePosition, lookTarget, steeringWheelAngle } from './views.js';
 /** @typedef {import('./stops.js').StopEvent} StopEvent */
@@ -232,13 +233,22 @@ async function load() {
   line = l;
   hf = new Ground(terrain, tileIndex, tiles, S.world.deckCatch, S.world.deckMargin);
   track = new Track(line.directions[P.dir], line.step);
-  track.stops.forEach((s) => {
+  const places = placeStops(track, kerbSegments(tiles, tileIndex), {
+    kerbSearch: S.world.kerbSearch,
+    shelterSetback: S.world.shelterSetback,
+    laneOffset: S.gameplay.laneOffset,
+    bodyWidth: B.bodyWidth,
+  });
+  track.stops.forEach((s, i) => {
+    // the front door must reach the kerb, not the GTFS point that may lie on the carriageway
+    s.x = places[i].x;
+    s.y = places[i].y;
     s.served = false;
     s.missed = false;
   });
   $('loadMsg').textContent = t('game.loadingStreets');
   await new Promise((r) => setTimeout(r, 30));
-  world = buildWorld(scene, hf, { map, tiles }, track, S);
+  world = buildWorld(scene, hf, { map, tiles, stops: places }, track, S);
   bus = makeBus(B);
   scene.add(bus.group);
   minimap = new Minimap($('map'), map, line);
@@ -253,7 +263,10 @@ async function load() {
   crowd = new Crowd(
     scene,
     hf,
-    track.stops.map((st) => ({ x: st.x, y: st.y, h: track.heading(st.s) })),
+    // under the shelter, or at the kerb where a building leaves no room for one
+    places.map((p, i) =>
+      world.shelters[i] ? { x: p.shelterX, y: p.shelterY, h: p.h } : { x: p.x, y: p.y, h: p.h },
+    ),
     plan.stops.map((r) => r.board),
     S.passengers,
     bus.interior,

@@ -852,8 +852,35 @@ function treeBillboards(hf, positions) {
 }
 
 // ------------------------------------------------------------------ arrets
-/** @param {Ground} hf @param {import('../world/track.js').Track} track */
-function stops(hf, track) {
+/**
+ * True when a building stands where the shelter would go: some streets of the route have a sidewalk too
+ * narrow for it (or none in OSM), and the stop then only gets its pole.
+ * @param {Footprint[]} footprints @param {import('./kerb.js').StopPlace} place
+ */
+function shelterBlocked(footprints, place) {
+  const ax = Math.cos(place.h),
+    ay = Math.sin(place.h),
+    rx = Math.sin(place.h),
+    ry = -Math.cos(place.h);
+  // middle and back corners of the shelter (2.4 m on each side along the route, 0.9 m behind its middle)
+  const probes = [0, -2.4, 2.4].map((along) => [
+    place.shelterX + ax * along + (along ? rx * 0.9 : 0),
+    place.shelterY + ay * along + (along ? ry * 0.9 : 0),
+  ]);
+  return footprints.some(
+    (f) =>
+      place.shelterX > f.x0 - 4 &&
+      place.shelterX < f.x1 + 4 &&
+      place.shelterY > f.y0 - 4 &&
+      place.shelterY < f.y1 + 4 &&
+      probes.some(([x, y]) => inside(f.ring, x, y)),
+  );
+}
+
+/**
+ * @param {Ground} hf @param {import('./kerb.js').StopPlace[]} places @param {boolean[]} blocked
+ */
+function stops(hf, places, blocked) {
   const grp = new THREE.Group();
   const sh = NEAREST(new THREE.CanvasTexture(shelter()));
   const po = NEAREST(new THREE.CanvasTexture(stopPole()));
@@ -870,25 +897,26 @@ function stops(hf, track) {
     side: THREE.DoubleSide,
   });
   const roofMat = new THREE.MeshLambertMaterial({ color: '#2c3038' });
-  for (const st of track.stops) {
-    const h = track.heading(st.s);
-    const x = st.x,
-      y = st.y,
+  places.forEach((place, i) => {
+    const h = place.h;
+    const x = place.shelterX,
+      y = place.shelterY,
       z = hf.h(x, y);
     const g = new THREE.Group();
     g.position.set(x, z, -y);
-    g.rotation.y = h; // repere local : +X = sens de marche, +Z = a droite (cote trottoir)
+    g.rotation.y = h; // local frame: +X = direction of travel, +Z = right (away from the kerb), origin mid-shelter
     const back = new THREE.Mesh(new THREE.PlaneGeometry(4.6, 3.1), shMat); // paroi du fond, cote exterieur
-    back.position.set(0, 1.55, 1.0);
+    back.position.set(0, 1.55, 0.9);
     const roof = new THREE.Mesh(new THREE.BoxGeometry(4.8, 0.15, 2.0), roofMat);
-    roof.position.set(0, 3.05, 0.1);
+    roof.position.set(0, 3.05, 0);
     roof.castShadow = true;
     const pole = new THREE.Mesh(new THREE.PlaneGeometry(0.9, 3.4), poMat); // poteau, face au bus qui arrive
-    pole.position.set(3.2, 1.7, -0.6);
+    pole.position.set(3.2, 1.7, -0.7); // near the kerb
     pole.rotation.y = Math.PI / 2;
-    g.add(back, roof, pole);
+    if (blocked[i]) g.add(pole);
+    else g.add(back, roof, pole);
     grp.add(g);
-  }
+  });
   return grp;
 }
 
@@ -918,7 +946,8 @@ function tileObjects(ground, tiles) {
 // ------------------------------------------------------------------ assemblage
 /**
  * @param {THREE.Scene} scene @param {Ground} hf
- * @param {{map: import('../common/types.js').MapData | null, tiles: Map<string, TileData>}} data @param {import('../world/track.js').Track} track
+ * @param {{map: import('../common/types.js').MapData | null, tiles: Map<string, TileData>, stops: import('./kerb.js').StopPlace[]}} data
+ * @param {import('../world/track.js').Track} track
  * @param {import('../settings/settings.js').Settings} settings
  */
 export function buildWorld(scene, hf, data, track, settings) {
@@ -940,6 +969,12 @@ export function buildWorld(scene, hf, data, track, settings) {
   scene.add(b.walls, b.roofs);
   footprints = b.footprints;
   scene.add(treeBillboards(hf, fromTiles.trees));
-  scene.add(stops(hf, track));
-  return { route, index: new FootprintIndex(footprints, track), water: water.material };
+  const blocked = data.stops.map((place) => shelterBlocked(footprints, place));
+  scene.add(stops(hf, data.stops, blocked));
+  return {
+    route,
+    index: new FootprintIndex(footprints, track),
+    water: water.material,
+    shelters: blocked.map((b) => !b),
+  };
 }

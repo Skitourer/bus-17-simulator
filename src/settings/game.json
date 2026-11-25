@@ -745,6 +745,20 @@
       "min": 0,
       "max": 5,
       "doc": "The water does not stop a bus this far beyond the sides and ends of a bridge deck: OSM decks are as narrow as the carriageway, the banks are skewed at the bridge ends, and the bus drifts in its lane (3 m lets the autopilot cross both bridges of the route)."
+    },
+    "kerbSearch": {
+      "value": 12,
+      "unit": "m",
+      "min": 2,
+      "max": 30,
+      "doc": "A stop looks for the kerb up to this distance to the right of the route centre line (the widest street of the route puts it 7.3 m away, at Verdun – Préfecture); farther, it keeps its GTFS position."
+    },
+    "shelterSetback": {
+      "value": 1,
+      "unit": "m",
+      "min": 0,
+      "max": 3,
+      "doc": "Distance from the kerb to the middle of the shelter: its 2 m deep roof then stays above the 2.5 m sidewalk and clear of a bus at the kerb."
     }
   },
   "water": {
