@@ -10,6 +10,7 @@
 import * as THREE from 'three';
 import { tree, shelter, stopPole } from './sprites.js';
 import { quayWalls, waterSurface } from './water.js';
+import { BillboardPool } from './instances.js';
 
 /** @typedef {import('./ground.js').Ground} Ground */
 /** @typedef {import('./ground.js').TileData} TileData */
@@ -788,70 +789,18 @@ function treeBillboards(hf, positions) {
     TH = 64;
   const { c, g } = canvas(TW * VAR, TH);
   for (let i = 0; i < VAR; i++) g.drawImage(tree(i + 1), i * TW, 0);
-  const tex = NEAREST(new THREE.CanvasTexture(c));
-  tex.minFilter = THREE.NearestFilter;
-  tex.generateMipmaps = false;
-  const quad = new THREE.PlaneGeometry(1, 1);
-  quad.translate(0, 0.5, 0);
   const n = positions.length / 2;
-  const geo = new THREE.InstancedBufferGeometry();
-  geo.index = quad.index;
-  geo.setAttribute('position', quad.attributes.position);
-  geo.setAttribute('uv', quad.attributes.uv);
-  const off = new Float32Array(n * 3),
-    sc = new Float32Array(n * 2),
-    vr = new Float32Array(n);
+  const pool = new BillboardPool(c, VAR, n);
   const r = rng(11);
   for (let i = 0; i < n; i++) {
     const x = positions[i * 2],
       y = positions[i * 2 + 1];
-    off[i * 3] = x;
-    off[i * 3 + 1] = hf.h(x, y) - 0.3;
-    off[i * 3 + 2] = -y;
     const s = 7 + r() * 5;
-    sc[i * 2] = s * 0.66;
-    sc[i * 2 + 1] = s;
-    vr[i] = Math.floor(r() * VAR);
+    pool.set(i, x, y, hf.h(x, y) - 0.3, s * 0.66, s, Math.floor(r() * VAR));
   }
-  geo.setAttribute('offset', new THREE.InstancedBufferAttribute(off, 3));
-  geo.setAttribute('scale', new THREE.InstancedBufferAttribute(sc, 2));
-  geo.setAttribute('variant', new THREE.InstancedBufferAttribute(vr, 1));
-  geo.instanceCount = n;
-  const mat = new THREE.ShaderMaterial({
-    uniforms: THREE.UniformsUtils.merge([
-      THREE.UniformsLib.fog,
-      { map: { value: tex }, tint: { value: new THREE.Color(1, 1, 1) } },
-    ]),
-    fog: true,
-    vertexShader: `
-      attribute vec3 offset; attribute vec2 scale; attribute float variant;
-      varying vec2 vUv;
-      #include <fog_pars_vertex>
-      void main() {
-        vUv = vec2((uv.x + variant) / ${VAR}.0, uv.y);
-        // billboard cylindrique : face a la camera, tronc vertical
-        vec3 right = normalize(vec3(viewMatrix[0][0], 0.0, viewMatrix[2][0]));
-        vec3 wp = offset + right * position.x * scale.x + vec3(0.0, position.y * scale.y, 0.0);
-        vec4 mvPosition = viewMatrix * vec4(wp, 1.0);
-        gl_Position = projectionMatrix * mvPosition;
-        #include <fog_vertex>
-      }`,
-    fragmentShader: `
-      uniform sampler2D map; uniform vec3 tint;
-      varying vec2 vUv;
-      #include <fog_pars_fragment>
-      void main() {
-        vec4 c = texture2D(map, vUv);
-        if (c.a < 0.5) discard;
-        gl_FragColor = vec4(c.rgb * tint, 1.0);
-        #include <colorspace_fragment>
-        #include <fog_fragment>
-      }`,
-  });
-  const m = new THREE.Mesh(geo, mat);
-  m.frustumCulled = false;
-  m.renderOrder = 12;
-  return m;
+  pool.show(n);
+  pool.mesh.renderOrder = 12;
+  return pool.mesh;
 }
 
 // ------------------------------------------------------------------ arrets

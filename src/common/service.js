@@ -94,6 +94,7 @@ export function readParams() {
     map: q.has('map') ? +(q.get('map') || 1) : null,
     debug: q.has('debug'),
     stop: q.get('stop') || '',
+    stress: Math.max(0, Math.floor(+(q.get('stress') || 0)) || 0),
   };
 }
 
