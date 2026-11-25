@@ -70,6 +70,41 @@ describe('Drive (HD-2D free driving)', () => {
     expect(drive.v).toBe(0);
   });
 
+  it('turns within the circle of a real 12 m city bus at walking pace', () => {
+    const drive = new Drive(SETTINGS.drive, SETTINGS.bus);
+    drive.v = 1;
+    run(drive, (dt) => drive.update({ ...NO_INPUT, up: drive.v < 1, left: true }, dt, flat, noWalls), 3);
+    // centre of the turn: on the left of the rear axle, at the radius set by the wheel angle
+    const rear = SETTINGS.bus.wheelbase / Math.tan(drive.delta);
+    const centre = drive.point(0, -rear);
+    const corner = drive.point(
+      SETTINGS.bus.bodyLength - SETTINGS.bus.rearOverhang,
+      SETTINGS.bus.bodyWidth / 2,
+    );
+    const radius = Math.hypot(corner.x - centre.x, corner.y - centre.y);
+    expect(radius).toBeGreaterThan(10);
+    expect(radius).toBeLessThan(11.5);
+  });
+
+  it('brakes harder the longer the brake key is held, and starts gently again once released', () => {
+    const drive = new Drive(SETTINGS.drive, SETTINGS.bus);
+    const { brakingStart, braking, brakeRampTime } = SETTINGS.drive;
+    expect(drive.brakeDeceleration(0)).toBeCloseTo(brakingStart);
+    expect(drive.brakeDeceleration(brakeRampTime / 2)).toBeCloseTo((brakingStart + braking) / 2);
+    expect(drive.brakeDeceleration(brakeRampTime * 3)).toBeCloseTo(braking);
+    drive.v = 14;
+    run(drive, (dt) => drive.update({ ...NO_INPUT, down: true }, dt, flat, noWalls), brakeRampTime);
+    expect(drive.brakeHeld).toBeGreaterThan(brakeRampTime - 2 * DT);
+    const before = drive.v;
+    drive.update({ ...NO_INPUT, down: true }, DT, flat, noWalls);
+    expect((before - drive.v) / DT).toBeGreaterThan(braking - 0.5);
+    drive.update(NO_INPUT, DT, flat, noWalls);
+    expect(drive.brakeHeld).toBe(0);
+    expect(new Drive({ ...SETTINGS.drive, brakeRampTime: 0 }, SETTINGS.bus).brakeDeceleration(0)).toBe(
+      braking,
+    );
+  });
+
   it('places its centre on a point, stopped, and tells when an obstacle touches it', () => {
     const drive = new Drive(SETTINGS.drive, SETTINGS.bus);
     drive.v = 5;

@@ -20,6 +20,7 @@ export class Drive {
     this.v = 0;
     this.delta = 0;
     this.braking = false;
+    this.brakeHeld = 0; // time the brake key has been held while moving forward (s)
     this.bump = 0; // temps depuis le dernier accrochage
   }
 
@@ -40,6 +41,18 @@ export class Drive {
     this.h = h;
     this.v = 0;
     this.delta = 0;
+    this.brakeHeld = 0;
+  }
+
+  /**
+   * Deceleration of the service brake after holding the key for `held` seconds: it grows linearly from
+   * `brakingStart` to `braking`, like a driver pressing the pedal harder.
+   * @param {number} held
+   */
+  brakeDeceleration(held) {
+    const { brakingStart, braking, brakeRampTime } = this.p;
+    const ramp = brakeRampTime > 0 ? Math.min(1, held / brakeRampTime) : 1;
+    return brakingStart + (braking - brakingStart) * ramp;
   }
 
   /** point du bus a `f` m devant l'essieu arriere et `r` m a droite @param {number} f */
@@ -106,11 +119,13 @@ export class Drive {
     let a = 0;
     this.braking = false;
     if (inp.up) a += v >= -0.05 ? p.acceleration * (1 - (v / vmax) ** 2) : p.braking;
-    if (inp.down) {
-      if (v > 0.15) {
-        a -= p.braking;
-        this.braking = true;
-      } else a -= p.reverseAcceleration;
+    if (inp.down && v > 0.15) {
+      this.brakeHeld += dt;
+      a -= this.brakeDeceleration(this.brakeHeld);
+      this.braking = true;
+    } else {
+      this.brakeHeld = 0;
+      if (inp.down) a -= p.reverseAcceleration;
     }
     if (!inp.up && !inp.down)
       a -= Math.sign(v) * Math.min(Math.abs(v) / dt, p.rollingDeceleration + p.airDrag * v * v);
