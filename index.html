@@ -7,7 +7,18 @@
     <link rel="stylesheet" href="src/menu.css" />
   </head>
   <body>
-    <main class="card">
+    <main class="card title-screen" id="screen-title">
+      <div class="badge big">17</div>
+      <h1 class="game-name" data-i18n="menu.title"></h1>
+      <p class="tagline" data-i18n="menu.subtitle"></p>
+      <nav class="menu-buttons">
+        <button class="go" data-screen="play" data-i18n="menu.play"></button>
+        <button class="menu-button" data-screen="settings" data-i18n="menu.settings"></button>
+        <button class="menu-button" data-screen="credits" data-i18n="menu.creditsTitle"></button>
+      </nav>
+    </main>
+
+    <main class="card" id="screen-play" hidden>
       <header class="title">
         <div class="badge">17</div>
         <div>
@@ -65,8 +76,55 @@
         <div data-i18n-html="menu.helpKeys"></div>
         <div data-i18n-html="menu.helpCamera"></div>
         <div data-i18n="menu.helpStops"></div>
-        <div class="credits" data-i18n="menu.credits"></div>
       </section>
+      <button class="menu-button back" data-screen="title" data-i18n="menu.back"></button>
+    </main>
+
+    <main class="card" id="screen-settings" hidden>
+      <header class="title">
+        <div class="badge">17</div>
+        <h1 data-i18n="settings.title"></h1>
+      </header>
+      <section class="group">
+        <h2 data-i18n="settings.language"></h2>
+        <div class="chips" id="languageChips"></div>
+      </section>
+      <section class="group">
+        <h2 data-i18n="settings.quality"></h2>
+        <div class="chips" id="qualityChips"></div>
+      </section>
+      <section class="group">
+        <h2 data-i18n="settings.viewDistance"></h2>
+        <div class="chips" id="viewDistanceChips"></div>
+      </section>
+      <section class="group">
+        <h2 data-i18n="settings.difficulty"></h2>
+        <div class="chips" id="difficultyChips"></div>
+        <p class="note" data-i18n="settings.difficultyHelp"></p>
+      </section>
+      <section class="group">
+        <h2 data-i18n="settings.keys"></h2>
+        <p class="note" data-i18n="settings.keysHelp"></p>
+        <div class="keys" id="keyList"></div>
+        <p class="note warn" id="keyMessage" role="status"></p>
+      </section>
+      <p class="note" id="saveMessage" role="status"></p>
+      <div class="row">
+        <button class="menu-button back" data-screen="title" data-i18n="menu.back"></button>
+        <button class="menu-button" id="resetBtn" data-i18n="settings.reset"></button>
+      </div>
+    </main>
+
+    <main class="card" id="screen-credits" hidden>
+      <header class="title">
+        <div class="badge">17</div>
+        <h1 data-i18n="menu.creditsTitle"></h1>
+      </header>
+      <section class="group help">
+        <div data-i18n="menu.credits"></div>
+        <div data-i18n="menu.developedWith"></div>
+      </section>
+      <button class="menu-button back" data-screen="title" data-i18n="menu.back"></button>
     </main>
     <script type="module" src="src/menu.js"></script>
   </body>

@@ -11,6 +11,7 @@ import {
   translatePage,
 } from '../../src/i18n/i18n.js';
 import fr from '../../src/i18n/fr.json';
+import { BINDINGS } from '../../src/common/keys.js';
 
 /** @typedef {import('../../src/i18n/i18n.js').Messages} Messages */
 
@@ -144,6 +145,26 @@ describe('translatePage and initI18n', () => {
     const keys = await keyLabelParams();
     expect(keys.keyMove).toBe('ZQSD / ↑←↓→');
     expect(keys.keyDoors).toBe('Espace');
+  });
+
+  it('follows the language and the keys chosen in the settings', async () => {
+    const page = fakePage();
+    vi.stubGlobal('location', { search: '', hostname: 'example.org' });
+    vi.stubGlobal('navigator', { languages: ['en-US'] });
+    vi.stubGlobal('document', {
+      documentElement: { lang: '' },
+      querySelectorAll: page.root.querySelectorAll,
+    });
+    /** @type {string[]} */
+    const urls = [];
+    vi.stubGlobal('fetch', async (/** @type {URL} */ url) => {
+      urls.push(String(url));
+      return { ok: true, json: async () => fr };
+    });
+    const bindings = { ...BINDINGS, accelerate: ['KeyI', 'ArrowUp'] };
+    await initI18n({ language: 'fr', bindings });
+    expect(urls[0]).toMatch(/fr\.json$/);
+    expect(page.html.innerHTML).toContain('<b>I / ↑</b>');
   });
 
   it('reports a missing language file', async () => {
