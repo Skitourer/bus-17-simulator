@@ -16,7 +16,7 @@ import { OrbitCamera } from './orbit.js';
 import { FreeFly, findStop, stepStop, turboDrive } from './debug.js';
 import { Doors, StopService, drawService, serviceSeed } from './stops.js';
 import { Crowd } from './crowd.js';
-import { kerbSegments, placeStops } from './kerb.js';
+import { SegmentGrid, kerbSegments, laneOffsets, offsetAt, placeStops } from './kerb.js';
 import { Mirrors } from './mirrors.js';
 import { eyePosition, lookTarget, steeringWheelAngle } from './views.js';
 /** @typedef {import('./stops.js').StopEvent} StopEvent */
@@ -130,6 +130,8 @@ let hf;
 let busZ = 0;
 /** @type {Track} */
 let track;
+/** offset of the bus lane at each route point (m to the right of the centre line), set by load() @type {Float64Array} */
+let lane = new Float64Array(1);
 /** @type {ReturnType<typeof buildWorld>} */
 let world;
 /** @type {ReturnType<typeof makeBus>} */
@@ -199,9 +201,14 @@ function nearest(x, y, hint, win) {
   return { s: bi * st, d: Math.sqrt(best) };
 }
 
+/** Distance to the right of the route centre line where the bus drives, at `s` (m along the route). @param {number} s */
+function laneAt(s) {
+  return offsetAt(lane, track.step, s);
+}
+
 /** @param {number} s */
 function placeOnRoute(s) {
-  const p = track.pos(s, S.gameplay.laneOffset);
+  const p = track.pos(s, laneAt(s));
   drive.place(p.x, p.y, p.h);
   busZ = p.z; // route altitude: picks the deck when the route is on a bridge
   progress = s + B.rearOverhang;
@@ -235,7 +242,15 @@ async function load() {
   line = l;
   hf = new Ground(terrain, tileIndex, tiles, S.world.deckCatch, S.world.deckMargin);
   track = new Track(line.directions[P.dir], line.step);
-  const places = placeStops(track, kerbSegments(tiles, tileIndex), {
+  // 16 m cells: a ray is at most kerbSearch (12 m) long, so it looks at a few cells only
+  const kerbs = new SegmentGrid(kerbSegments(tiles, tileIndex), 16);
+  lane = laneOffsets(track, kerbs, {
+    kerbSearch: S.world.kerbSearch,
+    laneOffset: S.gameplay.laneOffset,
+    bodyWidth: B.bodyWidth,
+    kerbMargin: S.gameplay.kerbMargin,
+  });
+  const places = placeStops(track, kerbs, {
     kerbSearch: S.world.kerbSearch,
     shelterSetback: S.world.shelterSetback,
     laneOffset: S.gameplay.laneOffset,
@@ -250,7 +265,7 @@ async function load() {
   });
   $('loadMsg').textContent = t('game.loadingStreets');
   await new Promise((r) => setTimeout(r, 30));
-  world = buildWorld(scene, hf, { map, tiles, stops: places }, track, S);
+  world = buildWorld(scene, hf, { map, tiles, stops: places, lane }, track, S);
   bus = makeBus(B);
   scene.add(bus.group);
   minimap = new Minimap($('map'), map, line);
@@ -374,7 +389,7 @@ function update(dt) {
 /** pilote de test (?auto) : suit le trace dans la voie de droite */
 function autopilot() {
   // 8 m ahead: a longer look cuts the corners onto the bridges, over the quays (water collision)
-  const look = track.pos(progress + 8, S.gameplay.laneOffset);
+  const look = track.pos(progress + 8, laneAt(progress + 8));
   const c = drive.point(B.wheelbase, 0);
   const want = Math.atan2(look.y - c.y, look.x - c.x);
   let err = want - drive.h;
