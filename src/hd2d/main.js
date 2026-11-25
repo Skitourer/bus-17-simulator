@@ -14,7 +14,8 @@ import { Drive, obstacles } from './drive.js';
 import { Post } from './post.js';
 import { OrbitCamera } from './orbit.js';
 import { FreeFly, findStop, stepStop, turboDrive } from './debug.js';
-import { Doors, StopService, drawRequests, serviceSeed } from './stops.js';
+import { Doors, StopService, drawService, serviceSeed } from './stops.js';
+import { Crowd } from './crowd.js';
 import { Mirrors } from './mirrors.js';
 import { eyePosition, lookTarget, steeringWheelAngle } from './views.js';
 /** @typedef {import('./stops.js').StopEvent} StopEvent */
@@ -156,6 +157,8 @@ const orbit = new OrbitCamera(S.camera.orbit);
 const doors = new Doors(S.gameplay);
 /** @type {StopService} */
 let service;
+/** @type {Crowd} */
+let crowd;
 // debug mode: free flight, collisions off (ghost), turbo
 const fly = new FreeFly(S.debug, S.camera.orbit);
 const turboParams = turboDrive(S.drive, S.debug);
@@ -245,10 +248,15 @@ async function load() {
   $('svc').textContent = t('game.serviceInfo', { day: serviceLabel(P.day, line.calendar), time: P.dep });
   placeOnRoute(P.s !== null ? P.s : Math.max(0, track.stops[0].s - 4));
   // arrets deja derriere le point de depart (mode test)
-  service = new StopService(
-    track.stops,
-    drawRequests(track.stops.length, serviceSeed(P.dep, P.dir), S.gameplay),
-    S.gameplay,
+  const plan = drawService(track.stops.length, serviceSeed(P.dep, P.dir), S.gameplay, S.passengers);
+  service = new StopService(track.stops, plan, S.gameplay, S.passengers);
+  crowd = new Crowd(
+    scene,
+    hf,
+    track.stops.map((st) => ({ x: st.x, y: st.y, h: track.heading(st.s) })),
+    plan.stops.map((r) => r.board),
+    S.passengers,
+    bus.interior,
   );
   service.reset(progress);
   if (P.stop) {
@@ -334,12 +342,17 @@ function update(dt) {
   // stop service: the front door (front right of the bus) at the stop, doors open long enough
   const st = track.stops[service.next];
   const door = drive.point(doorAhead(), B.bodyWidth / 2);
-  const event = service.update(dt, {
+  const at = service.next;
+  const { event, moves } = service.update(dt, {
     progress,
     doorDistance: st ? Math.hypot(door.x - st.x, door.y - st.y) : Infinity,
     doorsOpen: doors.open,
     onRoute: n.d < 25,
   });
+  for (const move of moves) {
+    if (move === 'board') crowd.board(at, door);
+    else crowd.alight(door, drive.h);
+  }
   if (event) stopToast(event);
 }
 
@@ -421,6 +434,7 @@ function render(dt) {
     $('wheel').style.transform = `rotate(${-steeringWheelAngle(drive.delta, B.steeringRatio)}rad)`;
   sky.position.copy(camera.position);
   world.water.uniforms.time.value += dt;
+  crowd.update(dt, service.onBoard);
 
   // soleil et ombres centres sur le bus
   sun.target.position.set(c.x, z, -c.y);
@@ -537,12 +551,13 @@ function hud() {
   $('slope').textContent = (sl > 0 ? '+' : '') + sl.toFixed(1) + ' %';
   const st = track.stops[service.next];
   const request = service.request;
-  $('saeAlight').classList.toggle('on', request.alight);
-  $('saeBoard').classList.toggle('on', request.board);
+  $('saeAlight').classList.toggle('on', request.alight > 0);
+  $('saeBoard').classList.toggle('on', request.board > 0);
+  $('saeOnBoard').textContent = t('game.onBoard', { count: service.onBoard });
   $('doorsState').textContent = t('game.doors.' + doors.state);
   $('doorsState').className = 'doors ' + doors.state;
   $('cabSpeed').textContent = String(Math.round(Math.abs(drive.v) * 3.6));
-  $('cabStop').classList.toggle('on', request.alight);
+  $('cabStop').classList.toggle('on', request.alight > 0);
   $('cabDoors').classList.toggle('on', !doors.closed);
   if (st) {
     $('saeStop').textContent = st.name;

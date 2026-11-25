@@ -65,6 +65,8 @@ export function makeInterior(bus) {
   box([front - 1.9, FLOOR, -half], [front - 1.85, 1.8, -0.35], 'pillar');
   // seat pairs on both sides, leaving the door areas on the right free (front and middle doors)
   const middleDoor = rear + length * 0.45;
+  /** @type {number[][]} where the people on board sit: [x, y, z] in the bus frame */
+  const seats = [];
   for (let x = rear + 0.4; x < front - 2.2; x += 0.95)
     for (const side of [-1, 1]) {
       if (side > 0 && Math.abs(x - middleDoor) < 1.1) continue;
@@ -72,7 +74,14 @@ export function makeInterior(bus) {
         z1 = side * (half - 0.05);
       box([x, FLOOR, z0], [x + 0.45, 0.8, z1], 'seat');
       box([x, 0.8, z0], [x + 0.08, 1.4, z1], 'seatBack');
+      for (const share of [0.25, 0.75]) seats.push([x + 0.25, FLOOR + 0.15, z0 + (z1 - z0) * share]);
     }
+  // fill the seats in a scattered order over the whole bus (golden ratio sequence), not front to back
+  const order = seats.map((_, k) => (k * 0.618034) % 1);
+  group.userData.seats = seats
+    .map((seat, k) => ({ seat, key: order[k] }))
+    .sort((a, b) => a.key - b.key)
+    .map((e) => e.seat);
   // grab poles along the aisle
   const pole = new THREE.CylinderGeometry(0.035, 0.035, CEILING - FLOOR, 6);
   for (let x = rear + 1; x < front - 1.5; x += 2)
