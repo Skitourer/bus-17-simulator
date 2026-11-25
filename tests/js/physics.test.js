@@ -1,6 +1,6 @@
 // @ts-check
 import { describe, expect, it } from 'vitest';
-import { Drive } from '../../src/hd2d/drive.js';
+import { Drive, obstacles } from '../../src/hd2d/drive.js';
 import { Heightfield } from '../../src/hd2d/heightfield.js';
 import { NO_INPUT, SETTINGS, tiltedTerrain } from './fixtures.js';
 
@@ -89,5 +89,27 @@ describe('Drive (HD-2D free driving)', () => {
     }
     expect(events).toEqual(['bump']);
     expect(drive.point(12 - 3).x).toBeLessThanOrEqual(9.6);
+  });
+});
+
+describe('obstacles', () => {
+  const building = { hit: (/** @type {number} */ x) => x > 50 };
+  const water = {
+    waterBlocks: (/** @type {number} */ x, /** @type {number} */ _y, /** @type {number} */ z) =>
+      x < 0 && z < 5,
+  };
+
+  it('stops the bus at buildings and at the water, not on a deck above it', () => {
+    const low = obstacles(building, water, () => 0, false);
+    expect(low.hit(60, 0)).toBe(true);
+    expect(low.hit(-1, 0)).toBe(true);
+    expect(low.hit(10, 0)).toBe(false);
+    expect(obstacles(building, water, () => 8, false).hit(-1, 0)).toBe(false);
+  });
+
+  it('stops nothing in ghost mode', () => {
+    const ghost = obstacles(building, water, () => 0, true);
+    expect(ghost.hit(60, 0)).toBe(false);
+    expect(ghost.hit(-1, 0)).toBe(false);
   });
 });

@@ -10,7 +10,7 @@ import { readParams, ServiceClock, serviceLabel, hms, hm, delta } from '../commo
 import { Ground } from './ground.js';
 import { buildWorld } from './world.js';
 import { makeBus } from './bus3d.js';
-import { Drive } from './drive.js';
+import { Drive, obstacles } from './drive.js';
 import { Post } from './post.js';
 import { OrbitCamera } from './orbit.js';
 import { FreeFly, findStop, stepStop, turboDrive } from './debug.js';
@@ -151,7 +151,6 @@ const orbit = new OrbitCamera(S.camera.orbit);
 const fly = new FreeFly(S.debug, S.camera.orbit);
 const turboParams = turboDrive(S.drive, S.debug);
 const flyKeys = { up: false, down: false, fast: false };
-const noWalls = { hit: () => false };
 let flying = false,
   ghost = false,
   fps = 60;
@@ -219,7 +218,7 @@ async function load() {
       loads.push(get(`tiles/t_${i}_${j}.json`).then((tile) => void tiles.set(`${i}_${j}`, tile)));
   await Promise.all(loads);
   line = l;
-  hf = new Ground(terrain, tileIndex, tiles, S.world.deckCatch);
+  hf = new Ground(terrain, tileIndex, tiles, S.world.deckCatch, S.world.deckMargin);
   track = new Track(line.directions[P.dir], line.step);
   track.stops.forEach((s) => {
     s.served = false;
@@ -304,8 +303,10 @@ function update(dt) {
         next < track.stops.length ? 'info' : 'good',
       );
   }
-  const walls = ghost ? noWalls : world.index;
+  const walls = obstacles(world.index, hf, () => busZ, ghost);
   const ev = drive.update(inp, dt, { slope: (x, y, hd) => hf.slopeAt(x, y, hd, busZ) }, walls);
+  // height on the drivable surface, kept by the simulation (fast-forward runs without rendering)
+  busZ = hf.surface(drive.x, drive.y, busZ);
   if (drive.bump === 0) bumps++;
   if (ev) toast(t('toast.' + ev), 'bad');
 
@@ -346,7 +347,8 @@ function update(dt) {
 
 /** pilote de test (?auto) : suit le trace dans la voie de droite */
 function autopilot() {
-  const look = track.pos(progress + 14, S.gameplay.laneOffset);
+  // 8 m ahead: a longer look cuts the corners onto the bridges, over the quays (water collision)
+  const look = track.pos(progress + 8, S.gameplay.laneOffset);
   const c = drive.point(B.wheelbase, 0);
   const want = Math.atan2(look.y - c.y, look.x - c.x);
   let err = want - drive.h;

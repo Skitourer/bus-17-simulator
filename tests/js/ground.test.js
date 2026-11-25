@@ -1,6 +1,6 @@
 // @ts-check
 import { describe, expect, it } from 'vitest';
-import { Ground, deckFromRecord, deckHeight } from '../../src/hd2d/ground.js';
+import { Ground, deckFromRecord, deckHeight, insideRings } from '../../src/hd2d/ground.js';
 import { SETTINGS, tiltedTerrain } from './fixtures.js';
 
 /** One 20 m tile with a 10 m grid: heights (m) given row by row from the south. */
@@ -8,6 +8,7 @@ function oneTile(
   /** @type {number[]} */ metres,
   /** @type {number[][]} */ bridges = [],
   /** @type {number[]} */ waterMetres = [],
+  /** @type {number[][][]} */ water = [],
 ) {
   /** @type {import('../../src/hd2d/ground.js').TileIndex} */
   const index = { x0: 0, y0: 0, size: 20, step: 10, nx: 1, ny: 1 };
@@ -24,7 +25,7 @@ function oneTile(
         bridges,
         buildings: [],
         trees: [],
-        water: [],
+        water,
         water_level: waterMetres.map((m) => m * 10),
         wet: [],
         dry: [],
@@ -32,7 +33,7 @@ function oneTile(
       },
     ],
   ]);
-  return new Ground(tiltedTerrain(0), index, tiles, SETTINGS.world.deckCatch);
+  return new Ground(tiltedTerrain(0), index, tiles, SETTINGS.world.deckCatch, 1);
 }
 
 describe('Ground', () => {
@@ -60,6 +61,47 @@ describe('Ground', () => {
     expect(ground.waterLevel(7, 3)).toBeCloseTo(0.8);
     expect(ground.waterLevel(-50, 10)).toBeNull();
     expect(oneTile([5, 5, 5, 5, 5, 5, 5, 5, 5]).waterLevel(10, 10)).toBeNull();
+  });
+
+  it('keeps a vehicle on a deck within reach even when the ground below is closer', () => {
+    // deck at 1 m over flat ground at 0 m: the ground under a bridge often runs close to the deck at its ends
+    const deck = [40, 0, 100, 10, 200, 100, 10];
+    const ground = oneTile([0, 0, 0, 0, 0, 0, 0, 0, 0], [deck]);
+    expect(ground.surface(10, 10, 0.2)).toBeCloseTo(1);
+    expect(ground.surface(10, 18, 0.2)).toBeCloseTo(0); // beside the deck
+  });
+
+  it('finds the water pieces by ground triangle', () => {
+    // piece (0, 0) (10, 0) (10, 5) in the first triangle of cell 0, and the whole second triangle of cell 3
+    const pieces = [[[0, 0, 100, 0, 100, 50]], [[100, 100, 200, 200, 100, 200]]];
+    const ground = oneTile([0, 0, 0, 0, 0, 0, 0, 0, 0], [], [], pieces);
+    expect(ground.inWater(8, 2)).toBe(true);
+    expect(ground.inWater(8, 7)).toBe(false); // same triangle, outside the piece
+    expect(ground.inWater(2, 8)).toBe(false); // second triangle of the cell, dry
+    expect(ground.inWater(12, 18)).toBe(true);
+    expect(ground.inWater(18, 12)).toBe(false);
+    expect(ground.inWater(-5, 5)).toBe(false); // outside the tiles
+  });
+
+  it('lets a vehicle cross the water only on a bridge deck', () => {
+    // cell 0 fully under water (both triangles)
+    const water = [[[0, 0, 100, 0, 100, 100]], [[0, 0, 100, 100, 0, 100]]];
+    const deck = [40, 0, 20, 80, 200, 20, 80]; // 4 m wide at 8 m along y = 2
+    const ground = oneTile([0, 0, 0, 0, 0, 0, 0, 0, 0], [deck], [], water);
+    expect(ground.waterBlocks(5, 2, 0)).toBe(true); // at the water level
+    expect(ground.waterBlocks(5, 2, 8)).toBe(false); // on the deck
+    expect(ground.waterBlocks(5, 4.5, 8)).toBe(false); // over the side, within the 1 m margin
+    expect(ground.waterBlocks(5, 8, 8)).toBe(true); // off the side of the deck
+    expect(ground.waterBlocks(15, 15, 0)).toBe(false); // dry cell
+  });
+
+  it('tests points against rings with holes', () => {
+    const square = [0, 0, 10, 0, 10, 10, 0, 10],
+      hole = [4, 4, 6, 4, 6, 6, 4, 6];
+    expect(insideRings([square], 2, 2)).toBe(true);
+    expect(insideRings([square, hole], 5, 5)).toBe(false);
+    expect(insideRings([square, hole], 2, 5)).toBe(true);
+    expect(insideRings([square], 12, 5)).toBe(false);
   });
 
   it('measures slopes along a heading', () => {

@@ -30,8 +30,11 @@ rivière et ses berges, et les routes des quais sont façonnées dans la même g
   changent pas.
 - Les tuiles grossissent d'environ 2,5 Mo (grilles de niveau et morceaux dans 80 des
   182 tuiles).
-- Le bus peut encore rouler sur l'eau (le sol sous lui n'est pas dessiné) : l'en empêcher
-  demande d'ajouter les surfaces d'eau à l'index des collisions, laissé pour plus tard.
+- L'eau arrête le bus comme un bâtiment (#34) : `Ground` retrouve les morceaux d'eau par
+  triangle du sol, sauf sur un tablier de pont à la hauteur du bus, élargi de
+  `world.deckMargin` (3 m) car les tabliers OSM sont aussi étroits que la chaussée et les
+  berges sont en biais aux extrémités des ponts. Un tablier à portée du bus l'emporte
+  désormais sur le sol, qui descend en pente sous les ponts.
 
 ## Alternatives rejetées
 
