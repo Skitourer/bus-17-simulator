@@ -9,6 +9,7 @@
  */
 import * as THREE from 'three';
 import { tree, shelter, stopPole } from './sprites.js';
+import { quayWalls, waterSurface } from './water.js';
 
 /** @typedef {import('./ground.js').Ground} Ground */
 /** @typedef {import('./ground.js').TileData} TileData */
@@ -117,32 +118,52 @@ function terrainTiles(ground, tiles, map) {
     ix = ground.index,
     n = ground.n;
   const mat = new THREE.MeshLambertMaterial({ map: groundTexture(map, b) });
-  for (const key of tiles.keys()) {
+  for (const [key, tile] of tiles) {
     const [ti, tj] = key.split('_').map(Number);
     const ox = ix.x0 + ti * ix.size,
       oy = ix.y0 + tj * ix.size;
     const grid = /** @type {Float32Array} */ (ground.grids.get(key));
-    const P = new Float32Array(n * n * 3),
-      U = new Float32Array(n * n * 2);
-    for (let j = 0; j < n; j++)
-      for (let i = 0; i < n; i++) {
-        const k = j * n + i,
-          x = ox + i * ix.step,
-          y = oy + j * ix.step;
-        P.set([x, grid[k], -y], k * 3);
-        U.set([(x - b.x0) / (b.x1 - b.x0), (y - b.y0) / (b.y1 - b.y0)], k * 2);
-      }
+    /** @type {number[]} */
+    const P = [];
+    /** @type {number[]} */
+    const U = [];
+    /** @type {number[]} */
     const I = [];
+    /** @param {number} x @param {number} y @param {number} z */
+    const vertex = (x, y, z) => {
+      P.push(x, z, -y);
+      U.push((x - b.x0) / (b.x1 - b.x0), (y - b.y0) / (b.y1 - b.y0));
+    };
+    for (let j = 0; j < n; j++)
+      for (let i = 0; i < n; i++) vertex(ox + i * ix.step, oy + j * ix.step, grid[j * n + i]);
+    // triangles under water are replaced by their dry parts (tools/water.py)
+    const wet = new Set(tile.wet),
+      cells = (n - 1) * (n - 1);
     for (let j = 0; j + 1 < n; j++)
       for (let i = 0; i + 1 < n; i++) {
         const a = j * n + i,
-          c = a + n;
+          c = a + n,
+          cell = j * (n - 1) + i;
         // (a, b, d) and (a, d, c): counter-clockwise seen from above (y is mapped to -z)
-        I.push(a, a + 1, c + 1, a, c + 1, c);
+        if (!wet.has(cell)) I.push(a, a + 1, c + 1);
+        if (!wet.has(cell + cells)) I.push(a, c + 1, c);
       }
+    for (const rings of tile.dry) {
+      const vec = rings.map((ring) => {
+        const out = [];
+        for (let k = 0; k + 1 < ring.length; k += 2)
+          out.push(new THREE.Vector2(ox + ring[k] / 10, oy + ring[k + 1] / 10));
+        return out;
+      });
+      const base = P.length / 3;
+      for (const v of vec.flat()) vertex(v.x, v.y, ground.h(v.x, v.y));
+      const [contour, ...holes] = vec;
+      for (const tri of THREE.ShapeUtils.triangulateShape(contour, holes))
+        I.push(base + tri[0], base + tri[2], base + tri[1]);
+    }
     const geo = new THREE.BufferGeometry();
-    geo.setAttribute('position', new THREE.BufferAttribute(P, 3));
-    geo.setAttribute('uv', new THREE.BufferAttribute(U, 2));
+    geo.setAttribute('position', new THREE.Float32BufferAttribute(P, 3));
+    geo.setAttribute('uv', new THREE.Float32BufferAttribute(U, 2));
     geo.setIndex(I);
     geo.computeVertexNormals();
     const m = new THREE.Mesh(geo, mat);
@@ -432,7 +453,9 @@ function bridges(ground) {
         quad([p(i, side, -0.8), p(i + 1, side, -0.8), p(i + 1, side, 0.95), p(i, side, 0.95)], sideCol);
       }
       sinceLastPier += L;
-      const below = ground.h(deck.x[i], deck.y[i]);
+      const groundZ = ground.h(deck.x[i], deck.y[i]);
+      // in a river the pier stands on the bed, below the water surface
+      const below = Math.min(groundZ, (ground.waterLevel(deck.x[i], deck.y[i]) ?? groundZ) - 1);
       if (sinceLastPier >= 25 && deck.z[i] - below > 2.5) {
         // pier: a square column from the river bed or the road below up to the deck
         sinceLastPier = 0;
@@ -896,15 +919,18 @@ function tileObjects(ground, tiles) {
 /**
  * @param {THREE.Scene} scene @param {Ground} hf
  * @param {{map: import('../common/types.js').MapData | null, tiles: Map<string, TileData>}} data @param {import('../world/track.js').Track} track
- * @param {WorldSettings} street
+ * @param {import('../settings/settings.js').Settings} settings
  */
-export function buildWorld(scene, hf, data, track, street) {
+export function buildWorld(scene, hf, data, track, settings) {
+  const street = settings.world;
   scene.add(terrainCoarse(hf.natural));
   scene.add(terrainTiles(hf, data.tiles, data.map));
   scene.add(roadSurface(hf, data.tiles, street));
   scene.add(sidewalks(hf, data.tiles, street));
   scene.add(streetDetails(hf, data.tiles, street));
   scene.add(bridges(hf));
+  const water = waterSurface(hf, data.tiles, settings.water, settings.render);
+  scene.add(water, quayWalls(hf, data.tiles, settings.water));
   const route = routeStrip(hf, track);
   scene.add(route);
   /** @type {Footprint[]} */
@@ -915,5 +941,5 @@ export function buildWorld(scene, hf, data, track, street) {
   footprints = b.footprints;
   scene.add(treeBillboards(hf, fromTiles.trees));
   scene.add(stops(hf, track));
-  return { route, index: new FootprintIndex(footprints, track) };
+  return { route, index: new FootprintIndex(footprints, track), water: water.material };
 }

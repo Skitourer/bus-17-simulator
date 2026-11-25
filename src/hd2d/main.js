@@ -218,7 +218,7 @@ async function load() {
   });
   $('loadMsg').textContent = t('game.loadingStreets');
   await new Promise((r) => setTimeout(r, 30));
-  world = buildWorld(scene, hf, { map, tiles }, track, S.world);
+  world = buildWorld(scene, hf, { map, tiles }, track, S);
   bus = makeBus(B);
   scene.add(bus.group);
   minimap = new Minimap($('map'), map, line);
@@ -380,6 +380,7 @@ function render(dt) {
     camera.updateProjectionMatrix();
   }
   sky.position.copy(camera.position);
+  world.water.uniforms.time.value += dt;
 
   // soleil et ombres centres sur le bus
   sun.target.position.set(c.x, z, -c.y);

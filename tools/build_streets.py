@@ -14,7 +14,14 @@ Geometry: see tools/streets.py and ADR 0003. All coordinates in decimetres.
                       "centre_lines": [[x, y, ...], ...]   (dashed, stopped before junctions),
                       "crossings": [[x, y, x, y, x, y, x, y], ...]   (zebra stripes),
                       "buildings": [[height, kind, x, y, ...], ...]   (clipped off the carriageway, CCW),
-                      "trees": [x, y, ...]   (OSM and seeded, off roads and buildings) }
+                      "trees": [x, y, ...]   (OSM and seeded, off roads and buildings),
+                      "water": [[ring, ...], ...]   (water areas cut along the ground triangles, like "road"),
+                      "water_level": [z, ...]   (n x n water surface, like "ground"; [] without water),
+                      "wet": [k, ...]   (ground triangles under water, not drawn: k < (n-1)^2 is the first
+                                         triangle of cell k, else the second of cell k - (n-1)^2),
+                      "dry": [[ring, ...], ...]   (dry parts of the wet triangles, drawn instead of them),
+                      "banks": [[x, y, ...], ...]   (water edges, where quay walls stand) }
+Water: see tools/water.py and ADR 0005.
 """
 
 import glob
@@ -53,6 +60,7 @@ from streets import (
     shaped_ground,
     sidewalk_zone,
 )
+from water import shore_lines, water_area, water_cut, water_level
 
 DATA = os.path.join(ROOT, 'data', 'grenoble')
 OUT = os.path.join(DATA, 'tiles')
@@ -162,6 +170,10 @@ def main() -> None:
     )
 
     nx, ny = math.ceil((bx1 - bx0) / TILE), math.ceil((by1 - by0) / TILE)
+    print('eau (niveau et rives)...')
+    water = water_area(map_data['polys']['water'], (bx0, by0, bx0 + nx * TILE, by0 + ny * TILE))
+    cells = TILE // STEP
+    level = water_level(water, terrain.heights, bx0, by0, nx * cells + 1, ny * cells + 1, STEP)
     os.makedirs(OUT, exist_ok=True)
     for old in glob.glob(os.path.join(OUT, 't_*.json')):
         os.remove(old)
@@ -182,6 +194,8 @@ def main() -> None:
             walk_pieces = (
                 road_pieces(walk, ox, oy, n, STEP) if isinstance(walk, Polygon | MultiPolygon) else []
             )
+            wet, wet_pieces, dry_pieces = water_cut(water, ox, oy, n, STEP)
+            tile_level = level[j * cells : j * cells + n, i * cells : i * cells + n].ravel()
             tile_bridges = [
                 bridge_record(e, p, ox, oy)
                 for e, p in bridges
@@ -203,6 +217,13 @@ def main() -> None:
                         for h, kind, ring in by_tile_buildings.get((i, j), [])
                     ],
                     'trees': [v for x, y in by_tile_trees.get((i, j), []) for v in (dm(x - ox), dm(y - oy))],
+                    'water': rings_of(MultiPolygon(wet_pieces), ox, oy) if wet_pieces else [],
+                    'water_level': [dm(float(z)) for z in tile_level] if wet else [],
+                    'wet': wet,
+                    'dry': rings_of(MultiPolygon(dry_pieces), ox, oy) if dry_pieces else [],
+                    'banks': [flat_dm(line, ox, oy) for line in shore_lines(water, ox, oy, TILE)]
+                    if wet
+                    else [],
                 },
             )
     write_json(

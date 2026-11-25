@@ -596,5 +596,46 @@
       "max": 10,
       "doc": "A bus closer than this to a bridge deck height drives on the deck; farther below, it drives under it."
     }
+  },
+  "water": {
+    "deepColor": {
+      "value": "#2f5f7e",
+      "unit": "colour",
+      "doc": "Colour of the water seen from above, before the sky reflection."
+    },
+    "foamColor": { "value": "#e6eff2", "unit": "colour", "doc": "Colour of the foam along the banks." },
+    "quayColor": {
+      "value": "#8f8a80",
+      "unit": "colour",
+      "doc": "Colour of the stone quay walls along the banks."
+    },
+    "pixelSize": {
+      "value": 0.5,
+      "unit": "m",
+      "min": 0.1,
+      "max": 4,
+      "doc": "Size of the pixels of the ripple and foam pattern, fixed in the world."
+    },
+    "rippleSpeed": {
+      "value": 1,
+      "unit": "ratio",
+      "min": 0,
+      "max": 5,
+      "doc": "Speed of the ripple animation (0 freezes it)."
+    },
+    "foamWidth": {
+      "value": 2.5,
+      "unit": "m",
+      "min": 0,
+      "max": 10,
+      "doc": "Width of the foam band along the banks."
+    },
+    "wallDepth": {
+      "value": 1.5,
+      "unit": "m",
+      "min": 0.2,
+      "max": 10,
+      "doc": "Depth of the quay walls below the water surface."
+    }
   }
 }
