@@ -888,6 +888,20 @@
     }
   },
   "debug": {
+    "stressSpacing": {
+      "value": 15,
+      "unit": "m",
+      "min": 5,
+      "max": 100,
+      "doc": "Distance between the places along the route where the dummy vehicles of the performance test may appear."
+    },
+    "stressSpeed": {
+      "value": 9,
+      "unit": "m/s",
+      "min": 1,
+      "max": 30,
+      "doc": "Speed of the dummy vehicles of the performance test (?debug&stress=N), along the route in both directions."
+    },
     "turboMaxSpeed": {
       "value": 150,
       "unit": "km/h",
@@ -980,6 +994,65 @@
       "doc": "Number of different people drawn (clothes, skin and hair picked per look)."
     },
     "height": { "value": 1.7, "unit": "m", "min": 1, "max": 2.2, "doc": "Height of the people sprites." }
+  },
+  "budget": {
+    "modelDistance": {
+      "value": 150,
+      "unit": "m",
+      "min": 20,
+      "max": 1000,
+      "doc": "Moving objects closer than this to the camera are drawn as 3D models."
+    },
+    "spriteDistance": {
+      "value": 700,
+      "unit": "m",
+      "min": 50,
+      "max": 5000,
+      "doc": "Moving objects farther than modelDistance and closer than this are drawn as flat sprites; beyond, they are not drawn."
+    },
+    "simulationRadius": {
+      "value": 300,
+      "unit": "m",
+      "min": 50,
+      "max": 3000,
+      "doc": "Moving objects closer than this to the player's bus are simulated every frame."
+    },
+    "farUpdateInterval": {
+      "value": 0.5,
+      "unit": "s",
+      "min": 0.05,
+      "max": 5,
+      "doc": "Farther than simulationRadius, a moving object is simulated once per interval, with the time saved up."
+    },
+    "spawnMinDistance": {
+      "value": 150,
+      "unit": "m",
+      "min": 20,
+      "max": 2000,
+      "doc": "Ambient objects (traffic, pedestrians) never appear closer than this to the player's bus."
+    },
+    "spawnRadius": {
+      "value": 400,
+      "unit": "m",
+      "min": 50,
+      "max": 3000,
+      "doc": "Ambient objects appear at most this far from the player's bus."
+    },
+    "despawnRadius": {
+      "value": 500,
+      "unit": "m",
+      "min": 50,
+      "max": 4000,
+      "doc": "Ambient objects farther than this from the player's bus are removed (beyond spawnRadius, so that they do not flicker)."
+    },
+    "capacity": {
+      "value": 256,
+      "unit": "objects",
+      "min": 16,
+      "max": 4096,
+      "integer": true,
+      "doc": "Largest number of instances of one model drawn at once (size of the instance buffers)."
+    }
   },
   "presets": {
     "quality": {

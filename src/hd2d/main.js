@@ -17,6 +17,7 @@ import { OrbitCamera } from './orbit.js';
 import { FreeFly, findStop, stepStop, turboDrive } from './debug.js';
 import { Doors, StopService, drawService, serviceSeed } from './stops.js';
 import { Crowd } from './crowd.js';
+import { StressTest } from './stress.js';
 import { SegmentGrid, kerbSegments, laneOffsets, offsetAt, placeStops } from './kerb.js';
 import { Mirrors } from './mirrors.js';
 import { eyePosition, lookTarget, steeringWheelAngle } from './views.js';
@@ -39,6 +40,7 @@ const B = busGeometry(S, P.bus);
 const canvas = /** @type {HTMLCanvasElement} */ ($('view'));
 const renderer = new THREE.WebGLRenderer({ canvas, antialias: false, powerPreference: 'high-performance' });
 renderer.setPixelRatio(1);
+renderer.info.autoReset = false;
 renderer.shadowMap.enabled = true;
 renderer.shadowMap.type = THREE.PCFShadowMap;
 const post = new Post(renderer, S.render.internalLines, S.render.tiltShiftBand);
@@ -168,6 +170,8 @@ const doors = new Doors(S.gameplay);
 let service;
 /** @type {Crowd} */
 let crowd;
+/** dummy traffic of the performance test (?debug&stress=N) @type {StressTest | null} */
+let stress = null;
 // debug mode: free flight, collisions off (ghost), turbo
 const fly = new FreeFly(S.debug, S.camera.orbit);
 const turboParams = turboDrive(S.drive, S.debug);
@@ -291,8 +295,11 @@ async function load() {
     ),
     plan.stops.map((r) => r.board),
     S.passengers,
+    S.budget,
     bus.interior,
   );
+  if (P.debug && P.stress > 0)
+    stress = new StressTest(scene, track, laneAt, (x, y) => hf.h(x, y), P.stress, S);
   service.reset(progress);
   if (P.stop) {
     const i = findStop(track.stops, P.stop);
@@ -490,6 +497,11 @@ function render(dt) {
   sky.position.copy(camera.position);
   world.water.uniforms.time.value += dt;
   crowd.update(dt, service.onBoard);
+  crowd.draw(camera.position.x, -camera.position.z);
+  if (stress) {
+    stress.update(dt, { x: c.x, y: c.y, h: drive.h });
+    stress.draw(camera.position.x, -camera.position.z);
+  }
 
   // soleil et ombres centres sur le bus
   sun.target.position.set(c.x, z, -c.y);
@@ -497,6 +509,7 @@ function render(dt) {
   post.mat.uniforms.focus.value = m.focus;
   // no tilt-shift blur from inside the bus
   post.mat.uniforms.blur.value = inside ? 0 : m.blur;
+  renderer.info.reset(); // counted over the whole frame (post-processing and mirrors draw several passes)
   post.render(scene, camera);
   if (inside === 'cabin') {
     mirrors.render(scene, bus.body, innerWidth, innerHeight);
@@ -738,6 +751,10 @@ function debugPanel() {
     ground: hf.h(c.x, c.y).toFixed(1),
     water: water === null ? t('debug.noWater') : water.toFixed(1) + ' m',
     fps: Math.round(fps),
+    calls: renderer.info.render.calls,
+    triangles: Math.round(renderer.info.render.triangles / 1000),
+    models: stress?.shown.models ?? 0,
+    sprites: (stress?.shown.sprites ?? 0) + crowd.pool.geometry.instanceCount,
   });
 }
 

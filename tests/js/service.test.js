@@ -108,7 +108,7 @@ describe('readParams', () => {
 
   it('reads the game parameters from the URL', () => {
     vi.stubGlobal('location', {
-      search: '?dir=1&dep=09:15&day=svc&bus=art&s=150&auto&map=2&debug&stop=saint-laurent',
+      search: '?dir=1&dep=09:15&day=svc&bus=art&s=150&auto&map=2&debug&stop=saint-laurent&stress=200',
     });
     expect(readParams()).toEqual({
       dir: 1,
@@ -121,6 +121,7 @@ describe('readParams', () => {
       map: 2,
       debug: true,
       stop: 'saint-laurent',
+      stress: 200,
     });
   });
 
@@ -135,6 +136,7 @@ describe('readParams', () => {
       map: null,
       debug: false,
       stop: '',
+      stress: 0,
     });
   });
 });
