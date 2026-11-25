@@ -18,6 +18,7 @@ const C = {
   dgreen: '#1f6e38',
   dark: '#2a2e38',
   door: '#283445',
+  doorway: '#0d0f14',
   red: '#c0262e',
   redHi: '#ff4b3e',
   amber: '#ffa41b',
@@ -47,6 +48,7 @@ function tex(w, h, draw) {
  * @property {number} length length of the body (m)
  * @property {number[]} doors door positions, m from the front of the body (right side); empty on the left
  * @property {number[]} arches wheel arch centres, m from the back of the body
+ * @property {boolean} [open] doors drawn open (dark doorways)
  */
 
 /** Right side doors: front, middle and rear doors of a 12 m bus (m from the front). */
@@ -82,6 +84,11 @@ function side(bus, spec) {
         const x = Math.round((spec.length - xm) * PPM) - 9;
         g.fillStyle = C.door;
         g.fillRect(x, 3, 9, h - 4);
+        if (spec.open) {
+          g.fillStyle = C.doorway;
+          g.fillRect(x + 1, 3, 7, h - 4);
+          continue;
+        }
         g.fillStyle = C.glassHi;
         g.fillRect(x + 1, 5, 3, 8);
         g.fillRect(x + 5, 5, 3, 8);
@@ -279,4 +286,37 @@ function makeRearBody(bus, t, rearMat, joint, wheelGeometry, wheelMaterial) {
     return wheel;
   });
   return { group, body, wheels };
+}
+
+/**
+ * Look of the other buses of the line (#48), drawn instanced: the body box with the same textures, origin
+ * at the middle of the bus on the road, +X forward. No wheels nor interior (seen from outside only).
+ * @param {BusSettings} bus @param {boolean} open doors open (bus dwelling at a stop)
+ */
+export function busLook(bus, open) {
+  const arches = [bus.rearOverhang, bus.rearOverhang + bus.wheelbase];
+  const roof = tex(
+    bus.bodyLength * bus.texturePixelsPerMetre,
+    Math.round(bus.bodyWidth * bus.texturePixelsPerMetre),
+    (g, w, h) => {
+      g.fillStyle = '#e4e6ea';
+      g.fillRect(0, 0, w, h);
+      g.fillStyle = '#b9bdc4';
+      g.fillRect(Math.round(w * 0.55), 3, 22, h - 6);
+    },
+  );
+  const materials = [
+    new THREE.MeshLambertMaterial({ map: front(bus) }),
+    new THREE.MeshLambertMaterial({ map: rear(bus, false) }),
+    new THREE.MeshLambertMaterial({ map: roof }),
+    new THREE.MeshLambertMaterial({ color: '#222' }),
+    new THREE.MeshLambertMaterial({
+      map: side(bus, { length: bus.bodyLength, doors: STANDARD_DOORS, arches, open }),
+    }),
+    new THREE.MeshLambertMaterial({ map: leftSide(bus, { length: bus.bodyLength, doors: [], arches }) }),
+  ];
+  const height = bus.bodyHeight - 0.35;
+  const geometry = new THREE.BoxGeometry(bus.bodyLength, height, bus.bodyWidth);
+  geometry.translate(0, 0.35 + height / 2, 0);
+  return { geometry, materials };
 }
