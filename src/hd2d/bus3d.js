@@ -6,8 +6,7 @@
 import * as THREE from 'three';
 import { digits } from './sprites.js';
 
-export const BUS = { L: 12, W: 2.55, H: 3.1, REAR: 3.0, WB: 6.0 }; // longueur, largeur, hauteur, porte-a-faux arriere, empattement
-const PPM = 8;
+/** @typedef {import('../settings/settings.js').Settings['bus']} BusSettings */
 const C = {
   white: '#f1f1ec',
   shade: '#d4d7dc',
@@ -42,9 +41,10 @@ function tex(w, h, draw) {
 }
 
 /** flanc : `doors` = cote droit (portes avant, milieu, arriere) */
-/** @param {boolean} doors */
-function side(doors) {
-  return tex(BUS.L * PPM, Math.round(BUS.H * PPM), (g, w, h) => {
+/** @param {BusSettings} bus @param {boolean} doors */
+function side(bus, doors) {
+  const PPM = bus.texturePixelsPerMetre;
+  return tex(bus.bodyLength * PPM, Math.round(bus.bodyHeight * PPM), (g, w, h) => {
     g.fillStyle = C.white;
     g.fillRect(0, 0, w, h);
     g.fillStyle = C.shade;
@@ -64,7 +64,7 @@ function side(doors) {
     // portes (cote droit) : x en metres depuis l'avant -> la texture va de l'arriere (u=0) vers l'avant (u=1)
     if (doors) {
       for (const xm of [0.6, 5.2, 9.0]) {
-        const x = Math.round((BUS.L - xm) * PPM) - 9;
+        const x = Math.round((bus.bodyLength - xm) * PPM) - 9;
         g.fillStyle = C.door;
         g.fillRect(x, 3, 9, h - 4);
         g.fillStyle = C.glassHi;
@@ -79,7 +79,7 @@ function side(doors) {
     }
     // passages de roues
     g.fillStyle = C.dark;
-    for (const xm of [BUS.REAR, BUS.REAR + BUS.WB]) {
+    for (const xm of [bus.rearOverhang, bus.rearOverhang + bus.wheelbase]) {
       const x = Math.round(xm * PPM);
       g.fillRect(x - 6, h - 6, 12, 6);
     }
@@ -88,8 +88,10 @@ function side(doors) {
   });
 }
 
-function front() {
-  return tex(Math.round(BUS.W * PPM) * 2, Math.round(BUS.H * PPM) * 2, (g, w, h) => {
+/** @param {BusSettings} bus */
+function front(bus) {
+  const PPM = bus.texturePixelsPerMetre;
+  return tex(Math.round(bus.bodyWidth * PPM) * 2, Math.round(bus.bodyHeight * PPM) * 2, (g, w, h) => {
     g.fillStyle = C.white;
     g.fillRect(0, 0, w, h);
     g.fillStyle = '#111';
@@ -117,9 +119,10 @@ function front() {
   });
 }
 
-/** @param {boolean} brake */
-function rear(brake) {
-  return tex(Math.round(BUS.W * PPM) * 2, Math.round(BUS.H * PPM) * 2, (g, w, h) => {
+/** @param {BusSettings} bus @param {boolean} brake */
+function rear(bus, brake) {
+  const PPM = bus.texturePixelsPerMetre;
+  return tex(Math.round(bus.bodyWidth * PPM) * 2, Math.round(bus.bodyHeight * PPM) * 2, (g, w, h) => {
     g.fillStyle = C.white;
     g.fillRect(0, 0, w, h);
     g.fillStyle = '#111';
@@ -144,11 +147,13 @@ function rear(brake) {
   });
 }
 
-export function makeBus() {
+/** @param {BusSettings} bus */
+export function makeBus(bus) {
+  const PPM = bus.texturePixelsPerMetre;
   const grp = new THREE.Group();
   const body = new THREE.Group(); // caisse (inclinee selon le relief et le roulis)
   grp.add(body);
-  const roofTex = tex(BUS.L * PPM, Math.round(BUS.W * PPM), (g, w, h) => {
+  const roofTex = tex(bus.bodyLength * PPM, Math.round(bus.bodyWidth * PPM), (g, w, h) => {
     g.fillStyle = '#e4e6ea';
     g.fillRect(0, 0, w, h);
     g.fillStyle = '#b9bdc4';
@@ -156,23 +161,23 @@ export function makeBus() {
     g.fillStyle = '#c9ccd2';
     g.fillRect(8, 4, 14, h - 8); // moteur/batteries
   });
-  const rearN = rear(false),
-    rearB = rear(true);
-  const leftSide = side(false);
+  const rearN = rear(bus, false),
+    rearB = rear(bus, true);
+  const leftSide = side(bus, false);
   // la texture du flanc gauche est vue en miroir : on la retourne pour garder l'avant a l'avant
   leftSide.wrapS = THREE.RepeatWrapping;
   leftSide.repeat.x = -1;
   const mats = [
-    new THREE.MeshLambertMaterial({ map: front() }), // +X avant
+    new THREE.MeshLambertMaterial({ map: front(bus) }), // +X avant
     new THREE.MeshLambertMaterial({ map: rearN }), // -X arriere
     new THREE.MeshLambertMaterial({ map: roofTex }), // +Y toit
     new THREE.MeshLambertMaterial({ color: '#222' }), // -Y dessous
-    new THREE.MeshLambertMaterial({ map: side(true) }), // +Z droit (portes)
+    new THREE.MeshLambertMaterial({ map: side(bus, true) }), // +Z droit (portes)
     new THREE.MeshLambertMaterial({ map: leftSide }), // -Z gauche
   ];
-  const geo = new THREE.BoxGeometry(BUS.L, BUS.H - 0.35, BUS.W);
+  const geo = new THREE.BoxGeometry(bus.bodyLength, bus.bodyHeight - 0.35, bus.bodyWidth);
   const box = new THREE.Mesh(geo, mats);
-  box.position.set(BUS.L / 2 - BUS.REAR, 0.35 + (BUS.H - 0.35) / 2, 0);
+  box.position.set(bus.bodyLength / 2 - bus.rearOverhang, 0.35 + (bus.bodyHeight - 0.35) / 2, 0);
   box.castShadow = true;
   body.add(box);
   // roues
@@ -180,7 +185,7 @@ export function makeBus() {
   wg.rotateX(Math.PI / 2);
   const wm = new THREE.MeshLambertMaterial({ color: '#151515' });
   const wheels = [];
-  for (const x of [0, BUS.WB])
+  for (const x of [0, bus.wheelbase])
     for (const z of [-1.05, 1.05]) {
       const w = new THREE.Mesh(wg, wm);
       w.position.set(x, 0.5, z);

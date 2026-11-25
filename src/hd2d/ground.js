@@ -8,9 +8,6 @@
  */
 import { Heightfield } from './heightfield.js';
 
-/** A bus closer than this (m) to a deck height is on the deck; farther below, it drives under it. */
-const DECK_CATCH = 2.5;
-
 /**
  * @typedef {object} TileIndex
  * @property {number} x0
@@ -87,8 +84,10 @@ export class Ground {
   /**
    * @param {import('../common/types.js').TerrainData} terrain natural IGN grids (fallback outside the tiles)
    * @param {TileIndex} index @param {Map<string, TileData>} tiles key "i_j"
+   * @param {number} deckCatch a vehicle closer than this (m) to a deck height drives on the deck
    */
-  constructor(terrain, index, tiles) {
+  constructor(terrain, index, tiles, deckCatch) {
+    this.deckCatch = deckCatch;
     this.natural = new Heightfield(terrain);
     this.index = index;
     this.n = Math.round(index.size / index.step) + 1;
@@ -155,7 +154,7 @@ export class Ground {
     let best = g;
     for (const deck of this.decks) {
       const z = deckHeight(deck, x, y);
-      if (z !== null && Math.abs(z - zRef) < DECK_CATCH && Math.abs(z - zRef) < Math.abs(best - zRef))
+      if (z !== null && Math.abs(z - zRef) < this.deckCatch && Math.abs(z - zRef) < Math.abs(best - zRef))
         best = z;
     }
     return best;

@@ -5,16 +5,7 @@
  * reset() eases it back to the automatic yaw and pitch of the current camera mode.
  */
 
-/** Radians per pixel of mouse drag. */
-const YAW_PER_PX = 0.006;
-const PITCH_PER_PX = 0.004;
-/** Pitch limits (rad): never at or below the horizon, never past straight down. */
-export const PITCH_MIN = 0.06;
-export const PITCH_MAX = 1.45;
-/** Time constant (s) of the return to the automatic view. */
-const RETURN_TAU = 0.18;
-/** Below this angle (rad) the return is complete. */
-const RETURN_DONE = 0.002;
+/** @typedef {import('../settings/settings.js').Settings['camera']['orbit']} OrbitSettings */
 
 /** @param {number} a */
 function wrapAngle(a) {
@@ -22,7 +13,9 @@ function wrapAngle(a) {
 }
 
 export class OrbitCamera {
-  constructor() {
+  /** @param {OrbitSettings} params */
+  constructor(params) {
+    this.p = params;
     /** @type {'auto' | 'free' | 'returning'} */
     this.state = 'auto';
     this.yaw = 0;
@@ -43,9 +36,10 @@ export class OrbitCamera {
       this.pitch = autoPitch;
     }
     this.state = 'free';
+    const p = this.p;
     // dragging right turns the view to the right, i.e. the camera moves counter-clockwise
-    this.yaw = wrapAngle(this.yaw - dx * YAW_PER_PX);
-    this.pitch = Math.max(PITCH_MIN, Math.min(PITCH_MAX, this.pitch + dy * PITCH_PER_PX));
+    this.yaw = wrapAngle(this.yaw - dx * p.yawPerPixel);
+    this.pitch = Math.max(p.pitchMin, Math.min(p.pitchMax, this.pitch + dy * p.pitchPerPixel));
   }
 
   /** Start easing back to the automatic view (no-op when already automatic). */
@@ -66,12 +60,12 @@ export class OrbitCamera {
   view(dt, autoYaw, autoPitch) {
     if (this.state === 'auto') return { yaw: autoYaw, pitch: autoPitch };
     if (this.state === 'returning') {
-      const k = 1 - Math.exp(-dt / RETURN_TAU);
+      const k = 1 - Math.exp(-dt / this.p.returnTime);
       const dyaw = wrapAngle(autoYaw - this.yaw);
       const dpitch = autoPitch - this.pitch;
       this.yaw = wrapAngle(this.yaw + dyaw * k);
       this.pitch += dpitch * k;
-      if (Math.abs(dyaw) < RETURN_DONE && Math.abs(dpitch) < RETURN_DONE) this.state = 'auto';
+      if (Math.abs(dyaw) < this.p.returnDone && Math.abs(dpitch) < this.p.returnDone) this.state = 'auto';
     }
     return { yaw: this.yaw, pitch: this.pitch };
   }

@@ -1,7 +1,7 @@
 // @ts-check
 import { describe, expect, it } from 'vitest';
 import { Ground, deckFromRecord, deckHeight } from '../../src/hd2d/ground.js';
-import { tiltedTerrain } from './fixtures.js';
+import { SETTINGS, tiltedTerrain } from './fixtures.js';
 
 /** One 20 m tile with a 10 m grid: heights (m) given row by row from the south. */
 function oneTile(/** @type {number[]} */ metres, /** @type {number[][]} */ bridges = []) {
@@ -23,7 +23,7 @@ function oneTile(/** @type {number[]} */ metres, /** @type {number[][]} */ bridg
       },
     ],
   ]);
-  return new Ground(tiltedTerrain(0), index, tiles);
+  return new Ground(tiltedTerrain(0), index, tiles, SETTINGS.world.deckCatch);
 }
 
 describe('Ground', () => {

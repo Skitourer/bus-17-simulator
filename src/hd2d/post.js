@@ -7,8 +7,11 @@
 import * as THREE from 'three';
 
 export class Post {
-  /** @param {THREE.WebGLRenderer} renderer */
-  constructor(renderer, lines = 300) {
+  /**
+   * @param {THREE.WebGLRenderer} renderer @param {number} lines height of the internal image (px)
+   * @param {number} band half height of the sharp band (share of the screen height)
+   */
+  constructor(renderer, lines, band) {
     this.r = renderer;
     this.lines = lines;
     this.rt = new THREE.WebGLRenderTarget(16, 16, { samples: 0, type: THREE.HalfFloatType });
@@ -20,7 +23,7 @@ export class Post {
         tDiffuse: { value: this.rt.texture },
         texel: { value: new THREE.Vector2() },
         focus: { value: 0.58 },
-        band: { value: 0.22 },
+        band: { value: band },
         blur: { value: 2.2 },
       },
       vertexShader: 'varying vec2 vUv; void main(){ vUv = uv; gl_Position = vec4(position.xy, 0.0, 1.0); }',

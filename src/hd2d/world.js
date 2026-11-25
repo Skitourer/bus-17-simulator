@@ -191,18 +191,7 @@ function terrainCoarse(hf) {
 }
 
 // ------------------------------------------------------------------ rues
-/**
- * Height of the road mesh above the shaped ground (m). Road pieces are cut along the ground triangles
- * (tools/streets.py), so they are coplanar with the ground; the lift only avoids depth fighting.
- */
-const ROAD_LIFT = 0.05;
-/** Sidewalk height above the road (m): a low kerb, readable at the HD-2D resolution. */
-const KERB_HEIGHT = 0.15;
-/** Road markings: lift above the road, line width, dash and gap of centre lines (m). */
-const MARK_LIFT = ROAD_LIFT + 0.02;
-const MARK_WIDTH = 0.25;
-const DASH = 3,
-  GAP = 5;
+/** @typedef {import('../settings/settings.js').Settings['world']} WorldSettings */
 
 /** asphalt texture, mapped in world metres (4 m per repeat) */
 function asphaltTexture() {
@@ -222,18 +211,18 @@ function asphaltTexture() {
 /**
  * Carriageway of every tile, laid on the shaped ground. Junctions and roundabouts come from the union
  * made by tools/build_streets.py, so there are no overlapping ribbons.
- * @param {Ground} ground @param {Map<string, TileData>} tiles
+ * @param {Ground} ground @param {Map<string, TileData>} tiles @param {WorldSettings} street
  */
-function roadSurface(ground, tiles) {
-  return piecesMesh(ground, tiles, (tile) => tile.road, ROAD_LIFT, asphaltTexture(), 1);
+function roadSurface(ground, tiles, street) {
+  return piecesMesh(ground, tiles, (tile) => tile.road, street.roadLift, asphaltTexture(), 1);
 }
 
 /**
  * Raised sidewalks beside the carriageway of the streets that have them.
- * @param {Ground} ground @param {Map<string, TileData>} tiles
+ * @param {Ground} ground @param {Map<string, TileData>} tiles @param {WorldSettings} street
  */
-function sidewalks(ground, tiles) {
-  return piecesMesh(ground, tiles, (tile) => tile.sidewalks, KERB_HEIGHT, pavingTexture(), 2);
+function sidewalks(ground, tiles, street) {
+  return piecesMesh(ground, tiles, (tile) => tile.sidewalks, street.kerbHeight, pavingTexture(), 2);
 }
 
 /**
@@ -308,9 +297,11 @@ function pavingTexture() {
 
 /**
  * Kerb faces (from the road up to the sidewalk) and white markings: dashed centre lines and zebra crossings.
- * @param {Ground} ground @param {Map<string, TileData>} tiles
+ * @param {Ground} ground @param {Map<string, TileData>} tiles @param {WorldSettings} street
  */
-function streetDetails(ground, tiles) {
+function streetDetails(ground, tiles, street) {
+  const { roadLift, kerbHeight, markingWidth, dashLength, dashGap } = street;
+  const markingLift = roadLift + street.markingLift;
   /** @type {number[]} */
   const P = [];
   /** @type {number[]} */
@@ -325,16 +316,16 @@ function streetDetails(ground, tiles) {
   /** @param {number} x @param {number} y @param {number} lift */
   const at = (x, y, lift) => [x, ground.h(x, y) + lift, -y];
   /** flat strip of half-width w from (x0, y0) to (x1, y1) @param {number[]} seg */
-  const strip = ([x0, y0, x1, y1], w = MARK_WIDTH / 2) => {
+  const strip = ([x0, y0, x1, y1], w = markingWidth / 2) => {
     const L = Math.hypot(x1 - x0, y1 - y0) || 1,
       nx = ((y1 - y0) / L) * w,
       ny = (-(x1 - x0) / L) * w;
     quad(
       [
-        at(x0 - nx, y0 - ny, MARK_LIFT),
-        at(x0 + nx, y0 + ny, MARK_LIFT),
-        at(x1 + nx, y1 + ny, MARK_LIFT),
-        at(x1 - nx, y1 - ny, MARK_LIFT),
+        at(x0 - nx, y0 - ny, markingLift),
+        at(x0 + nx, y0 + ny, markingLift),
+        at(x1 + nx, y1 + ny, markingLift),
+        at(x1 - nx, y1 - ny, markingLift),
       ],
       paint,
     );
@@ -353,22 +344,22 @@ function streetDetails(ground, tiles) {
         const [x0, y0] = p[k],
           [x1, y1] = p[k + 1];
         quad(
-          [at(x0, y0, ROAD_LIFT), at(x1, y1, ROAD_LIFT), at(x1, y1, KERB_HEIGHT), at(x0, y0, KERB_HEIGHT)],
+          [at(x0, y0, roadLift), at(x1, y1, roadLift), at(x1, y1, kerbHeight), at(x0, y0, kerbHeight)],
           kerb,
         );
       }
     }
     for (const line of tile.centre_lines) {
-      // dashes of DASH metres every DASH + GAP metres, continued across the points of the line
+      // dashes of dashLength metres every dashLength + dashGap metres, continued across the points of the line
       const p = pts(line);
       let phase = 0;
       for (let k = 0; k + 1 < p.length; k++) {
         const [x0, y0] = p[k],
           [x1, y1] = p[k + 1];
         const L = Math.hypot(x1 - x0, y1 - y0);
-        for (let s = -phase; s < L; s += DASH + GAP) {
+        for (let s = -phase; s < L; s += dashLength + dashGap) {
           const a = Math.max(0, s),
-            b = Math.min(L, s + DASH);
+            b = Math.min(L, s + dashLength);
           if (b > a)
             strip([
               x0 + ((x1 - x0) * a) / L,
@@ -377,13 +368,13 @@ function streetDetails(ground, tiles) {
               y0 + ((y1 - y0) * b) / L,
             ]);
         }
-        phase = (phase + L) % (DASH + GAP);
+        phase = (phase + L) % (dashLength + dashGap);
       }
     }
     for (const stripe of tile.crossings) {
       const p = pts(stripe);
       quad(
-        p.map(([x, y]) => at(x, y, MARK_LIFT)),
+        p.map(([x, y]) => at(x, y, markingLift)),
         paint,
       );
     }
@@ -905,13 +896,14 @@ function tileObjects(ground, tiles) {
 /**
  * @param {THREE.Scene} scene @param {Ground} hf
  * @param {{map: import('../common/types.js').MapData | null, tiles: Map<string, TileData>}} data @param {import('../world/track.js').Track} track
+ * @param {WorldSettings} street
  */
-export function buildWorld(scene, hf, data, track) {
+export function buildWorld(scene, hf, data, track, street) {
   scene.add(terrainCoarse(hf.natural));
   scene.add(terrainTiles(hf, data.tiles, data.map));
-  scene.add(roadSurface(hf, data.tiles));
-  scene.add(sidewalks(hf, data.tiles));
-  scene.add(streetDetails(hf, data.tiles));
+  scene.add(roadSurface(hf, data.tiles, street));
+  scene.add(sidewalks(hf, data.tiles, street));
+  scene.add(streetDetails(hf, data.tiles, street));
   scene.add(bridges(hf));
   const route = routeStrip(hf, track);
   scene.add(route);
