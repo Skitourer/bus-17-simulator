@@ -55,6 +55,7 @@ export function turboDrive(drive, debug) {
     maxSpeed: debug.turboMaxSpeed,
     acceleration: drive.acceleration * debug.turboFactor,
     braking: drive.braking * debug.turboFactor,
+    brakingStart: drive.brakingStart * debug.turboFactor,
   };
 }
 
