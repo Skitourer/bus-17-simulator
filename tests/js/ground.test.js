@@ -4,7 +4,11 @@ import { Ground, deckFromRecord, deckHeight } from '../../src/hd2d/ground.js';
 import { SETTINGS, tiltedTerrain } from './fixtures.js';
 
 /** One 20 m tile with a 10 m grid: heights (m) given row by row from the south. */
-function oneTile(/** @type {number[]} */ metres, /** @type {number[][]} */ bridges = []) {
+function oneTile(
+  /** @type {number[]} */ metres,
+  /** @type {number[][]} */ bridges = [],
+  /** @type {number[]} */ waterMetres = [],
+) {
   /** @type {import('../../src/hd2d/ground.js').TileIndex} */
   const index = { x0: 0, y0: 0, size: 20, step: 10, nx: 1, ny: 1 };
   const tiles = new Map([
@@ -20,6 +24,11 @@ function oneTile(/** @type {number[]} */ metres, /** @type {number[][]} */ bridg
         bridges,
         buildings: [],
         trees: [],
+        water: [],
+        water_level: waterMetres.map((m) => m * 10),
+        wet: [],
+        dry: [],
+        banks: [],
       },
     ],
   ]);
@@ -44,6 +53,13 @@ describe('Ground', () => {
     expect(ground.inFine(10, 10)).toBe(true);
     expect(ground.inFine(-50, 10)).toBe(false);
     expect(ground.bounds).toEqual({ x0: 0, y0: 0, x1: 20, y1: 20 });
+  });
+
+  it('gives the water level on the same triangles, and none without water', () => {
+    const ground = oneTile([5, 5, 5, 5, 5, 5, 5, 5, 5], [], [0, 2, 0, 0, 0, 0, 0, 0, 0]);
+    expect(ground.waterLevel(7, 3)).toBeCloseTo(0.8);
+    expect(ground.waterLevel(-50, 10)).toBeNull();
+    expect(oneTile([5, 5, 5, 5, 5, 5, 5, 5, 5]).waterLevel(10, 10)).toBeNull();
   });
 
   it('measures slopes along a heading', () => {

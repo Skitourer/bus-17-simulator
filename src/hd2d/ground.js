@@ -29,6 +29,12 @@ import { Heightfield } from './heightfield.js';
  * @property {number[][]} crossings zebra stripes: [x, y, x, y, x, y, x, y] (dm, relative)
  * @property {number[][]} buildings [height, kind, x, y, ...] (dm; clipped off the carriageway, counter-clockwise)
  * @property {number[]} trees [x, y, ...] (dm, relative to the tile origin)
+ * @property {number[][][]} water water polygons cut along the ground triangles, like `road`
+ * @property {number[]} water_level n x n water surface heights (dm), like `ground`; empty without water
+ * @property {number[]} wet ground triangles under water (not drawn): k < (n-1)^2 is the first triangle of
+ * cell k, else the second triangle of cell k - (n-1)^2
+ * @property {number[][][]} dry dry parts of the wet triangles, like `road`
+ * @property {number[][]} banks water edges: [x, y, ...] (dm, relative to the tile origin)
  */
 
 /**
@@ -93,6 +99,8 @@ export class Ground {
     this.n = Math.round(index.size / index.step) + 1;
     /** @type {Map<string, Float32Array>} heights in metres */
     this.grids = new Map();
+    /** @type {Map<string, Float32Array>} water surface heights in metres, for the tiles with water */
+    this.levels = new Map();
     /** @type {Deck[]} */
     this.decks = [];
     for (const [key, tile] of tiles) {
@@ -100,6 +108,11 @@ export class Ground {
         key,
         Float32Array.from(tile.ground, (v) => v / 10),
       );
+      if (tile.water_level.length)
+        this.levels.set(
+          key,
+          Float32Array.from(tile.water_level, (v) => v / 10),
+        );
       const [i, j] = key.split('_').map(Number);
       const ox = index.x0 + i * index.size,
         oy = index.y0 + j * index.size;
@@ -124,11 +137,28 @@ export class Ground {
    * @param {number} x @param {number} y
    */
   h(x, y) {
+    return this.sample(this.grids, x, y) ?? this.natural.h(x, y);
+  }
+
+  /**
+   * Water surface height (m) near water, null in the tiles without water. Away from the water it is only an
+   * estimate below the ground (piers use it to reach under the water).
+   * @param {number} x @param {number} y
+   */
+  waterLevel(x, y) {
+    return this.sample(this.levels, x, y);
+  }
+
+  /**
+   * Height from per-tile grids, on the two triangles of each cell like the mesh; null without a grid.
+   * @param {Map<string, Float32Array>} grids @param {number} x @param {number} y
+   */
+  sample(grids, x, y) {
     const ix = this.index;
     const i = Math.floor((x - ix.x0) / ix.size),
       j = Math.floor((y - ix.y0) / ix.size);
-    const grid = this.grids.get(i + '_' + j);
-    if (!grid) return this.natural.h(x, y);
+    const grid = grids.get(i + '_' + j);
+    if (!grid) return null;
     const n = this.n;
     const fx = (x - ix.x0 - i * ix.size) / ix.step,
       fy = (y - ix.y0 - j * ix.size) / ix.step;
