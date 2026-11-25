@@ -84,6 +84,14 @@ describe('Drive (HD-2D free driving)', () => {
     expect(drive.blocked({ hit: (_x, /** @type {number} */ y) => y > 56.1 })).toBe(false);
   });
 
+  it('holds still with the brake on', () => {
+    const drive = new Drive(SETTINGS.drive, SETTINGS.bus);
+    drive.v = 0.2;
+    drive.hold();
+    expect(drive.v).toBe(0);
+    expect(drive.braking).toBe(true);
+  });
+
   it('drives faster once tuned for the turbo', () => {
     const drive = new Drive(SETTINGS.drive, SETTINGS.bus);
     drive.tune({ ...SETTINGS.drive, maxSpeed: 150 });

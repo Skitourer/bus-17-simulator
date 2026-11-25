@@ -65,6 +65,12 @@ export class Drive {
     ].map(([f, r]) => this.point(f, r));
   }
 
+  /** Stand still with the brake on (doors open). */
+  hold() {
+    this.v = 0;
+    this.braking = true;
+  }
+
   /**
    * Whether an obstacle touches the bus where it stands.
    * @param {{hit:(x:number,y:number)=>boolean}} walls

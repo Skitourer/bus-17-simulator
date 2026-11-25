@@ -42,7 +42,7 @@
     "zoomOut": "Dézoomer (-)",
     "follow": "Recentrer sur le bus",
     "mapSize": "Agrandir / réduire (M)",
-    "keys": "<b>Z/↑</b> accélérer · <b>S/↓</b> freiner/reculer · <b>Q D/← →</b> tourner · <b>C</b> caméra · <b>souris</b> tourner la vue · <b>V</b> revenir à la vue · <b>molette</b> zoom · <b>G</b> guidage · <b>M</b> carte · <b>R</b> replacer · <b>P</b> pause · <b>Échap</b> menu",
+    "keys": "<b>Z/↑</b> accélérer · <b>S/↓</b> freiner/reculer · <b>Q D/← →</b> tourner · <b>Espace</b> portes · <b>C</b> caméra · <b>souris</b> tourner la vue · <b>V</b> revenir à la vue · <b>molette</b> zoom · <b>G</b> guidage · <b>M</b> carte · <b>R</b> replacer · <b>P</b> pause · <b>Échap</b> menu",
     "loadingCity": "Construction de Grenoble…",
     "loadingStreets": "Construction des rues et des immeubles…",
     "loadError": "Erreur de chargement : {error}",
@@ -55,7 +55,15 @@
     "early": "avance {delta}",
     "onTime": "à l'heure",
     "terminus": "Terminus",
-    "resetView": "⟲ Revenir à la vue (V)"
+    "resetView": "⟲ Revenir à la vue (V)",
+    "stopRequested": "ARRÊT DEMANDÉ",
+    "peopleWaiting": "VOYAGEURS À L’ARRÊT",
+    "doors": {
+      "closed": "Portes fermées",
+      "opening": "Ouverture…",
+      "open": "Portes ouvertes",
+      "closing": "Fermeture…"
+    }
   },
   "toast": {
     "serviceStart": "Service de {time} vers {stop}",
@@ -68,7 +76,9 @@
     "camera": "Caméra : {name}",
     "guidanceOn": "Guidage affiché",
     "guidanceOff": "Guidage masqué",
-    "busReplaced": "Bus replacé sur le parcours"
+    "busReplaced": "Bus replacé sur le parcours",
+    "passedStop": "{stop} : personne à prendre ni à déposer",
+    "doorsTooFast": "Arrête le bus avant d’ouvrir les portes"
   },
   "camera": {
     "hd2d": "HD-2D",
