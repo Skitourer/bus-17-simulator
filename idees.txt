@@ -1,18 +1,29 @@
-Page d’accueil avec sélection
-    * du type de bus (accordéon, normal)
-    * le l’horaire
-    * du sens de parcours
-    * vacances scolaires, semaine, samedi, dimanche et jours fériés
+Liste d'idées. Le suivi détaillé est dans les issues GitHub (#n).
 
-Gestion jour/nuit
-Vue cabine
-Vue passager
-Rétroviseur pour voir les passagers entrer et sortir
-Bouton pour les portes
-Cockpit avec affichage :
-    Signalisation arrêt demandé
-    horaires à respecter (heure d’arrivée au prochain arrêt)ç
-    Nom du prochain arrêt
-    Annonce sonores avec nom du prochain arrêt
-Panneau d’information voyageur avec représentation linéaire du trajet (précédente station, prochaine station, station suivante)
-Abris bus
+Fait
+    Vue cabine, vue passager, rétroviseurs (#18)
+    Bouton pour les portes, signalisation arrêt demandé (#37)
+    Passagers aux arrêts et à bord (#40)
+    Cockpit : nom du prochain arrêt, horaire à respecter, retard (SAE)
+    Abris bus
+
+À faire
+    Écran titre et menu de configuration (#46), avec sélection :
+        * du type de bus (accordéon, normal)
+        * de l'horaire
+        * du sens de parcours
+        * vacances scolaires, semaine, samedi, dimanche et jours fériés
+    Touches physiques identiques quelle que soit la disposition du clavier,
+    libellés des touches selon la disposition (#44)
+    Arrêts de bus sur le trottoir, pas sur la chaussée (#43)
+    Élargir les routes trop étroites (#45)
+    Optimisation : ne pas afficher ni simuler tous les objets mobiles de la carte (#47, #12, #19)
+    Bus des autres horaires, dans le même sens et en sens inverse (#48)
+    Véhicules lambda et vélos sur la chaussée (#49)
+    Personnes qui se promènent dans la rue (#50)
+    Mode deux joueurs en coopération, écran partagé verticalement ou horizontalement (#51)
+    Gestion jour/nuit (#17)
+    Annonces sonores avec le nom du prochain arrêt
+    Panneau d'information voyageur avec représentation linéaire du trajet
+    (station précédente, prochaine station, station suivante)
+    Rétroviseur intérieur et tableau de bord 3D avec volant (#42)
