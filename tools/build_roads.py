@@ -24,6 +24,7 @@ from roads import (
     has_bus_lane,
     highway_base,
     road_width,
+    route_edges,
     split_ways,
 )
 from sources import ROOT, overpass, read_json, write_json
@@ -34,6 +35,8 @@ OUT = os.path.join(ROOT, 'data', 'grenoble', 'roads.json')
 GAP_DIST = 8.0  # m: a route sample farther than this from every road is a coverage gap
 GAP_STEP = 5.0  # m between route samples
 SIMPLIFY_M = 0.3  # Douglas-Peucker tolerance: well below a lane width, halves the file size
+ROUTE_TOLERANCE = 6.0  # m: the GTFS shape drifts up to a few metres from the OSM centre line
+ROUTE_SHARE = 0.6  # share of an edge length along the route for the edge to carry the line
 
 
 def edge_flags(tags: dict[str, str]) -> list[str]:
@@ -60,7 +63,7 @@ CLASSES = sorted({cls for cls, _ in ROAD_CLASSES.values()})
 FLAGS = ['oneway', 'oneway_reverse', 'roundabout', 'bridge', 'tunnel', 'bus_lane', 'link']
 
 
-def edge_record(e: Edge, index: dict[int, int]) -> list[int]:
+def edge_record(e: Edge, index: dict[int, int], on_bus_route: bool) -> list[int]:
     """[a, b, class, width_dm, layer, flag_mask, x, y, ...] (see the module docstring)."""
     base = highway_base(e.tags) or 'residential'
     layer = e.tags.get('layer', '0')
@@ -69,7 +72,7 @@ def edge_record(e: Edge, index: dict[int, int]) -> list[int]:
         index[e.a],
         index[e.b],
         CLASSES.index(ROAD_CLASSES[base][0]),
-        round(road_width(e.tags) * 10),
+        round(road_width(e.tags, on_bus_route) * 10),
         int(layer) if layer.lstrip('-').isdigit() else 0,
         mask,
         *(round(v * 10) for xy in douglas_peucker(e.coords, SIMPLIFY_M) for v in xy),
@@ -95,9 +98,12 @@ def main() -> None:
     index = {nid: i for i, nid in enumerate(nodes)}
     print(f'{len(ways)} voies, {len(nodes)} noeuds, {len(edges)} troncons')
 
-    for d in line['directions']:
-        pts = d['pts']
-        route = [(pts[i], pts[i + 1]) for i in range(0, len(pts), 3)]
+    routes = [
+        [(d['pts'][i], d['pts'][i + 1]) for i in range(0, len(d['pts']), 3)] for d in line['directions']
+    ]
+    on_route = route_edges(edges, routes, ROUTE_TOLERANCE, ROUTE_SHARE)
+    print(f'{len(on_route)} troncons parcourus par la ligne')
+    for d, route in zip(line['directions'], routes, strict=True):
         gaps = coverage_gaps(route, edges, GAP_DIST, GAP_STEP)
         total = sum(b - a for a, b in gaps)
         print(f'  sens {d["id"]} : {len(gaps)} trous, {total:.0f} m hors reseau')
@@ -111,7 +117,7 @@ def main() -> None:
             'classes': CLASSES,
             'flags': FLAGS,
             'nodes': [round(v * 10) for xy in nodes.values() for v in xy],
-            'edges': [edge_record(e, index) for e in edges],
+            'edges': [edge_record(e, index, i in on_route) for i, e in enumerate(edges)],
         },
     )
 

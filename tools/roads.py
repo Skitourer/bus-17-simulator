@@ -5,7 +5,7 @@ from collections.abc import Sequence
 from dataclasses import dataclass, field
 
 from geo import Point
-from shapely import LineString, STRtree
+from shapely import LineString, STRtree, unary_union
 from shapely import Point as ShapelyPoint
 
 # OSM highway values kept as drivable roads, with their class for rendering and default width (m).
@@ -26,6 +26,12 @@ ROAD_CLASSES: dict[str, tuple[str, float]] = {
 LANE_WIDTH = 3.25  # m, between the CEREMA urban lane widths of 3.0 and 3.5 m
 HIGHWAY_REGEX = '^(' + '|'.join(ROAD_CLASSES) + ')(_link)?$'
 EXCLUDED_SERVICE = ('parking_aisle', 'drive-through')  # private car park lanes, never driven by a bus
+# Smallest carriageways (m). OSM often tags narrow two-way streets `lanes=1` (no marking), and one-way
+# streets get a single 3.25 m lane, too narrow to drive a 2.55 m bus (EU Directive 96/53/EC) with a margin.
+TWO_WAY_MIN_WIDTH = 5.5  # two cars (about 1.8 m wide) pass at low speed with 0.6 m margins
+BUS_ONE_WAY_MIN_WIDTH = 4.0  # a bus with 0.7 m on each side
+BUS_TWO_WAY_MIN_WIDTH = 6.5  # two buses pass with 0.4 m between them and to each kerb
+NO_MINIMUM = ('service', 'busway', 'bus_guideway', 'living_street')  # narrow by design
 
 
 @dataclass(frozen=True)
@@ -73,8 +79,14 @@ def parse_float(value: str | None) -> float | None:
         return None
 
 
-def road_width(tags: dict[str, str]) -> float:
-    """Carriageway width (m): `width` tag, else lanes x LANE_WIDTH, else the class default."""
+def is_oneway(tags: dict[str, str]) -> bool:
+    """True for one-way roads, in either direction, and roundabouts."""
+    roundabout = tags.get('junction') in ('roundabout', 'circular')
+    return roundabout or tags.get('oneway') in ('yes', '1', 'true', '-1')
+
+
+def tagged_width(tags: dict[str, str]) -> float:
+    """Carriageway width (m) from the tags: `width`, else lanes x LANE_WIDTH, else the class default."""
     width = parse_float(tags.get('width'))
     if width is not None and 2.0 <= width <= 40.0:
         return width
@@ -86,6 +98,17 @@ def road_width(tags: dict[str, str]) -> float:
     if tags.get('oneway') == 'yes' and base not in ('service', 'busway', 'bus_guideway'):
         width *= 0.6  # one-way streets are usually one lane wide plus parking
     return round(width, 2)
+
+
+def road_width(tags: dict[str, str], on_bus_route: bool = False) -> float:
+    """Carriageway width (m): the tagged width, raised to the smallest drivable width of its kind."""
+    width = tagged_width(tags)
+    oneway = is_oneway(tags)
+    if not oneway and (highway_base(tags) or 'residential') not in NO_MINIMUM:
+        width = max(width, TWO_WAY_MIN_WIDTH)
+    if on_bus_route:
+        width = max(width, BUS_ONE_WAY_MIN_WIDTH if oneway else BUS_TWO_WAY_MIN_WIDTH)
+    return width
 
 
 def has_bus_lane(tags: dict[str, str]) -> bool:
@@ -118,6 +141,19 @@ def split_ways(ways: Sequence[Way]) -> tuple[dict[int, Point], list[Edge]]:
                     edges.append(Edge(a, b, piece, w.id, w.tags))
                 start = i
     return nodes, edges
+
+
+def route_edges(
+    edges: Sequence[Edge], routes: Sequence[Sequence[Point]], tolerance: float, share: float
+) -> set[int]:
+    """Indices of the edges lying along a route: at least `share` of their length within `tolerance` m."""
+    area = unary_union([LineString(r).buffer(tolerance) for r in routes])
+    out: set[int] = set()
+    for i, e in enumerate(edges):
+        line = LineString(e.coords)
+        if line.length > 0 and line.intersection(area).length >= share * line.length:
+            out.add(i)
+    return out
 
 
 def coverage_gaps(

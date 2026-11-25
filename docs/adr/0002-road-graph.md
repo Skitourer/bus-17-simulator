@@ -14,7 +14,9 @@ the Lycée du Grésivaudan terminus are absent (the route leaves the drawn roads
 
 - `tools/build_roads.py` writes `data/grenoble/roads.json`: a graph whose nodes are way
   ends and shared OSM nodes, and whose edges are road pieces with class, width (`width`
-  tag, else `lanes` × 3.25 m, else a class default), layer and flags (one-way,
+  tag, else `lanes` × 3.25 m, else a class default; raised to 5.5 m for two-way streets,
+  and to 6.5 m two-way or 4 m one-way on the edges driven by line 17, #45), layer and
+  flags (one-way,
   roundabout, bridge, tunnel, bus lane, link). Service roads and busways are included;
   car-park aisles are not.
 - Compact arrays (class and flag tables in the file header, decimetre coordinates) keep

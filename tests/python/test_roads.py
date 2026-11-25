@@ -3,14 +3,19 @@
 import pytest
 from geo import Point
 from roads import (
+    BUS_ONE_WAY_MIN_WIDTH,
+    BUS_TWO_WAY_MIN_WIDTH,
     LANE_WIDTH,
+    TWO_WAY_MIN_WIDTH,
     Edge,
     Way,
     coverage_gaps,
     has_bus_lane,
     highway_base,
+    is_oneway,
     parse_float,
     road_width,
+    route_edges,
     split_ways,
 )
 
@@ -36,11 +41,45 @@ def test_parse_float(value: str | None, expected: float | None) -> None:
 
 def test_road_width_prefers_width_then_lanes_then_class() -> None:
     assert road_width({'highway': 'primary', 'width': '12'}) == 12.0
-    assert road_width({'highway': 'primary', 'width': '500', 'lanes': '2'}) == 2 * LANE_WIDTH
+    assert road_width({'highway': 'primary', 'width': '500', 'lanes': '3'}) == 3 * LANE_WIDTH
     assert road_width({'highway': 'secondary'}) == 8.0
     assert road_width({'highway': 'residential', 'oneway': 'yes'}) == pytest.approx(3.6)
     assert road_width({'highway': 'service', 'oneway': 'yes'}) == 4.0
     assert road_width({'highway': 'unknown'}) == 6.0
+
+
+def test_road_width_raises_narrow_two_way_streets() -> None:
+    # OSM `lanes=1` on a two-way street means an unmarked street, not a 3.25 m carriageway
+    assert road_width({'highway': 'secondary', 'lanes': '1'}) == TWO_WAY_MIN_WIDTH
+    assert road_width({'highway': 'secondary', 'lanes': '1', 'oneway': 'yes'}) == LANE_WIDTH
+    assert road_width({'highway': 'service'}) == 4.0
+    assert road_width({'highway': 'living_street'}) == 5.0
+
+
+def test_road_width_fits_a_bus_on_the_line() -> None:
+    assert road_width({'highway': 'secondary', 'lanes': '1'}, on_bus_route=True) == BUS_TWO_WAY_MIN_WIDTH
+    assert (
+        road_width({'highway': 'residential', 'oneway': '-1', 'lanes': '1'}, on_bus_route=True)
+        == BUS_ONE_WAY_MIN_WIDTH
+    )
+    assert road_width({'highway': 'service'}, on_bus_route=True) == BUS_TWO_WAY_MIN_WIDTH
+    assert road_width({'highway': 'primary', 'width': '12'}, on_bus_route=True) == 12.0
+
+
+def test_is_oneway() -> None:
+    assert is_oneway({'oneway': 'yes'})
+    assert is_oneway({'oneway': '-1'})
+    assert is_oneway({'junction': 'roundabout'})
+    assert not is_oneway({'oneway': 'no'})
+
+
+def test_route_edges_keeps_the_edges_along_the_route() -> None:
+    along = Edge(1, 2, [(0.0, 2.0), (100.0, 2.0)], 1, {})
+    crossing = Edge(3, 4, [(50.0, -30.0), (50.0, 30.0)], 2, {})
+    away = Edge(5, 6, [(0.0, 40.0), (100.0, 40.0)], 3, {})
+    point = Edge(7, 8, [(0.0, 0.0), (0.0, 0.0)], 4, {})
+    route = [(0.0, 0.0), (100.0, 0.0)]
+    assert route_edges([along, crossing, away, point], [route], 6.0, 0.6) == {0}
 
 
 def test_has_bus_lane() -> None:

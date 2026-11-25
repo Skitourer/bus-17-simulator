@@ -500,8 +500,11 @@ function bridges(ground) {
 }
 
 /** trace de la ligne au sol : chevrons verts (guidage, touche G) */
-/** @param {Ground} hf @param {import('../world/track.js').Track} track */
-function routeStrip(hf, track) {
+/**
+ * @param {Ground} hf @param {import('../world/track.js').Track} track
+ * @param {Float64Array} lane offset of the bus lane at each route point (m to the right)
+ */
+function routeStrip(hf, track, lane) {
   const P = [],
     U = [],
     I = [];
@@ -511,9 +514,9 @@ function routeStrip(hf, track) {
       y = track.y[i];
     const nx = Math.sin(h),
       ny = -Math.cos(h);
-    // decale dans la voie de droite
-    const cx = x + nx * 1.8,
-      cy = y + ny * 1.8;
+    // in the bus lane
+    const cx = x + nx * lane[i],
+      cy = y + ny * lane[i];
     const lx = cx - nx * 0.9,
       ly = cy - ny * 0.9,
       rx = cx + nx * 0.9,
@@ -946,7 +949,7 @@ function tileObjects(ground, tiles) {
 // ------------------------------------------------------------------ assemblage
 /**
  * @param {THREE.Scene} scene @param {Ground} hf
- * @param {{map: import('../common/types.js').MapData | null, tiles: Map<string, TileData>, stops: import('./kerb.js').StopPlace[]}} data
+ * @param {{map: import('../common/types.js').MapData | null, tiles: Map<string, TileData>, stops: import('./kerb.js').StopPlace[], lane: Float64Array}} data
  * @param {import('../world/track.js').Track} track
  * @param {import('../settings/settings.js').Settings} settings
  */
@@ -960,7 +963,7 @@ export function buildWorld(scene, hf, data, track, settings) {
   scene.add(bridges(hf));
   const water = waterSurface(hf, data.tiles, settings.water, settings.render);
   scene.add(water, quayWalls(hf, data.tiles, settings.water));
-  const route = routeStrip(hf, track);
+  const route = routeStrip(hf, track, data.lane);
   scene.add(route);
   /** @type {Footprint[]} */
   let footprints = [];
