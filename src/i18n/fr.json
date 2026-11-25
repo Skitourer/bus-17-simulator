@@ -78,13 +78,15 @@
   "debug": {
     "panel": "x {x} · y {y} · s {s} m · sol {ground} m · eau {water} · {fps} i/s",
     "noWater": "—",
-    "keys": "<b>DEBUG</b> · <b>Maj</b> turbo · <b>N/B</b> arrêt suivant/précédent · <b>clic carte</b> téléporter · <b>K</b> collisions · <b>F</b> vol libre (flèches/ZQSD, <b>Espace/X</b> monter/descendre, <b>souris</b> regarder, <b>Entrée</b> poser le bus)",
+    "keys": "<b>DEBUG</b> · <b>Maj</b> turbo · <b>N/B</b> arrêt suivant/précédent · <b>clic carte</b> téléporter n'importe où · <b>K</b> collisions · <b>F</b> vol libre (flèches/ZQSD, <b>Espace/X</b> monter/descendre, <b>souris</b> regarder, <b>Entrée</b> poser le bus)",
     "on": "Mode debug",
     "unknownStop": "Arrêt « {stop} » introuvable. Arrêts : {stops}",
     "teleported": "Bus placé : {stop}",
     "ghostOn": "Collisions désactivées",
     "ghostOff": "Collisions activées",
     "flyOn": "Vol libre",
-    "flyOff": "Retour au bus"
+    "flyOff": "Retour au bus",
+    "moved": "Bus déplacé · prochain arrêt : {stop}",
+    "blocked": "Emplacement occupé (bâtiment ou eau) : coupe les collisions avec K pour y aller"
   }
 }

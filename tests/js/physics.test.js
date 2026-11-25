@@ -70,6 +70,20 @@ describe('Drive (HD-2D free driving)', () => {
     expect(drive.v).toBe(0);
   });
 
+  it('places its centre on a point, stopped, and tells when an obstacle touches it', () => {
+    const drive = new Drive(SETTINGS.drive, SETTINGS.bus);
+    drive.v = 5;
+    drive.placeCentre(100, 50, Math.PI / 2);
+    expect(drive.center.x).toBeCloseTo(100);
+    expect(drive.center.y).toBeCloseTo(50);
+    expect(drive.v).toBe(0);
+    expect(drive.probes()).toHaveLength(7);
+    expect(drive.blocked(noWalls)).toBe(false);
+    // the front of the bus is 6 m north of its centre (12 m bus, 3 m rear overhang)
+    expect(drive.blocked({ hit: (_x, /** @type {number} */ y) => y > 55.9 })).toBe(true);
+    expect(drive.blocked({ hit: (_x, /** @type {number} */ y) => y > 56.1 })).toBe(false);
+  });
+
   it('drives faster once tuned for the turbo', () => {
     const drive = new Drive(SETTINGS.drive, SETTINGS.bus);
     drive.tune({ ...SETTINGS.drive, maxSpeed: 150 });
