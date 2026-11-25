@@ -34,7 +34,7 @@ export class Crowd {
     /** @type {THREE.Sprite[][]} people waiting, by stop */
     this.waiting = stops.map((st, i) =>
       Array.from({ length: waiting[i] }, (_, k) => {
-        // under the shelter, between its back wall and the kerb (stop frame: +x along the route, +z right)
+        // under the shelter, between its middle and its back wall (stop frame: +x along the route, +z right)
         const along = (k - (waiting[i] - 1) / 2) * 0.9,
           across = 0.3 + (k % 2) * 0.35;
         const x = st.x + Math.cos(st.h) * along + Math.sin(st.h) * across,
