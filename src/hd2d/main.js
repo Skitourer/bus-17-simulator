@@ -14,6 +14,8 @@ import { Drive, obstacles } from './drive.js';
 import { Post } from './post.js';
 import { OrbitCamera } from './orbit.js';
 import { FreeFly, findStop, stepStop, turboDrive } from './debug.js';
+import { Doors, StopService, drawRequests, serviceSeed } from './stops.js';
+/** @typedef {import('./stops.js').StopEvent} StopEvent */
 import { initI18n, t } from '../i18n/i18n.js';
 import { loadSettings } from '../settings/settings.js';
 
@@ -135,8 +137,6 @@ const clock = new ServiceClock(P.dep);
 let bumps = 0,
   progress = 0,
   offT = 0,
-  next = 0,
-  doors = 0,
   paused = false,
   running = false;
 const CAMS = /** @type {const} */ (['hd2d', 'chase', 'sky']).map((id) => ({
@@ -147,6 +147,9 @@ let camMode = +(new URLSearchParams(location.search).get('cam') || 0) % CAMS.len
   zoom = 1,
   camYaw = 0;
 const orbit = new OrbitCamera(S.camera.orbit);
+const doors = new Doors(S.gameplay);
+/** @type {StopService} */
+let service;
 // debug mode: free flight, collisions off (ghost), turbo
 const fly = new FreeFly(S.debug, S.camera.orbit);
 const turboParams = turboDrive(S.drive, S.debug);
@@ -236,7 +239,12 @@ async function load() {
   $('svc').textContent = t('game.serviceInfo', { day: serviceLabel(P.day, line.calendar), time: P.dep });
   placeOnRoute(P.s !== null ? P.s : Math.max(0, track.stops[0].s - 4));
   // arrets deja derriere le point de depart (mode test)
-  syncStops();
+  service = new StopService(
+    track.stops,
+    drawRequests(track.stops.length, serviceSeed(P.dep, P.dir), S.gameplay),
+    S.gameplay,
+  );
+  service.reset(progress);
   if (P.stop) {
     const i = findStop(track.stops, P.stop);
     if (i >= 0) placeAtStop(i);
@@ -261,7 +269,7 @@ async function load() {
     ' / v ' +
     drive.v.toFixed(2) +
     ' / next ' +
-    next +
+    service.next +
     ' / bumps ' +
     bumps +
     ' / lat ' +
@@ -292,19 +300,15 @@ function update(dt) {
   /** @type {import('../common/types.js').DriveInput} */
   let inp = flying ? { up: false, down: false, left: false, right: false } : keys;
   if (P.auto) inp = autopilot();
-  if (doors > 0) {
-    doors -= dt;
-    inp = { up: false, down: true, left: false, right: false };
-    if (doors <= 0)
-      toast(
-        next < track.stops.length
-          ? t('toast.nextStop', { stop: track.stops[next].name })
-          : t('toast.endOfService'),
-        next < track.stops.length ? 'info' : 'good',
-      );
-  }
+  const wasClosed = doors.closed;
+  doors.update(dt);
+  if (!wasClosed && doors.closed) announceNextStop();
   const walls = obstacles(world.index, hf, () => busZ, ghost);
-  const ev = drive.update(inp, dt, { slope: (x, y, hd) => hf.slopeAt(x, y, hd, busZ) }, walls);
+  // the bus stands still until the doors are closed again (brake on, even on a slope)
+  /** @type {'bump' | null} */
+  let ev = null;
+  if (doors.closed) ev = drive.update(inp, dt, { slope: (x, y, hd) => hf.slopeAt(x, y, hd, busZ) }, walls);
+  else drive.hold();
   // height on the drivable surface, kept by the simulation (fast-forward runs without rendering)
   busZ = hf.surface(drive.x, drive.y, busZ);
   if (drive.bump === 0) bumps++;
@@ -321,28 +325,16 @@ function update(dt) {
   offT = n.d > G.offRouteDistance ? offT + dt : 0;
   $('offroute').hidden = offT < G.offRouteDelay;
 
-  // desserte : porte avant (avant droit du bus) a hauteur de l'arret, bus a l'arret
-  const st = track.stops[next];
-  if (st && doors <= 0) {
-    const door = drive.point(B.bodyLength - B.rearOverhang - B.frontDoorSetback, B.bodyWidth / 2);
-    const dd = Math.hypot(door.x - st.x, door.y - st.y);
-    if (dd < G.stopDistance && Math.abs(drive.v) < G.stopSpeed) {
-      st.served = true;
-      next++;
-      doors = G.doorTime;
-      const late = clock.t - clock.sched(st);
-      toast(
-        Math.abs(late) < G.onTimeTolerance
-          ? t('toast.servedOnTime', { stop: st.name })
-          : t('toast.servedDelta', { stop: st.name, delta: delta(late) }),
-        'good',
-      );
-    } else if (progress > st.s + G.missedStopDistance && n.d < 25) {
-      st.missed = true;
-      next++;
-      toast(t('toast.missedStop', { stop: st.name }), 'bad');
-    }
-  }
+  // stop service: the front door (front right of the bus) at the stop, doors open long enough
+  const st = track.stops[service.next];
+  const door = drive.point(doorAhead(), B.bodyWidth / 2);
+  const event = service.update(dt, {
+    progress,
+    doorDistance: st ? Math.hypot(door.x - st.x, door.y - st.y) : Infinity,
+    doorsOpen: doors.open,
+    onRoute: n.d < 25,
+  });
+  if (event) stopToast(event);
 }
 
 /** pilote de test (?auto) : suit le trace dans la voie de droite */
@@ -355,6 +347,28 @@ function autopilot() {
   while (err > Math.PI) err -= 2 * Math.PI;
   while (err < -Math.PI) err += 2 * Math.PI;
   return { up: drive.v < 8, down: false, left: err > 0.03, right: err < -0.03 };
+}
+
+/** Toast for a stop that was served, missed or passed without request. @param {StopEvent} event */
+function stopToast(event) {
+  const st = track.stops[event.index];
+  if (event.type === 'served') {
+    const late = clock.t - clock.sched(st);
+    toast(
+      Math.abs(late) < S.gameplay.onTimeTolerance
+        ? t('toast.servedOnTime', { stop: st.name })
+        : t('toast.servedDelta', { stop: st.name, delta: delta(late) }),
+      'good',
+    );
+  } else if (event.type === 'missed') toast(t('toast.missedStop', { stop: st.name }), 'bad');
+  else toast(t('toast.passedStop', { stop: st.name }), 'info');
+}
+
+/** Toast once the doors are closed: the next stop, or the end of the service. */
+function announceNextStop() {
+  const st = track.stops[service.next];
+  if (st) toast(t('toast.nextStop', { stop: st.name }), 'info');
+  else toast(t('toast.endOfService'), 'good');
 }
 
 // ------------------------------------------------------------------ rendu
@@ -379,7 +393,7 @@ function render(dt) {
     Math.atan2(sh(lt.x, lt.y) - sh(rt.x, rt.y), 2.4) +
     ((drive.v * drive.v * Math.tan(drive.delta)) / B.wheelbase) * 0.012;
   bus.body.rotation.set(roll, 0, pitch);
-  bus.setBrake(drive.braking || doors > 0);
+  bus.setBrake(drive.braking || !doors.closed);
   for (const w of bus.wheels) w.rotation.z -= (drive.v * dt) / 0.5;
 
   // camera
@@ -401,7 +415,7 @@ function render(dt) {
   post.render(scene, camera);
 
   hud();
-  minimap.draw({ x: c.x, y: c.y, h: drive.h }, next);
+  minimap.draw({ x: c.x, y: c.y, h: drive.h }, service.next);
 }
 
 /**
@@ -460,7 +474,12 @@ function hud() {
   $('alt').textContent = Math.round(busZ) + ' m';
   const sl = hf.slopeAt(c.x, c.y, drive.h, busZ, 10) * 100;
   $('slope').textContent = (sl > 0 ? '+' : '') + sl.toFixed(1) + ' %';
-  const st = track.stops[next];
+  const st = track.stops[service.next];
+  const request = service.request;
+  $('saeAlight').classList.toggle('on', request.alight);
+  $('saeBoard').classList.toggle('on', request.board);
+  $('doorsState').textContent = t('game.doors.' + doors.state);
+  $('doorsState').className = 'doors ' + doors.state;
   if (st) {
     $('saeStop').textContent = st.name;
     const d = Math.max(0, st.s - progress - (B.bodyLength - B.rearOverhang));
@@ -487,29 +506,19 @@ function hud() {
   $('trBus').style.left = (progress / track.length) * 100 + '%';
   track.stops.forEach((s, i) => {
     const el = $('st' + i);
-    el.className = 'st' + (s.served ? ' ok' : s.missed ? ' miss' : i === next ? ' nx' : '');
+    el.className = 'st' + (s.served ? ' ok' : s.missed ? ' miss' : i === service.next ? ' nx' : '');
   });
 }
 
 // ------------------------------------------------------------------ debug (?debug, src/hd2d/debug.js)
-/** Stops behind the bus are missed, the others still to serve. */
-function syncStops() {
-  next = track.stops.findIndex((st) => st.s >= progress - 5);
-  if (next < 0) next = track.stops.length;
-  track.stops.forEach((st, i) => {
-    st.served = false;
-    st.missed = i < next;
-  });
-}
-
 /** Distance along the route of the front door when the bus stands at a stop. */
 const doorAhead = () => B.bodyLength - B.rearOverhang - B.frontDoorSetback;
 
 /** Place the bus with its front door at stop `i`. @param {number} i */
 function placeAtStop(i) {
   placeOnRoute(Math.max(0, track.stops[i].s - doorAhead()));
-  syncStops();
-  doors = 0;
+  service.reset(progress);
+  doors.reset();
   toast(t('debug.teleported', { stop: track.stops[i].name }));
 }
 
@@ -531,9 +540,9 @@ function teleport(x, y, h = drive.h) {
   }
   progress = nearest(x, y, 0, 0).s;
   camYaw = drive.h;
-  syncStops();
-  doors = 0;
-  const st = track.stops[next];
+  service.reset(progress);
+  doors.reset();
+  const st = track.stops[service.next];
   toast(t('debug.moved', { stop: st ? st.name : t('game.terminus') }));
   return true;
 }
@@ -631,6 +640,10 @@ addEventListener('keydown', (e) => {
     e.preventDefault();
   }
   if (!running) return;
+  if (e.code === 'Space' && !flying) {
+    if (doors.toggle(drive.v)) toast(t('toast.doorsTooFast'), 'bad');
+    e.preventDefault();
+  }
   if (e.code === 'KeyM') minimap.cycleSize();
   if (e.code === 'KeyP') setPause(!paused);
   if (e.code === 'Escape') {

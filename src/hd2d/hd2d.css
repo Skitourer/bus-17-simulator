@@ -166,6 +166,30 @@ body {
 #sae .late {
   color: #ff8a6a;
 }
+/* SAE lights: dim when off, lit red (stop requested) or amber (people waiting) */
+#sae .lights {
+  margin-top: 6px;
+  gap: 8px;
+}
+#sae .lights span {
+  flex: 1;
+  text-align: center;
+  padding: 2px 4px;
+  border-radius: 4px;
+  font-size: 12px;
+  opacity: 0.25;
+  border: 1px solid currentColor;
+}
+#sae #saeAlight.on {
+  opacity: 1;
+  color: #fff;
+  background: #c0262e;
+}
+#sae #saeBoard.on {
+  opacity: 1;
+  color: #1b1b1b;
+  background: #ffa41b;
+}
 #sae .early {
   color: var(--yellow);
 }
@@ -200,6 +224,16 @@ body {
   color: var(--muted);
   font-size: 13px;
   margin-top: 4px;
+}
+/* doors state: green when closed (the bus may drive), amber otherwise */
+#speed .doors {
+  grid-column: 1 / -1;
+  font-size: 13px;
+  font-weight: 700;
+  color: #6fd08c;
+}
+#speed .doors:not(.closed) {
+  color: var(--amber, #ffa41b);
 }
 
 #offroute {
@@ -442,4 +476,10 @@ body {
 }
 #camReset[hidden] {
   display: none;
+}
+@media (max-width: 1000px) {
+  #debug {
+    left: 8px;
+    right: 8px;
+  }
 }
