@@ -54,6 +54,7 @@ uv run python tools/build_streets.py
 
 - Cahier des charges : [CAHIER_DES_CHARGES.md](CAHIER_DES_CHARGES.md)
 - Décisions : [docs/adr/](docs/adr/)
+- Paramètres du jeu (unités, sens, sources) : [src/settings/game.json](src/settings/game.json)
 - Contribuer : [CONTRIBUTING.md](CONTRIBUTING.md) · Sécurité : [SECURITY.md](SECURITY.md)
 
 ## Licence et données

@@ -1,6 +1,8 @@
 // @ts-check
 /** Fictitious routes and grids shared by the unit tests. */
 import { Track } from '../../src/world/track.js';
+import { parseSettings } from '../../src/settings/settings.js';
+import gameSettings from '../../src/settings/game.json';
 
 /**
  * Route through the given flat [x, y, z, ...] points, without stops.
@@ -66,3 +68,6 @@ export function tiltedTerrain(slope) {
 
 /** @type {import('../../src/common/types.js').DriveInput} */
 export const NO_INPUT = { up: false, down: false, left: false, right: false };
+
+/** Settings of the game, validated like at start-up. */
+export const SETTINGS = parseSettings(gameSettings);

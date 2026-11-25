@@ -9,16 +9,19 @@ import { Minimap } from '../ui/minimap.js';
 import { readParams, ServiceClock, serviceLabel, hms, hm, delta } from '../common/service.js';
 import { Ground } from './ground.js';
 import { buildWorld } from './world.js';
-import { makeBus, BUS } from './bus3d.js';
+import { makeBus } from './bus3d.js';
 import { Drive } from './drive.js';
 import { Post } from './post.js';
 import { OrbitCamera } from './orbit.js';
 import { initI18n, t } from '../i18n/i18n.js';
+import { loadSettings } from '../settings/settings.js';
 
 /** @param {string} id */
 const $ = (id) => /** @type {HTMLElement} */ (document.getElementById(id));
 const P = readParams();
 if (!location.search) location.replace('index.html');
+const S = await boot();
+const B = S.bus;
 
 // ------------------------------------------------------------------ rendu
 const canvas = /** @type {HTMLCanvasElement} */ ($('view'));
@@ -26,24 +29,25 @@ const renderer = new THREE.WebGLRenderer({ canvas, antialias: false, powerPrefer
 renderer.setPixelRatio(1);
 renderer.shadowMap.enabled = true;
 renderer.shadowMap.type = THREE.PCFShadowMap;
-const post = new Post(renderer, 300);
+const post = new Post(renderer, S.render.internalLines, S.render.tiltShiftBand);
 const scene = new THREE.Scene();
-const FOG = new THREE.Color('#c9d8e4');
-scene.fog = new THREE.Fog(FOG, 900, 26000);
-scene.background = FOG;
-const camera = new THREE.PerspectiveCamera(32, 16 / 9, 1, 45000);
+const fogColor = new THREE.Color(S.render.fogColor);
+scene.fog = new THREE.Fog(fogColor, S.render.fogNear, S.render.fogFar);
+scene.background = fogColor;
+const camera = new THREE.PerspectiveCamera(32, 16 / 9, 1, S.render.viewDistance);
 
 // ciel en degrade (dome qui suit la camera)
 const sky = new THREE.Mesh(
-  new THREE.SphereGeometry(40000, 24, 12),
+  // just inside the far plane, so it is never clipped
+  new THREE.SphereGeometry((S.render.viewDistance * 8) / 9, 24, 12),
   new THREE.ShaderMaterial({
     side: THREE.BackSide,
     depthWrite: false,
     fog: false,
     uniforms: {
-      top: { value: new THREE.Color('#3f74bd') },
-      mid: { value: new THREE.Color('#9cc0e0') },
-      bot: { value: FOG },
+      top: { value: new THREE.Color(S.render.skyTopColor) },
+      mid: { value: new THREE.Color(S.render.skyMiddleColor) },
+      bot: { value: fogColor },
     },
     vertexShader:
       'varying vec3 vDir; void main(){ vDir = normalize(position); gl_Position = projectionMatrix * modelViewMatrix * vec4(position,1.0); }',
@@ -60,19 +64,27 @@ sky.renderOrder = -1;
 scene.add(sky);
 
 // lumieres : soleil d'apres-midi au sud-ouest, ombres autour du bus
-const hemi = new THREE.HemisphereLight('#dfeaff', '#6d6450', 1.6);
+const hemi = new THREE.HemisphereLight('#dfeaff', '#6d6450', S.render.skyLightIntensity);
 scene.add(hemi);
-const sun = new THREE.DirectionalLight('#fff1d6', 2.4);
-const SUN_AZ = (215 * Math.PI) / 180,
-  SUN_EL = (34 * Math.PI) / 180;
+const sun = new THREE.DirectionalLight('#fff1d6', S.render.sunIntensity);
+const sunAzimuth = (S.render.sunAzimuth * Math.PI) / 180,
+  sunElevation = (S.render.sunElevation * Math.PI) / 180;
 const sunDir = new THREE.Vector3(
-  Math.sin(SUN_AZ) * Math.cos(SUN_EL),
-  Math.sin(SUN_EL),
-  -Math.cos(SUN_AZ) * Math.cos(SUN_EL),
+  Math.sin(sunAzimuth) * Math.cos(sunElevation),
+  Math.sin(sunElevation),
+  -Math.cos(sunAzimuth) * Math.cos(sunElevation),
 );
 sun.castShadow = true;
-sun.shadow.mapSize.set(2048, 2048);
-Object.assign(sun.shadow.camera, { left: -110, right: 110, top: 110, bottom: -110, near: 10, far: 900 });
+sun.shadow.mapSize.set(S.render.shadowMapSize, S.render.shadowMapSize);
+const shadowRadius = S.render.shadowRadius;
+Object.assign(sun.shadow.camera, {
+  left: -shadowRadius,
+  right: shadowRadius,
+  top: shadowRadius,
+  bottom: -shadowRadius,
+  near: 10,
+  far: 900,
+});
 sun.shadow.bias = -0.0006;
 sun.shadow.normalBias = 0.6;
 scene.add(sun, sun.target);
@@ -117,7 +129,7 @@ let bus;
 let minimap;
 /** @type {import('../common/types.js').LineData} */
 let line;
-const drive = new Drive();
+const drive = new Drive(S.drive, B);
 const clock = new ServiceClock(P.dep);
 let bumps = 0,
   progress = 0,
@@ -126,15 +138,14 @@ let bumps = 0,
   doors = 0,
   paused = false,
   running = false;
-const CAMS = [
-  { name: 'camera.hd2d', dist: 52, pitch: 0.36, fov: 30, ahead: 16 },
-  { name: 'camera.chase', dist: 20, pitch: 0.24, fov: 48, ahead: 10 },
-  { name: 'camera.sky', dist: 140, pitch: 1.15, fov: 30, ahead: 0 },
-];
-let camMode = +(new URLSearchParams(location.search).get('cam') || 0) % 3,
+const CAMS = /** @type {const} */ (['hd2d', 'chase', 'sky']).map((id) => ({
+  name: 'camera.' + id,
+  ...S.camera[id],
+}));
+let camMode = +(new URLSearchParams(location.search).get('cam') || 0) % CAMS.length,
   zoom = 1,
   camYaw = 0;
-const orbit = new OrbitCamera();
+const orbit = new OrbitCamera(S.camera.orbit);
 
 /** @param {string} text */
 function toast(text, kind = 'info') {
@@ -167,16 +178,15 @@ function nearest(x, y, hint, win) {
 
 /** @param {number} s */
 function placeOnRoute(s) {
-  const p = track.pos(s, 1.8);
+  const p = track.pos(s, S.gameplay.laneOffset);
   drive.place(p.x, p.y, p.h);
   busZ = p.z; // route altitude: picks the deck when the route is on a bridge
-  progress = s + BUS.REAR;
+  progress = s + B.rearOverhang;
   camYaw = p.h;
 }
 
 // ------------------------------------------------------------------ chargement
 async function load() {
-  await initI18n();
   document.title = t('game.pageTitle');
   $('loadMsg').textContent = t('game.loadingCity');
   /** @param {string} f */
@@ -200,7 +210,7 @@ async function load() {
       loads.push(get(`tiles/t_${i}_${j}.json`).then((tile) => void tiles.set(`${i}_${j}`, tile)));
   await Promise.all(loads);
   line = l;
-  hf = new Ground(terrain, tileIndex, tiles);
+  hf = new Ground(terrain, tileIndex, tiles, S.world.deckCatch);
   track = new Track(line.directions[P.dir], line.step);
   track.stops.forEach((s) => {
     s.served = false;
@@ -208,8 +218,8 @@ async function load() {
   });
   $('loadMsg').textContent = t('game.loadingStreets');
   await new Promise((r) => setTimeout(r, 30));
-  world = buildWorld(scene, hf, { map, tiles }, track);
-  bus = makeBus();
+  world = buildWorld(scene, hf, { map, tiles }, track, S.world);
+  bus = makeBus(B);
   scene.add(bus.group);
   minimap = new Minimap($('map'), map, line);
   minimap.setTrack(track);
@@ -224,7 +234,7 @@ async function load() {
   }
   // mode test : ?auto&ff=40 -> simule 40 s d'un coup (pilote automatique)
   const ff = +(new URLSearchParams(location.search).get('ff') || 0);
-  for (let i = 0; i < ff * 60; i++) update(STEP);
+  for (let i = 0; i < ff * S.simulation.stepsPerSecond; i++) update(STEP);
   document.body.dataset.progress =
     progress.toFixed(1) +
     ' / off ' +
@@ -258,6 +268,7 @@ function buildSynoptic() {
 // ------------------------------------------------------------------ simulation
 /** @param {number} dt */
 function update(dt) {
+  const G = S.gameplay;
   clock.tick(dt);
   let inp = keys;
   if (P.auto) inp = autopilot();
@@ -284,26 +295,26 @@ function update(dt) {
     if (g.d < n.d) n = g;
   }
   progress = n.s;
-  offT = n.d > 18 ? offT + dt : 0;
-  $('offroute').hidden = offT < 0.8;
+  offT = n.d > G.offRouteDistance ? offT + dt : 0;
+  $('offroute').hidden = offT < G.offRouteDelay;
 
   // desserte : porte avant (avant droit du bus) a hauteur de l'arret, bus a l'arret
   const st = track.stops[next];
   if (st && doors <= 0) {
-    const door = drive.point(BUS.L - BUS.REAR - 0.9, BUS.W / 2);
+    const door = drive.point(B.bodyLength - B.rearOverhang - B.frontDoorSetback, B.bodyWidth / 2);
     const dd = Math.hypot(door.x - st.x, door.y - st.y);
-    if (dd < 6 && Math.abs(drive.v) < 0.3) {
+    if (dd < G.stopDistance && Math.abs(drive.v) < G.stopSpeed) {
       st.served = true;
       next++;
-      doors = 3;
+      doors = G.doorTime;
       const late = clock.t - clock.sched(st);
       toast(
-        Math.abs(late) < 60
+        Math.abs(late) < G.onTimeTolerance
           ? t('toast.servedOnTime', { stop: st.name })
           : t('toast.servedDelta', { stop: st.name, delta: delta(late) }),
         'good',
       );
-    } else if (progress > st.s + 25 && n.d < 25) {
+    } else if (progress > st.s + G.missedStopDistance && n.d < 25) {
       st.missed = true;
       next++;
       toast(t('toast.missedStop', { stop: st.name }), 'bad');
@@ -313,8 +324,8 @@ function update(dt) {
 
 /** pilote de test (?auto) : suit le trace dans la voie de droite */
 function autopilot() {
-  const look = track.pos(progress + 14, 1.8);
-  const c = drive.point(BUS.WB, 0);
+  const look = track.pos(progress + 14, S.gameplay.laneOffset);
+  const c = drive.point(B.wheelbase, 0);
   const want = Math.atan2(look.y - c.y, look.x - c.x);
   let err = want - drive.h;
   while (err > Math.PI) err -= 2 * Math.PI;
@@ -335,14 +346,14 @@ function render(dt) {
   const z = sh(c.x, c.y);
   g.position.set(drive.x, busZ, -drive.y);
   g.rotation.set(0, drive.h, 0);
-  const fr = drive.point(BUS.L - BUS.REAR, 0),
-    rr = drive.point(-BUS.REAR, 0);
-  const pitch = Math.atan2(sh(fr.x, fr.y) - sh(rr.x, rr.y), BUS.L);
-  const lt = drive.point(BUS.WB / 2, -1.2),
-    rt = drive.point(BUS.WB / 2, 1.2);
+  const fr = drive.point(B.bodyLength - B.rearOverhang, 0),
+    rr = drive.point(-B.rearOverhang, 0);
+  const pitch = Math.atan2(sh(fr.x, fr.y) - sh(rr.x, rr.y), B.bodyLength);
+  const lt = drive.point(B.wheelbase / 2, -1.2),
+    rt = drive.point(B.wheelbase / 2, 1.2);
   const roll =
     Math.atan2(sh(lt.x, lt.y) - sh(rt.x, rt.y), 2.4) +
-    ((drive.v * drive.v * Math.tan(drive.delta)) / BUS.WB) * 0.012;
+    ((drive.v * drive.v * Math.tan(drive.delta)) / B.wheelbase) * 0.012;
   bus.body.rotation.set(roll, 0, pitch);
   bus.setBrake(drive.braking || doors > 0);
   for (const w of bus.wheels) w.rotation.z -= (drive.v * dt) / 0.5;
@@ -352,15 +363,15 @@ function render(dt) {
   let dy = drive.h - camYaw;
   while (dy > Math.PI) dy -= 2 * Math.PI;
   while (dy < -Math.PI) dy += 2 * Math.PI;
-  camYaw += dy * (1 - Math.exp(-dt / (camMode === 2 ? 1.2 : 0.45)));
+  camYaw += dy * (1 - Math.exp(-dt / m.followTime));
   const view = orbit.view(dt, camYaw, m.pitch);
-  const D = m.dist * zoom;
+  const D = m.distance * zoom;
   const tx = c.x + Math.cos(drive.h) * m.ahead,
     ty = c.y + Math.sin(drive.h) * m.ahead;
-  const tz = sh(tx, ty) + 2;
+  const tz = sh(tx, ty) + S.camera.targetHeight;
   const cx = tx - Math.cos(view.yaw) * Math.cos(view.pitch) * D,
     cy = ty - Math.sin(view.yaw) * Math.cos(view.pitch) * D;
-  const cz = Math.max(tz + Math.sin(view.pitch) * D, hf.h(cx, cy) + 3);
+  const cz = Math.max(tz + Math.sin(view.pitch) * D, hf.h(cx, cy) + S.camera.groundClearance);
   $('camReset').hidden = orbit.state === 'auto';
   camera.position.set(cx, cz, -cy);
   camera.lookAt(tx, tz, -ty);
@@ -373,8 +384,8 @@ function render(dt) {
   // soleil et ombres centres sur le bus
   sun.target.position.set(c.x, z, -c.y);
   sun.position.copy(tmpV.copy(sunDir).multiplyScalar(400).add(sun.target.position));
-  post.mat.uniforms.focus.value = camMode === 1 ? 0.55 : 0.5;
-  post.mat.uniforms.blur.value = camMode === 1 ? 1.2 : 2.4;
+  post.mat.uniforms.focus.value = m.focus;
+  post.mat.uniforms.blur.value = m.blur;
   post.render(scene, camera);
 
   hud();
@@ -395,18 +406,20 @@ function hud() {
   const st = track.stops[next];
   if (st) {
     $('saeStop').textContent = st.name;
-    const d = Math.max(0, st.s - progress - (BUS.L - BUS.REAR));
+    const d = Math.max(0, st.s - progress - (B.bodyLength - B.rearOverhang));
     $('saeDist').textContent = d > 1000 ? (d / 1000).toFixed(1) + ' km' : Math.round(d / 10) * 10 + ' m';
     $('saeSched').textContent = t('game.scheduled', { time: hm(clock.sched(st)) });
     const late = clock.t - clock.sched(st);
     const e = $('saeDelta');
+    const shown = S.gameplay.saeDeltaThreshold,
+      coloured = S.gameplay.onTimeTolerance;
     e.textContent =
-      late > 30
+      late > shown
         ? t('game.late', { delta: delta(late) })
-        : late < -30
+        : late < -shown
           ? t('game.early', { delta: delta(late) })
           : t('game.onTime');
-    e.className = late > 60 ? 'late' : late < -60 ? 'early' : '';
+    e.className = late > coloured ? 'late' : late < -coloured ? 'early' : '';
   } else {
     $('saeStop').textContent = t('game.terminus');
     $('saeDist').textContent = '';
@@ -424,7 +437,7 @@ function hud() {
 // ------------------------------------------------------------------ boucle
 let last = performance.now(),
   acc = 0;
-const STEP = 1 / 60;
+const STEP = 1 / S.simulation.stepsPerSecond;
 /** @param {number} t */
 function frame(t) {
   requestAnimationFrame(frame);
@@ -472,7 +485,7 @@ addEventListener('keydown', (e) => {
     toast(t(world.route.visible ? 'toast.guidanceOn' : 'toast.guidanceOff'));
   }
   if (e.code === 'KeyR') {
-    placeOnRoute(progress - BUS.REAR);
+    placeOnRoute(progress - B.rearOverhang);
     toast(t('toast.busReplaced'));
   }
 });
@@ -508,7 +521,8 @@ canvas.addEventListener(
   'wheel',
   (e) => {
     e.preventDefault();
-    zoom = Math.max(0.35, Math.min(3, zoom * Math.exp(e.deltaY * 0.001)));
+    const C = S.camera;
+    zoom = Math.max(C.zoomMin, Math.min(C.zoomMax, zoom * Math.exp(e.deltaY * C.zoomPerWheelUnit)));
   },
   { passive: false },
 );
@@ -520,13 +534,28 @@ window.addEventListener('error', (e) => {
   document.body.dataset.error = String(e.message);
 });
 
-load().catch((e) => {
-  let text = String(e.message);
+load().catch(showLoadError);
+
+/** Language and settings, needed before anything is built; a failure stays on the loading screen. */
+async function boot() {
   try {
-    text = t('game.loadError', { error: text });
+    await initI18n();
+    return await loadSettings();
+  } catch (e) {
+    showLoadError(e);
+    throw e;
+  }
+}
+
+/** @param {unknown} e */
+function showLoadError(e) {
+  const message = e instanceof Error ? e.message : String(e);
+  let text = message;
+  try {
+    text = t('game.loadError', { error: message });
   } catch {
     // the language file itself is missing: show the raw error
   }
   $('loadMsg').textContent = text;
-  document.body.dataset.error = String(e.message);
-});
+  document.body.dataset.error = message;
+}

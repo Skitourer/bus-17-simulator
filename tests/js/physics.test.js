@@ -2,7 +2,7 @@
 import { describe, expect, it } from 'vitest';
 import { Drive } from '../../src/hd2d/drive.js';
 import { Heightfield } from '../../src/hd2d/heightfield.js';
-import { NO_INPUT, tiltedTerrain } from './fixtures.js';
+import { NO_INPUT, SETTINGS, tiltedTerrain } from './fixtures.js';
 
 const DT = 1 / 60;
 
@@ -41,7 +41,7 @@ describe('Drive (HD-2D free driving)', () => {
   const noWalls = { hit: () => false };
 
   it('drives forward along its heading', () => {
-    const drive = new Drive();
+    const drive = new Drive(SETTINGS.drive, SETTINGS.bus);
     drive.place(0, 0, Math.PI / 2);
     run(drive, (dt) => drive.update({ ...NO_INPUT, up: true }, dt, flat, noWalls), 3);
     expect(drive.y).toBeGreaterThan(5);
@@ -50,7 +50,7 @@ describe('Drive (HD-2D free driving)', () => {
   });
 
   it('turns left when steering left, and recentres the wheel', () => {
-    const drive = new Drive();
+    const drive = new Drive(SETTINGS.drive, SETTINGS.bus);
     drive.v = 5;
     run(drive, (dt) => drive.update({ ...NO_INPUT, up: true, left: true }, dt, flat, noWalls), 2);
     expect(drive.h).toBeGreaterThan(0.2);
@@ -60,7 +60,7 @@ describe('Drive (HD-2D free driving)', () => {
   });
 
   it('brakes to a stop, then reverses', () => {
-    const drive = new Drive();
+    const drive = new Drive(SETTINGS.drive, SETTINGS.bus);
     drive.v = 8;
     run(drive, (dt) => drive.update({ ...NO_INPUT, down: true }, dt, flat, noWalls), 2.5);
     expect(drive.braking || drive.v <= 0).toBe(true);
@@ -71,7 +71,7 @@ describe('Drive (HD-2D free driving)', () => {
   });
 
   it('bounces off buildings and reports at most one collision per 0.6 s', () => {
-    const drive = new Drive();
+    const drive = new Drive(SETTINGS.drive, SETTINGS.bus);
     drive.v = 6;
     drive.bump = 1;
     const wallAhead = { hit: (/** @type {number} */ x) => x > 9.5 };
