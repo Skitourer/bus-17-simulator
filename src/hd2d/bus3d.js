@@ -5,6 +5,7 @@
  */
 import * as THREE from 'three';
 import { digits } from './sprites.js';
+import { makeInterior } from './interior.js';
 
 /** @typedef {import('../settings/settings.js').Settings['bus']} BusSettings */
 const C = {
@@ -153,6 +154,8 @@ export function makeBus(bus) {
   const grp = new THREE.Group();
   const body = new THREE.Group(); // caisse (inclinee selon le relief et le roulis)
   grp.add(body);
+  const interior = makeInterior(bus);
+  body.add(interior);
   const roofTex = tex(bus.bodyLength * PPM, Math.round(bus.bodyWidth * PPM), (g, w, h) => {
     g.fillStyle = '#e4e6ea';
     g.fillRect(0, 0, w, h);
@@ -196,6 +199,7 @@ export function makeBus(bus) {
   return {
     group: grp,
     body,
+    interior,
     wheels,
     /** @param {boolean} on */
     setBrake(on) {

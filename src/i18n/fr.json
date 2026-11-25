@@ -63,7 +63,8 @@
       "opening": "Ouverture…",
       "open": "Portes ouvertes",
       "closing": "Fermeture…"
-    }
+    },
+    "doorsLamp": "PORTES"
   },
   "toast": {
     "serviceStart": "Service de {time} vers {stop}",
@@ -83,7 +84,9 @@
   "camera": {
     "hd2d": "HD-2D",
     "chase": "Poursuite",
-    "sky": "Vue du ciel"
+    "sky": "Vue du ciel",
+    "cabin": "Cabine",
+    "passenger": "Passager"
   },
   "debug": {
     "panel": "x {x} · y {y} · s {s} m · sol {ground} m · eau {water} · {fps} i/s",
