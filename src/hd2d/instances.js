@@ -13,11 +13,12 @@ import * as THREE from 'three';
  */
 export class BillboardPool {
   /**
-   * @param {HTMLCanvasElement} atlas variants of equal width, side by side
+   * @param {HTMLCanvasElement | THREE.Texture} atlas variants of equal width, side by side (a texture may be
+   *   shared by several pools)
    * @param {number} variants number of variants in the atlas @param {number} capacity largest instance count
    */
   constructor(atlas, variants, capacity) {
-    const map = new THREE.CanvasTexture(atlas);
+    const map = atlas instanceof THREE.Texture ? atlas : new THREE.CanvasTexture(atlas);
     map.magFilter = THREE.NearestFilter;
     map.minFilter = THREE.NearestFilter;
     map.generateMipmaps = false;

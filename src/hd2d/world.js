@@ -11,6 +11,7 @@ import * as THREE from 'three';
 import { tree, shelter, stopPole } from './sprites.js';
 import { quayWalls, waterSurface } from './water.js';
 import { BillboardPool } from './instances.js';
+import { TileSet } from './tileset.js';
 
 /** @typedef {import('./ground.js').Ground} Ground */
 /** @typedef {import('./ground.js').TileData} TileData */
@@ -24,6 +25,18 @@ const NEAREST = (t) => {
   t.colorSpace = THREE.SRGBColorSpace;
   return t;
 };
+
+/** @type {Map<string, THREE.Texture>} */
+const sharedTextures = new Map();
+/**
+ * One texture per kind for all the tiles (built once, never freed with a tile).
+ * @param {string} name @param {() => THREE.Texture} make
+ */
+function shared(name, make) {
+  let texture = sharedTextures.get(name);
+  if (!texture) sharedTextures.set(name, (texture = make()));
+  return texture;
+}
 
 /** @param {number} w @param {number} h */
 function canvas(w, h) {
@@ -110,68 +123,99 @@ function groundTexture(map, b) {
 }
 
 /**
- * Ground of the tiles (10 m grid shaped by the roads), one mesh per tile, triangles split like Ground.h().
- * @param {Ground} ground @param {Map<string, TileData>} tiles @param {import('../common/types.js').MapData | null} map
+ * Fine ground of a tile (10 m grid shaped by the roads), triangles split like Ground.h().
+ * @param {Ground} ground @param {string} key @param {TileData} tile @param {THREE.Material} material
  */
-function terrainTiles(ground, tiles, map) {
-  const grp = new THREE.Group();
+function terrainTile(ground, key, tile, material) {
   const b = ground.bounds,
     ix = ground.index,
     n = ground.n;
-  const mat = new THREE.MeshLambertMaterial({ map: groundTexture(map, b) });
-  for (const [key, tile] of tiles) {
-    const [ti, tj] = key.split('_').map(Number);
-    const ox = ix.x0 + ti * ix.size,
-      oy = ix.y0 + tj * ix.size;
-    const grid = /** @type {Float32Array} */ (ground.grids.get(key));
-    /** @type {number[]} */
-    const P = [];
-    /** @type {number[]} */
-    const U = [];
-    /** @type {number[]} */
-    const I = [];
-    /** @param {number} x @param {number} y @param {number} z */
-    const vertex = (x, y, z) => {
-      P.push(x, z, -y);
-      U.push((x - b.x0) / (b.x1 - b.x0), (y - b.y0) / (b.y1 - b.y0));
-    };
-    for (let j = 0; j < n; j++)
-      for (let i = 0; i < n; i++) vertex(ox + i * ix.step, oy + j * ix.step, grid[j * n + i]);
-    // triangles under water are replaced by their dry parts (tools/water.py)
-    const wet = new Set(tile.wet),
-      cells = (n - 1) * (n - 1);
-    for (let j = 0; j + 1 < n; j++)
-      for (let i = 0; i + 1 < n; i++) {
-        const a = j * n + i,
-          c = a + n,
-          cell = j * (n - 1) + i;
-        // (a, b, d) and (a, d, c): counter-clockwise seen from above (y is mapped to -z)
-        if (!wet.has(cell)) I.push(a, a + 1, c + 1);
-        if (!wet.has(cell + cells)) I.push(a, c + 1, c);
-      }
-    for (const rings of tile.dry) {
-      const vec = rings.map((ring) => {
-        const out = [];
-        for (let k = 0; k + 1 < ring.length; k += 2)
-          out.push(new THREE.Vector2(ox + ring[k] / 10, oy + ring[k + 1] / 10));
-        return out;
-      });
-      const base = P.length / 3;
-      for (const v of vec.flat()) vertex(v.x, v.y, ground.h(v.x, v.y));
-      const [contour, ...holes] = vec;
-      for (const tri of THREE.ShapeUtils.triangulateShape(contour, holes))
-        I.push(base + tri[0], base + tri[2], base + tri[1]);
+  const [ox, oy] = tileOrigin(ground, key);
+  const grid = /** @type {Float32Array} */ (ground.grids.get(key));
+  /** @type {number[]} */
+  const P = [];
+  /** @type {number[]} */
+  const U = [];
+  /** @type {number[]} */
+  const I = [];
+  /** @param {number} x @param {number} y @param {number} z */
+  const vertex = (x, y, z) => {
+    P.push(x, z, -y);
+    U.push((x - b.x0) / (b.x1 - b.x0), (y - b.y0) / (b.y1 - b.y0));
+  };
+  for (let j = 0; j < n; j++)
+    for (let i = 0; i < n; i++) vertex(ox + i * ix.step, oy + j * ix.step, grid[j * n + i]);
+  // triangles under water are replaced by their dry parts (tools/water.py)
+  const wet = new Set(tile.wet),
+    cells = (n - 1) * (n - 1);
+  for (let j = 0; j + 1 < n; j++)
+    for (let i = 0; i + 1 < n; i++) {
+      const a = j * n + i,
+        c = a + n,
+        cell = j * (n - 1) + i;
+      // (a, b, d) and (a, d, c): counter-clockwise seen from above (y is mapped to -z)
+      if (!wet.has(cell)) I.push(a, a + 1, c + 1);
+      if (!wet.has(cell + cells)) I.push(a, c + 1, c);
     }
-    const geo = new THREE.BufferGeometry();
-    geo.setAttribute('position', new THREE.Float32BufferAttribute(P, 3));
-    geo.setAttribute('uv', new THREE.Float32BufferAttribute(U, 2));
-    geo.setIndex(I);
-    geo.computeVertexNormals();
-    const m = new THREE.Mesh(geo, mat);
-    m.receiveShadow = true;
-    grp.add(m);
+  for (const rings of tile.dry) {
+    const vec = rings.map((ring) => {
+      const out = [];
+      for (let k = 0; k + 1 < ring.length; k += 2)
+        out.push(new THREE.Vector2(ox + ring[k] / 10, oy + ring[k + 1] / 10));
+      return out;
+    });
+    const base = P.length / 3;
+    for (const v of vec.flat()) vertex(v.x, v.y, ground.h(v.x, v.y));
+    const [contour, ...holes] = vec;
+    for (const tri of THREE.ShapeUtils.triangulateShape(contour, holes))
+      I.push(base + tri[0], base + tri[2], base + tri[1]);
   }
-  return grp;
+  const geo = new THREE.BufferGeometry();
+  geo.setAttribute('position', new THREE.Float32BufferAttribute(P, 3));
+  geo.setAttribute('uv', new THREE.Float32BufferAttribute(U, 2));
+  geo.setIndex(I);
+  geo.computeVertexNormals();
+  const m = new THREE.Mesh(geo, material);
+  m.receiveShadow = true;
+  return m;
+}
+
+/**
+ * Light ground of a far tile: one vertex out of `every` of the fine grid, the same texture. The water
+ * surface hides the cells under water, so they are not cut out.
+ * @param {Ground} ground @param {string} key @param {THREE.Material} material @param {number} every
+ */
+function terrainTileLight(ground, key, material, every) {
+  const b = ground.bounds,
+    ix = ground.index,
+    n = ground.n;
+  const [ox, oy] = tileOrigin(ground, key);
+  const grid = /** @type {Float32Array} */ (ground.grids.get(key));
+  const m = Math.floor((n - 1) / every) + 1;
+  const P = new Float32Array(m * m * 3),
+    U = new Float32Array(m * m * 2);
+  for (let j = 0; j < m; j++)
+    for (let i = 0; i < m; i++) {
+      const k = j * m + i,
+        x = ox + i * every * ix.step,
+        y = oy + j * every * ix.step;
+      P.set([x, grid[j * every * n + i * every], -y], k * 3);
+      U.set([(x - b.x0) / (b.x1 - b.x0), (y - b.y0) / (b.y1 - b.y0)], k * 2);
+    }
+  /** @type {number[]} */
+  const I = [];
+  for (let j = 0; j + 1 < m; j++)
+    for (let i = 0; i + 1 < m; i++) {
+      const a = j * m + i,
+        c = a + m;
+      I.push(a, a + 1, c + 1, a, c + 1, c);
+    }
+  const geo = new THREE.BufferGeometry();
+  geo.setAttribute('position', new THREE.BufferAttribute(P, 3));
+  geo.setAttribute('uv', new THREE.BufferAttribute(U, 2));
+  geo.setIndex(I);
+  geo.computeVertexNormals();
+  return new THREE.Mesh(geo, material);
 }
 
 /** @param {import('./heightfield.js').Heightfield} hf */
@@ -236,7 +280,14 @@ function asphaltTexture() {
  * @param {Ground} ground @param {Map<string, TileData>} tiles @param {WorldSettings} street
  */
 function roadSurface(ground, tiles, street) {
-  return piecesMesh(ground, tiles, (tile) => tile.road, street.roadLift, asphaltTexture(), 1);
+  return piecesMesh(
+    ground,
+    tiles,
+    (tile) => tile.road,
+    street.roadLift,
+    shared('asphalt', asphaltTexture),
+    1,
+  );
 }
 
 /**
@@ -244,7 +295,14 @@ function roadSurface(ground, tiles, street) {
  * @param {Ground} ground @param {Map<string, TileData>} tiles @param {WorldSettings} street
  */
 function sidewalks(ground, tiles, street) {
-  return piecesMesh(ground, tiles, (tile) => tile.sidewalks, street.kerbHeight, pavingTexture(), 2);
+  return piecesMesh(
+    ground,
+    tiles,
+    (tile) => tile.sidewalks,
+    street.kerbHeight,
+    shared('paving', pavingTexture),
+    2,
+  );
 }
 
 /**
@@ -599,17 +657,16 @@ function facadeTexture() {
   return t;
 }
 
-/** batiments extrudes, fusionnes en deux maillages (murs, toits) ; renvoie aussi un index pour les collisions */
-/** @param {Ground} hf @param {import('../common/types.js').BuildingsData} data */
-function buildings(hf, data) {
+/** batiments extrudes d'une tuile, fusionnes en deux maillages (murs, toits) */
+/** @param {Ground} hf @param {import('../common/types.js').BuildingsData} data @param {number} seed colour stream */
+function buildings(hf, data, seed) {
   const WP = [],
     WU = [],
     WC = [],
     RP = [],
     RC = [];
-  const r = rng(3);
+  const r = rng(seed);
   const col = new THREE.Color();
-  const footprints = [];
   for (const b of data.b) {
     const h = b[0] / 10,
       kind = b[1];
@@ -656,17 +713,6 @@ function buildings(hf, data) {
         RC.push(rc.r, rc.g, rc.b);
       }
     }
-    let x0 = 1e9,
-      y0 = 1e9,
-      x1 = -1e9,
-      y1 = -1e9;
-    for (const [x, y] of ring) {
-      x0 = Math.min(x0, x);
-      x1 = Math.max(x1, x);
-      y0 = Math.min(y0, y);
-      y1 = Math.max(y1, y);
-    }
-    footprints.push({ ring, x0, y0, x1, y1 });
   }
   const wg = new THREE.BufferGeometry();
   wg.setAttribute('position', new THREE.Float32BufferAttribute(WP, 3));
@@ -675,7 +721,11 @@ function buildings(hf, data) {
   wg.computeVertexNormals();
   const walls = new THREE.Mesh(
     wg,
-    new THREE.MeshLambertMaterial({ map: facadeTexture(), vertexColors: true, side: THREE.DoubleSide }),
+    new THREE.MeshLambertMaterial({
+      map: shared('facade', facadeTexture),
+      vertexColors: true,
+      side: THREE.DoubleSide,
+    }),
   );
   const rg = new THREE.BufferGeometry();
   rg.setAttribute('position', new THREE.Float32BufferAttribute(RP, 3));
@@ -690,7 +740,21 @@ function buildings(hf, data) {
     m.receiveShadow = true;
     m.renderOrder = 10;
   }
-  return { walls, roofs, footprints };
+  return { walls, roofs };
+}
+
+/**
+ * Outlines of the buildings (world metres) with their bounding boxes, for the collisions.
+ * @param {import('../common/types.js').BuildingsData} data @returns {Footprint[]}
+ */
+function footprintsOf(data) {
+  return data.b.map((b) => {
+    const ring = [];
+    for (let i = 2; i < b.length; i += 2) ring.push([b[i] / 10, b[i + 1] / 10]);
+    const xs = ring.map((p) => p[0]),
+      ys = ring.map((p) => p[1]);
+    return { ring, x0: Math.min(...xs), y0: Math.min(...ys), x1: Math.max(...xs), y1: Math.max(...ys) };
+  });
 }
 
 /** distance d'un point au contour d'un anneau */
@@ -787,11 +851,14 @@ function treeBillboards(hf, positions) {
   const VAR = 4,
     TW = 40,
     TH = 64;
-  const { c, g } = canvas(TW * VAR, TH);
-  for (let i = 0; i < VAR; i++) g.drawImage(tree(i + 1), i * TW, 0);
+  const atlas = shared('trees', () => {
+    const { c, g } = canvas(TW * VAR, TH);
+    for (let i = 0; i < VAR; i++) g.drawImage(tree(i + 1), i * TW, 0);
+    return new THREE.CanvasTexture(c);
+  });
   const n = positions.length / 2;
-  const pool = new BillboardPool(c, VAR, n);
-  const r = rng(11);
+  const pool = new BillboardPool(atlas, VAR, Math.max(1, n));
+  const r = rng(11 + Math.round(positions[0] ?? 0));
   for (let i = 0; i < n; i++) {
     const x = positions[i * 2],
       y = positions[i * 2 + 1];
@@ -905,22 +972,42 @@ function tileObjects(ground, tiles) {
 export function buildWorld(scene, hf, data, track, settings) {
   const street = settings.world;
   scene.add(terrainCoarse(hf.natural));
-  scene.add(terrainTiles(hf, data.tiles, data.map));
-  scene.add(roadSurface(hf, data.tiles, street));
-  scene.add(sidewalks(hf, data.tiles, street));
-  scene.add(streetDetails(hf, data.tiles, street));
+  const groundMaterial = new THREE.MeshLambertMaterial({ map: groundTexture(data.map, hf.bounds) });
+  const ix = hf.index;
+  const keys = [...data.tiles.keys()];
+  const tiles = keys.map((key) => {
+    const [x0, y0] = tileOrigin(hf, key);
+    return { key, rect: { x0, y0, x1: x0 + ix.size, y1: y0 + ix.size } };
+  });
+  const tileSet = new TileSet(
+    scene,
+    tiles,
+    (key) => terrainTileLight(hf, key, groundMaterial, settings.tiles.lightGroundStep),
+    (key) => {
+      const tile = /** @type {TileData} */ (data.tiles.get(key));
+      const one = new Map([[key, tile]]);
+      const objects = tileObjects(hf, one);
+      const streets = new THREE.Group();
+      streets.add(roadSurface(hf, one, street), sidewalks(hf, one, street), streetDetails(hf, one, street));
+      const houses = buildings(hf, objects.buildings, 3 + keys.indexOf(key));
+      const block = new THREE.Group();
+      block.add(houses.walls, houses.roofs);
+      return {
+        fineGround: terrainTile(hf, key, tile, groundMaterial),
+        streets,
+        trees: treeBillboards(hf, objects.trees),
+        buildings: block,
+      };
+    },
+    settings.tiles,
+  );
   scene.add(bridges(hf));
   const water = waterSurface(hf, data.tiles, settings.water, settings.render);
   scene.add(water, quayWalls(hf, data.tiles, settings.water));
   const route = routeStrip(hf, track, data.lane);
   scene.add(route);
-  /** @type {Footprint[]} */
-  let footprints = [];
-  const fromTiles = tileObjects(hf, data.tiles);
-  const b = buildings(hf, fromTiles.buildings);
-  scene.add(b.walls, b.roofs);
-  footprints = b.footprints;
-  scene.add(treeBillboards(hf, fromTiles.trees));
+  // collisions need every building from the start, drawn or not: their outlines are light
+  const footprints = footprintsOf(tileObjects(hf, data.tiles).buildings);
   const blocked = data.stops.map((place) => shelterBlocked(footprints, place));
   scene.add(stops(hf, data.stops, blocked));
   return {
@@ -928,5 +1015,6 @@ export function buildWorld(scene, hf, data, track, settings) {
     index: new FootprintIndex(footprints, track),
     water: water.material,
     shelters: blocked.map((b) => !b),
+    tiles: tileSet,
   };
 }
