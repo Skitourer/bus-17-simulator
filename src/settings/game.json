@@ -595,6 +595,13 @@
       "min": 0.5,
       "max": 10,
       "doc": "A bus closer than this to a bridge deck height drives on the deck; farther below, it drives under it."
+    },
+    "deckMargin": {
+      "value": 3,
+      "unit": "m",
+      "min": 0,
+      "max": 5,
+      "doc": "The water does not stop a bus this far beyond the sides and ends of a bridge deck: OSM decks are as narrow as the carriageway, the banks are skewed at the bridge ends, and the bus drifts in its lane (3 m lets the autopilot cross both bridges of the route)."
     }
   },
   "water": {

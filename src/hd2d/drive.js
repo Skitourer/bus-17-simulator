@@ -124,3 +124,17 @@ export class Drive {
     return ev;
   }
 }
+
+/**
+ * What stops the bus: buildings, and water unless the bus is on a bridge deck above it; nothing in ghost mode
+ * (debug).
+ * @param {{hit: (x: number, y: number) => boolean}} buildings
+ * @param {{waterBlocks: (x: number, y: number, zRef: number) => boolean}} ground
+ * @param {() => number} height current height of the bus @param {boolean} ghost
+ */
+export function obstacles(buildings, ground, height, ghost) {
+  return {
+    /** @param {number} x @param {number} y */
+    hit: (x, y) => !ghost && (buildings.hit(x, y) || ground.waterBlocks(x, y, height())),
+  };
+}

@@ -62,12 +62,12 @@ export function deckFromRecord(rec, ox, oy) {
 }
 
 /**
- * Deck height at (x, y) if the point is on the deck, else null.
+ * Deck height at (x, y) if the point is on the deck (its sides widened by `margin` m), else null.
  * @param {Deck} deck @param {number} x @param {number} y
  */
-export function deckHeight(deck, x, y) {
+export function deckHeight(deck, x, y, margin = 0) {
   const [x0, y0, x1, y1] = deck.box;
-  if (x < x0 || y < y0 || x > x1 || y > y1) return null;
+  if (x < x0 - margin || y < y0 - margin || x > x1 + margin || y > y1 + margin) return null;
   let best = Infinity,
     z = 0;
   for (let i = 0; i + 1 < deck.x.length; i++) {
@@ -83,7 +83,7 @@ export function deckHeight(deck, x, y) {
       z = deck.z[i] + (deck.z[i + 1] - deck.z[i]) * t;
     }
   }
-  return best <= deck.halfWidth ? z : null;
+  return best <= deck.halfWidth + margin ? z : null;
 }
 
 export class Ground {
@@ -91,9 +91,11 @@ export class Ground {
    * @param {import('../common/types.js').TerrainData} terrain natural IGN grids (fallback outside the tiles)
    * @param {TileIndex} index @param {Map<string, TileData>} tiles key "i_j"
    * @param {number} deckCatch a vehicle closer than this (m) to a deck height drives on the deck
+   * @param {number} deckMargin the water does not stop a vehicle this close (m) beyond the side of a deck
    */
-  constructor(terrain, index, tiles, deckCatch) {
+  constructor(terrain, index, tiles, deckCatch, deckMargin) {
     this.deckCatch = deckCatch;
+    this.deckMargin = deckMargin;
     this.natural = new Heightfield(terrain);
     this.index = index;
     this.n = Math.round(index.size / index.step) + 1;
@@ -101,9 +103,12 @@ export class Ground {
     this.grids = new Map();
     /** @type {Map<string, Float32Array>} water surface heights in metres, for the tiles with water */
     this.levels = new Map();
+    /** @type {Map<string, Map<number, number[][][]>>} water pieces by tile and ground triangle (m, tile frame) */
+    this.water = new Map();
     /** @type {Deck[]} */
     this.decks = [];
     for (const [key, tile] of tiles) {
+      if (tile.water.length) this.water.set(key, this.piecesByTriangle(tile.water));
       this.grids.set(
         key,
         Float32Array.from(tile.ground, (v) => v / 10),
@@ -118,6 +123,81 @@ export class Ground {
         oy = index.y0 + j * index.size;
       for (const rec of tile.bridges) this.decks.push(deckFromRecord(rec, ox, oy));
     }
+  }
+
+  /**
+   * Water pieces grouped by the ground triangle that holds them (each piece lies in one triangle).
+   * @param {number[][][]} pieces rings [x, y, ...] in dm relative to the tile origin
+   */
+  piecesByTriangle(pieces) {
+    /** @type {Map<number, number[][][]>} */
+    const out = new Map();
+    for (const rings of pieces) {
+      const metres = rings.map((ring) => ring.map((v) => v / 10));
+      const outer = metres[0];
+      let cx = 0,
+        cy = 0;
+      for (let k = 0; k + 1 < outer.length; k += 2) {
+        cx += outer[k];
+        cy += outer[k + 1];
+      }
+      // the mean of the vertices lies inside the (convex) triangle that holds the piece
+      const k = this.triangleOf(cx / (outer.length / 2), cy / (outer.length / 2));
+      const list = out.get(k);
+      if (list) list.push(metres);
+      else out.set(k, [metres]);
+    }
+    return out;
+  }
+
+  /**
+   * Index of the ground triangle at a point of a tile (m from the tile origin), in the order of the tile data:
+   * every cell's first triangle (south-east of the diagonal), then every cell's second triangle.
+   * @param {number} lx @param {number} ly
+   */
+  triangleOf(lx, ly) {
+    const n = this.n,
+      step = this.index.step;
+    const ci = Math.max(0, Math.min(n - 2, Math.floor(lx / step))),
+      cj = Math.max(0, Math.min(n - 2, Math.floor(ly / step)));
+    const cell = cj * (n - 1) + ci;
+    return lx / step - ci >= ly / step - cj ? cell : cell + (n - 1) * (n - 1);
+  }
+
+  /**
+   * Whether (x, y) lies on a water surface (rivers and lakes of the tiles).
+   * @param {number} x @param {number} y
+   */
+  inWater(x, y) {
+    const ix = this.index;
+    const i = Math.floor((x - ix.x0) / ix.size),
+      j = Math.floor((y - ix.y0) / ix.size);
+    const byTriangle = this.water.get(i + '_' + j);
+    if (!byTriangle) return false;
+    const lx = x - ix.x0 - i * ix.size,
+      ly = y - ix.y0 - j * ix.size;
+    const pieces = byTriangle.get(this.triangleOf(lx, ly));
+    return !!pieces && pieces.some((rings) => insideRings(rings, lx, ly));
+  }
+
+  /**
+   * Whether a vehicle at height `zRef` is on a bridge deck at (x, y), its sides widened by `margin` (m).
+   * @param {number} x @param {number} y @param {number} zRef
+   */
+  onDeck(x, y, zRef, margin = 0) {
+    return this.decks.some((deck) => {
+      const z = deckHeight(deck, x, y, margin);
+      return z !== null && Math.abs(z - zRef) < this.deckCatch;
+    });
+  }
+
+  /**
+   * Whether the water stops a vehicle at height `zRef` at (x, y): water, and no bridge deck at that height.
+   * @param {number} x @param {number} y @param {number} zRef
+   */
+  waterBlocks(x, y, zRef) {
+    // the deck margin keeps a bus that drifts in its lane, or overhangs a narrow deck, from being stopped
+    return this.inWater(x, y) && !this.onDeck(x, y, zRef, this.deckMargin);
   }
 
   /** Area covered by the tiles. */
@@ -180,14 +260,20 @@ export class Ground {
    * @param {number} x @param {number} y @param {number} zRef
    */
   surface(x, y, zRef) {
-    const g = this.h(x, y);
-    let best = g;
+    // a deck within reach wins over the ground, even when the ground is closer: the ground under a bridge
+    // slopes down gently towards the river and would otherwise pull the vehicle off the deck
+    /** @type {number | null} */
+    let best = null;
     for (const deck of this.decks) {
       const z = deckHeight(deck, x, y);
-      if (z !== null && Math.abs(z - zRef) < this.deckCatch && Math.abs(z - zRef) < Math.abs(best - zRef))
+      if (
+        z !== null &&
+        Math.abs(z - zRef) < this.deckCatch &&
+        (best === null || Math.abs(z - zRef) < Math.abs(best - zRef))
+      )
         best = z;
     }
-    return best;
+    return best ?? this.h(x, y);
   }
 
   /**
@@ -210,4 +296,23 @@ export class Ground {
   slope(x, y, hd, span = 6) {
     return this.slopeAt(x, y, hd, -1e9, span);
   }
+}
+
+/**
+ * Even-odd point in polygon test over all the rings (outline and holes).
+ * @param {number[][]} rings [x, y, ...] @param {number} x @param {number} y
+ */
+export function insideRings(rings, x, y) {
+  let inside = false;
+  for (const ring of rings) {
+    const m = ring.length;
+    for (let k = 0, l = m - 2; k < m; l = k, k += 2) {
+      const xk = ring[k],
+        yk = ring[k + 1],
+        xl = ring[l],
+        yl = ring[l + 1];
+      if (yk > y !== yl > y && x < ((xl - xk) * (y - yk)) / (yl - yk) + xk) inside = !inside;
+    }
+  }
+  return inside;
 }

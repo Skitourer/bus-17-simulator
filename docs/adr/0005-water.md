@@ -27,8 +27,11 @@ banks, and roads along the quays are shaped into the same ground grid.
 
 - Flat water bounded by quays; roads and buildings beside the river are unchanged.
 - The tiles grow by about 2.5 MB (level grids and pieces in 80 of the 182 tiles).
-- The bus can still drive onto the water (the ground under it is not drawn): blocking it
-  needs the water areas in the collision index, left for later.
+- The water stops the bus like a building (#34): `Ground` finds the water pieces by
+  ground triangle, except on a bridge deck at the height of the bus, widened by
+  `world.deckMargin` (3 m) because OSM decks are as narrow as the carriageway and the
+  banks are skewed at the bridge ends. A deck within reach of the bus now wins over the
+  ground, which slopes down under the bridges.
 
 ## Rejected alternatives
 
