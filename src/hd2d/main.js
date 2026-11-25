@@ -348,6 +348,8 @@ async function load() {
   // mode test : ?auto&ff=40 -> simule 40 s d'un coup (pilote automatique)
   const ff = +(new URLSearchParams(location.search).get('ff') || 0);
   for (let i = 0; i < ff * S.simulation.stepsPerSecond; i++) update(STEP);
+  // the tiles around the start (or the test position), before the first frame
+  world.tiles.update(drive.x, drive.y, Infinity);
   document.body.dataset.progress =
     progress.toFixed(1) +
     ' / off ' +
@@ -530,6 +532,7 @@ function render(dt) {
   world.water.uniforms.time.value += dt;
   crowd.update(dt, service.onBoard);
   crowd.draw(camera.position.x, -camera.position.z);
+  world.tiles.update(c.x, c.y, S.tiles.buildBudget);
   otherBuses.draw(fleet.buses, camera.position.x, -camera.position.z);
   if (stress) {
     stress.update(dt, { x: c.x, y: c.y, h: drive.h });
@@ -788,6 +791,7 @@ function debugPanel() {
     triangles: Math.round(renderer.info.render.triangles / 1000),
     models: (stress?.shown.models ?? 0) + otherBuses.shown,
     buses: fleet.buses.length,
+    tiles: world.tiles.count,
     sprites: (stress?.shown.sprites ?? 0) + crowd.pool.geometry.instanceCount,
   });
 }

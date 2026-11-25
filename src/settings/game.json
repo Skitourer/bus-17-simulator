@@ -1046,6 +1046,58 @@
       "doc": "The player's bus is looked for along each route within this distance of where it was last found."
     }
   },
+  "tiles": {
+    "loadRadius": {
+      "value": 2000,
+      "unit": "m",
+      "min": 300,
+      "max": 10000,
+      "doc": "The detailed layers of a tile (10 m ground, streets, trees, buildings) are built when the bus comes this close to the tile; the buildings are drawn as long as they are built."
+    },
+    "unloadRadius": {
+      "value": 2400,
+      "unit": "m",
+      "min": 300,
+      "max": 12000,
+      "doc": "The detailed layers of a tile are freed when the bus is farther than this (beyond loadRadius, so that driving along the limit does not build and free them in turn)."
+    },
+    "fineGroundDistance": {
+      "value": 1200,
+      "unit": "m",
+      "min": 100,
+      "max": 10000,
+      "doc": "The 10 m ground grid of a tile is drawn within this distance of the bus; farther, its light ground."
+    },
+    "streetDistance": {
+      "value": 1200,
+      "unit": "m",
+      "min": 100,
+      "max": 10000,
+      "doc": "Carriageways, sidewalks, kerbs and markings of a tile are drawn within this distance of the bus (farther, the ground texture shows the streets)."
+    },
+    "treeDistance": {
+      "value": 1200,
+      "unit": "m",
+      "min": 100,
+      "max": 10000,
+      "doc": "The trees of a tile are drawn within this distance of the bus."
+    },
+    "lightGroundStep": {
+      "value": 5,
+      "unit": "grid points",
+      "min": 1,
+      "max": 25,
+      "integer": true,
+      "doc": "The light ground of a far tile keeps one point out of this many of the 10 m grid (50 m cells): 25 times fewer triangles."
+    },
+    "buildBudget": {
+      "value": 6,
+      "unit": "ms",
+      "min": 1,
+      "max": 50,
+      "doc": "Time spent building the tiles that come near, per frame (at least one tile), so that driving never stutters."
+    }
+  },
   "budget": {
     "modelDistance": {
       "value": 150,

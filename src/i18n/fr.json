@@ -134,7 +134,7 @@
     "passenger": "Passager"
   },
   "debug": {
-    "panel": "x {x} · y {y} · s {s} m · sol {ground} m · eau {water} · {fps} i/s · {calls} appels · {triangles} k triangles · {models} modèles · {sprites} sprites · {buses} autres bus en service",
+    "panel": "x {x} · y {y} · s {s} m · sol {ground} m · eau {water} · {fps} i/s · {calls} appels · {triangles} k triangles · {models} modèles · {sprites} sprites · {buses} autres bus en service · {tiles} tuiles détaillées",
     "noWater": "—",
     "keys": "<b>DEBUG</b> · <b>{keyTurbo}</b> turbo · <b>{keyNextStop} / {keyPreviousStop}</b> arrêt suivant/précédent · <b>clic carte</b> téléporter n'importe où · <b>&stress=200</b> dans l'adresse : 200 véhicules de test · <b>{keyGhost}</b> collisions · <b>{keyFly}</b> vol libre (<b>{keyMove}</b>, <b>{keyFlyUp} / {keyFlyDown}</b> monter/descendre, <b>souris</b> regarder, <b>{keyLand}</b> poser le bus)",
     "on": "Mode debug",
