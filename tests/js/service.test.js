@@ -107,7 +107,9 @@ describe('readParams', () => {
   });
 
   it('reads the game parameters from the URL', () => {
-    vi.stubGlobal('location', { search: '?dir=1&dep=09:15&day=svc&bus=art&s=150&auto&map=2' });
+    vi.stubGlobal('location', {
+      search: '?dir=1&dep=09:15&day=svc&bus=art&s=150&auto&map=2&debug&stop=saint-laurent',
+    });
     expect(readParams()).toEqual({
       dir: 1,
       dep: '09:15',
@@ -117,11 +119,22 @@ describe('readParams', () => {
       auto: true,
       nodecor: false,
       map: 2,
+      debug: true,
+      stop: 'saint-laurent',
     });
   });
 
   it('uses defaults when the URL is empty', () => {
     vi.stubGlobal('location', { search: '' });
-    expect(readParams()).toMatchObject({ dir: 0, dep: '07:32', day: '', bus: 'std', s: null, map: null });
+    expect(readParams()).toMatchObject({
+      dir: 0,
+      dep: '07:32',
+      day: '',
+      bus: 'std',
+      s: null,
+      map: null,
+      debug: false,
+      stop: '',
+    });
   });
 });

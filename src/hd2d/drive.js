@@ -9,10 +9,11 @@
 export class Drive {
   /** @param {Settings['drive']} params @param {Settings['bus']} bus */
   constructor(params, bus) {
-    this.p = params;
     this.bus = bus;
-    this.maxSpeed = params.maxSpeed / 3.6;
-    this.reverseMaxSpeed = params.reverseMaxSpeed / 3.6;
+    this.p = params;
+    this.maxSpeed = 0;
+    this.reverseMaxSpeed = 0;
+    this.tune(params);
     this.x = 0;
     this.y = 0;
     this.h = 0; // essieu arriere
@@ -20,6 +21,16 @@ export class Drive {
     this.delta = 0;
     this.braking = false;
     this.bump = 0; // temps depuis le dernier accrochage
+  }
+
+  /**
+   * Change the driving parameters (debug turbo).
+   * @param {Settings['drive']} params
+   */
+  tune(params) {
+    this.p = params;
+    this.maxSpeed = params.maxSpeed / 3.6;
+    this.reverseMaxSpeed = params.reverseMaxSpeed / 3.6;
   }
 
   /** @param {number} x @param {number} y @param {number} h */

@@ -287,6 +287,27 @@ body {
   color: #fff;
 }
 
+/* debug mode (?debug): position and keys, above the key bar */
+#debug {
+  position: fixed;
+  left: 230px;
+  right: 330px;
+  bottom: 38px;
+  padding: 6px 10px;
+  background: rgba(60, 20, 20, 0.85);
+  border: 2px solid #c0262e;
+  border-radius: 8px;
+  color: #fff;
+  font:
+    12px ui-monospace,
+    Consolas,
+    monospace;
+  line-height: 1.5;
+}
+#debug[hidden] {
+  display: none;
+}
+
 /* mini-carte (composant partage avec le prototype OutRun) */
 #map {
   position: fixed;

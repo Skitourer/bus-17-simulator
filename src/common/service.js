@@ -92,6 +92,8 @@ export function readParams() {
     auto: q.has('auto'),
     nodecor: q.has('nodecor'),
     map: q.has('map') ? +(q.get('map') || 1) : null,
+    debug: q.has('debug'),
+    stop: q.get('stop') || '',
   };
 }
 

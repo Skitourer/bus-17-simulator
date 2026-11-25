@@ -70,6 +70,13 @@ describe('Drive (HD-2D free driving)', () => {
     expect(drive.v).toBe(0);
   });
 
+  it('drives faster once tuned for the turbo', () => {
+    const drive = new Drive(SETTINGS.drive, SETTINGS.bus);
+    drive.tune({ ...SETTINGS.drive, maxSpeed: 150 });
+    run(drive, (dt) => drive.update({ ...NO_INPUT, up: true }, dt, flat, noWalls), 40);
+    expect(drive.v * 3.6).toBeGreaterThan(60);
+  });
+
   it('bounces off buildings and reports at most one collision per 0.6 s', () => {
     const drive = new Drive(SETTINGS.drive, SETTINGS.bus);
     drive.v = 6;

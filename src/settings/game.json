@@ -637,5 +637,42 @@
       "max": 10,
       "doc": "Depth of the quay walls below the water surface."
     }
+  },
+  "debug": {
+    "turboMaxSpeed": {
+      "value": 150,
+      "unit": "km/h",
+      "min": 50,
+      "max": 400,
+      "doc": "Debug mode: top speed with the turbo (Shift held)."
+    },
+    "turboFactor": {
+      "value": 4,
+      "unit": "ratio",
+      "min": 1,
+      "max": 20,
+      "doc": "Debug mode: acceleration and braking multiplier of the turbo."
+    },
+    "flySpeed": {
+      "value": 30,
+      "unit": "m/s",
+      "min": 1,
+      "max": 300,
+      "doc": "Debug mode: speed of the free-flying camera."
+    },
+    "flyFastFactor": {
+      "value": 5,
+      "unit": "ratio",
+      "min": 1,
+      "max": 20,
+      "doc": "Debug mode: speed multiplier of the free-flying camera with Shift held."
+    },
+    "flyMinHeight": {
+      "value": 2,
+      "unit": "m",
+      "min": 0.5,
+      "max": 50,
+      "doc": "Debug mode: the free-flying camera stays this high above the ground."
+    }
   }
 }
