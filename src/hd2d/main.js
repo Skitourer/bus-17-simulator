@@ -21,6 +21,7 @@ import { Mirrors } from './mirrors.js';
 import { eyePosition, lookTarget, steeringWheelAngle } from './views.js';
 /** @typedef {import('./stops.js').StopEvent} StopEvent */
 import { initI18n, t } from '../i18n/i18n.js';
+import { isAction } from '../common/keys.js';
 import { loadSettings } from '../settings/settings.js';
 
 /** @param {string} id */
@@ -111,16 +112,17 @@ resize();
 /** @type {import('../common/types.js').DriveInput} */
 const keys = { up: false, down: false, left: false, right: false };
 /** @type {Record<string, keyof import('../common/types.js').DriveInput>} */
-const KEYMAP = {
-  ArrowUp: 'up',
-  KeyW: 'up',
-  ArrowDown: 'down',
-  KeyS: 'down',
-  ArrowLeft: 'left',
-  KeyA: 'left',
-  ArrowRight: 'right',
-  KeyD: 'right',
-};
+/**
+ * Driving input held by a physical key, if any.
+ * @param {string} code @returns {keyof import('../common/types.js').DriveInput | null}
+ */
+function driveKey(code) {
+  if (isAction('accelerate', code)) return 'up';
+  if (isAction('brake', code)) return 'down';
+  if (isAction('left', code)) return 'left';
+  if (isAction('right', code)) return 'right';
+  return null;
+}
 // assigned once by load(), before the first frame
 /** @type {Ground} */
 let hf;
@@ -657,18 +659,19 @@ function setFlying(on) {
 
 /** Debug keys; returns true when the key was used. @param {KeyboardEvent} e */
 function debugKey(e) {
-  if (e.code === 'ShiftLeft' || e.code === 'ShiftRight') {
+  const is = (/** @type {import('../common/keys.js').Action} */ action) => isAction(action, e.code);
+  if (is('turbo')) {
     flyKeys.fast = true;
     drive.tune(turboParams);
-  } else if (e.code === 'KeyN' || e.code === 'KeyB') {
-    placeAtStop(stepStop(track.stops, progress - B.rearOverhang + doorAhead(), e.code === 'KeyN' ? 1 : -1));
-  } else if (e.code === 'KeyK') {
+  } else if (is('nextStop') || is('previousStop')) {
+    placeAtStop(stepStop(track.stops, progress - B.rearOverhang + doorAhead(), is('nextStop') ? 1 : -1));
+  } else if (is('ghost')) {
     ghost = !ghost;
     toast(t(ghost ? 'debug.ghostOn' : 'debug.ghostOff'));
-  } else if (e.code === 'KeyF') setFlying(!flying);
-  else if (e.code === 'Space') flyKeys.up = true;
-  else if (e.code === 'KeyX') flyKeys.down = true;
-  else if (e.code === 'Enter' && flying) {
+  } else if (is('fly')) setFlying(!flying);
+  else if (is('flyUp')) flyKeys.up = true;
+  else if (is('flyDown')) flyKeys.down = true;
+  else if (is('land') && flying) {
     // the bus lands below the camera, facing where the camera looks
     if (teleport(fly.x, fly.y, fly.yaw)) setFlying(false);
   } else return false;
@@ -677,12 +680,12 @@ function debugKey(e) {
 
 /** @param {KeyboardEvent} e */
 function debugKeyUp(e) {
-  if (e.code === 'ShiftLeft' || e.code === 'ShiftRight') {
+  if (isAction('turbo', e.code)) {
     flyKeys.fast = false;
     drive.tune(S.drive);
   }
-  if (e.code === 'Space') flyKeys.up = false;
-  if (e.code === 'KeyX') flyKeys.down = false;
+  if (isAction('flyUp', e.code)) flyKeys.up = false;
+  if (isAction('flyDown', e.code)) flyKeys.down = false;
 }
 
 function debugPanel() {
@@ -726,42 +729,43 @@ function setPause(p) {
   $('pause').hidden = !p;
 }
 addEventListener('keydown', (e) => {
-  const k = KEYMAP[e.code];
+  const k = driveKey(e.code);
   if (k) {
     keys[k] = true;
     e.preventDefault();
   }
   if (!running) return;
-  if (e.code === 'Space' && !flying) {
+  const is = (/** @type {import('../common/keys.js').Action} */ action) => isAction(action, e.code);
+  if (is('doors') && !flying) {
     if (doors.toggle(drive.v)) toast(t('toast.doorsTooFast'), 'bad');
     e.preventDefault();
   }
-  if (e.code === 'KeyM') minimap.cycleSize();
-  if (e.code === 'KeyP') setPause(!paused);
-  if (e.code === 'Escape') {
+  if (is('map')) minimap.cycleSize();
+  if (is('pause')) setPause(!paused);
+  if (is('menu')) {
     if (paused) location.href = 'index.html';
     else setPause(true);
   }
-  if (e.code === 'KeyC') {
+  if (is('camera')) {
     camMode = (camMode + 1) % VIEW_COUNT;
     zoom = 1;
     orbit.snap();
     const id = interiorView();
     toast(t('toast.camera', { name: t(id ? 'camera.' + id : CAMS[camMode].name) }));
   }
-  if (e.code === 'KeyV') orbit.reset();
-  if (e.code === 'KeyG') {
+  if (is('resetView')) orbit.reset();
+  if (is('guidance')) {
     world.route.visible = !world.route.visible;
     toast(t(world.route.visible ? 'toast.guidanceOn' : 'toast.guidanceOff'));
   }
-  if (e.code === 'KeyR') {
+  if (is('replace')) {
     placeOnRoute(progress - B.rearOverhang);
     toast(t('toast.busReplaced'));
   }
   if (P.debug && debugKey(e)) e.preventDefault();
 });
 addEventListener('keyup', (e) => {
-  const k = KEYMAP[e.code];
+  const k = driveKey(e.code);
   if (k) keys[k] = false;
   if (P.debug) debugKeyUp(e);
 });

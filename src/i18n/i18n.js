@@ -1,4 +1,6 @@
 // @ts-check
+import { guessLayout, keyLabel, keyPlaceholders } from '../common/keys.js';
+
 /**
  * Translations: every player-facing text lives in src/i18n/<lang>.json, looked up by a dotted key.
  * Place names (stops, communes) are data and stay in the local language.
@@ -13,6 +15,8 @@ export const LANGUAGES = ['fr'];
 let messages = {};
 /** Missing keys throw on a development host and show `[key]` elsewhere. */
 let strict = true;
+/** Placeholders available to every text, such as the key labels (`{keyAccelerate}`). */
+let globals = {};
 
 /**
  * Language for the player: `?lang=` in the URL, else the first supported browser language, else French.
@@ -33,19 +37,48 @@ export function setMessages(dict, options = {}) {
   strict = options.strict ?? true;
 }
 
+/** @param {Record<string, string>} params placeholders filled in every text unless a call overrides them */
+export function setGlobalParams(params) {
+  globals = params;
+}
+
+/** @param {string} key @returns {string | undefined} */
+function lookup(key) {
+  /** @type {string | Messages | undefined} */
+  let node = messages;
+  for (const part of key.split('.')) node = typeof node === 'object' ? node[part] : undefined;
+  return typeof node === 'string' ? node : undefined;
+}
+
 /**
  * Translated text for `key`, with `{name}` placeholders replaced by `params`.
  * @param {string} key dotted path, e.g. "toast.missedStop" @param {Record<string, string | number>} [params]
  */
 export function t(key, params = {}) {
-  /** @type {string | Messages | undefined} */
-  let node = messages;
-  for (const part of key.split('.')) node = typeof node === 'object' ? node[part] : undefined;
-  if (typeof node !== 'string') {
+  const text = lookup(key);
+  if (text === undefined) {
     if (strict) throw new Error(`missing translation: ${key}`);
     return `[${key}]`;
   }
-  return node.replace(/\{(\w+)\}/g, (whole, name) => (name in params ? String(params[name]) : whole));
+  /** @type {Record<string, string | number>} */
+  const all = { ...globals, ...params };
+  return text.replace(/\{(\w+)\}/g, (whole, name) => (name in all ? String(all[name]) : whole));
+}
+
+/**
+ * Key labels of the player's keyboard layout (#44), as placeholders. The browser layout map
+ * (`navigator.keyboard`, Chromium only) may be missing or refused (e.g. in a frame); the layout is then
+ * guessed from the language.
+ * @returns {Promise<Record<string, string>>}
+ */
+export async function keyLabelParams() {
+  /** @type {{getLayoutMap?: () => Promise<Map<string, string>>} | undefined} */
+  const keyboard = /** @type {any} */ (navigator).keyboard;
+  /** @type {Map<string, string> | null} */
+  let layoutMap = null;
+  if (keyboard?.getLayoutMap) layoutMap = await keyboard.getLayoutMap().catch(() => null);
+  const layout = guessLayout(navigator.languages);
+  return keyPlaceholders((code) => keyLabel(code, layoutMap, layout, (c) => lookup('keys.' + c)));
 }
 
 /**
@@ -69,6 +102,7 @@ export async function initI18n() {
   if (!res.ok) throw new Error(`language file ${lang}.json: HTTP ${res.status}`);
   const dev = ['localhost', '127.0.0.1'].includes(location.hostname);
   setMessages(await res.json(), { strict: dev });
+  setGlobalParams(await keyLabelParams());
   document.documentElement.lang = lang;
   translatePage(document);
 }

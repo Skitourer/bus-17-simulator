@@ -22,8 +22,8 @@
     "nextDeparture": "Prochain départ réel",
     "noDeparture": "Aucun départ ce jour-là.",
     "start": "Prendre le service ▶",
-    "helpKeys": "<b>Z / ↑</b> accélérer · <b>S / ↓</b> freiner, puis reculer à l'arrêt · <b>Q D / ← →</b> tourner · <b>M</b> carte · <b>molette sur la carte</b> zoom · <b>glisser</b> déplacer la carte · <b>P / Échap</b> pause",
-    "helpCamera": "<b>molette</b> rapprocher / éloigner la caméra · <b>glisser sur la vue</b> tourner autour du bus · <b>V</b> revenir à la vue · <b>C</b> changer de caméra · <b>R</b> replacer le bus sur le parcours. Suis le tracé vert de la ligne : si tu t'en écartes, le jeu te le signale.",
+    "helpKeys": "<b>{keyAccelerate}</b> accélérer · <b>{keyBrake}</b> freiner, puis reculer à l'arrêt · <b>{keySteer}</b> tourner · <b>{keyMap}</b> carte · <b>molette sur la carte</b> zoom · <b>glisser</b> déplacer la carte · <b>{keyPause} / {keyMenu}</b> pause",
+    "helpCamera": "<b>molette</b> rapprocher / éloigner la caméra · <b>glisser sur la vue</b> tourner autour du bus · <b>{keyResetView}</b> revenir à la vue · <b>{keyCamera}</b> changer de caméra · <b>{keyReplace}</b> replacer le bus sur le parcours. Suis le tracé vert de la ligne : si tu t'en écartes, le jeu te le signale.",
     "helpStops": "Pour desservir un arrêt : arrête-toi le long du trottoir, la porte avant à hauteur de l'abri. Les portes s'ouvrent toutes seules.",
     "credits": "Tracé, arrêts, horaires : GTFS M réso (SMMAG, ODbL). Fond de carte, bâtiments, arbres : © contributeurs OpenStreetMap (ODbL). Altitude : IGN RGE ALTI."
   },
@@ -41,13 +41,13 @@
     "zoomIn": "Zoomer (+)",
     "zoomOut": "Dézoomer (-)",
     "follow": "Recentrer sur le bus",
-    "mapSize": "Agrandir / réduire (M)",
-    "keys": "<b>Z/↑</b> accélérer · <b>S/↓</b> freiner/reculer · <b>Q D/← →</b> tourner · <b>Espace</b> portes · <b>C</b> caméra · <b>souris</b> tourner la vue · <b>V</b> revenir à la vue · <b>molette</b> zoom · <b>G</b> guidage · <b>M</b> carte · <b>R</b> replacer · <b>P</b> pause · <b>Échap</b> menu",
+    "mapSize": "Agrandir / réduire ({keyMap})",
+    "keys": "<b>{keyAccelerate}</b> accélérer · <b>{keyBrake}</b> freiner/reculer · <b>{keySteer}</b> tourner · <b>{keyDoors}</b> portes · <b>{keyCamera}</b> caméra · <b>souris</b> tourner la vue · <b>{keyResetView}</b> revenir à la vue · <b>molette</b> zoom · <b>{keyGuidance}</b> guidage · <b>{keyMap}</b> carte · <b>{keyReplace}</b> replacer · <b>{keyPause}</b> pause · <b>{keyMenu}</b> menu",
     "loadingCity": "Construction de Grenoble…",
     "loadingStreets": "Construction des rues et des immeubles…",
     "loadError": "Erreur de chargement : {error}",
     "pause": "PAUSE",
-    "resume": "Reprendre (P)",
+    "resume": "Reprendre ({keyPause})",
     "quit": "Quitter le service",
     "serviceInfo": "{day} · départ {time}",
     "scheduled": "prévu {time}",
@@ -55,7 +55,7 @@
     "early": "avance {delta}",
     "onTime": "à l'heure",
     "terminus": "Terminus",
-    "resetView": "⟲ Revenir à la vue (V)",
+    "resetView": "⟲ Revenir à la vue ({keyResetView})",
     "stopRequested": "ARRÊT DEMANDÉ",
     "peopleWaiting": "VOYAGEURS À L’ARRÊT",
     "doors": {
@@ -92,7 +92,7 @@
   "debug": {
     "panel": "x {x} · y {y} · s {s} m · sol {ground} m · eau {water} · {fps} i/s",
     "noWater": "—",
-    "keys": "<b>DEBUG</b> · <b>Maj</b> turbo · <b>N/B</b> arrêt suivant/précédent · <b>clic carte</b> téléporter n'importe où · <b>K</b> collisions · <b>F</b> vol libre (flèches/ZQSD, <b>Espace/X</b> monter/descendre, <b>souris</b> regarder, <b>Entrée</b> poser le bus)",
+    "keys": "<b>DEBUG</b> · <b>{keyTurbo}</b> turbo · <b>{keyNextStop} / {keyPreviousStop}</b> arrêt suivant/précédent · <b>clic carte</b> téléporter n'importe où · <b>{keyGhost}</b> collisions · <b>{keyFly}</b> vol libre (<b>{keyMove}</b>, <b>{keyFlyUp} / {keyFlyDown}</b> monter/descendre, <b>souris</b> regarder, <b>{keyLand}</b> poser le bus)",
     "on": "Mode debug",
     "unknownStop": "Arrêt « {stop} » introuvable. Arrêts : {stops}",
     "teleported": "Bus placé : {stop}",
@@ -101,6 +101,13 @@
     "flyOn": "Vol libre",
     "flyOff": "Retour au bus",
     "moved": "Bus déplacé · prochain arrêt : {stop}",
-    "blocked": "Emplacement occupé (bâtiment ou eau) : coupe les collisions avec K pour y aller"
+    "blocked": "Emplacement occupé (bâtiment ou eau) : coupe les collisions avec {keyGhost} pour y aller"
+  },
+  "keys": {
+    "Space": "Espace",
+    "Enter": "Entrée",
+    "Escape": "Échap",
+    "ShiftLeft": "Maj",
+    "ShiftRight": "Maj"
   }
 }
