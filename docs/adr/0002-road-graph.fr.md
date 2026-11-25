@@ -16,7 +16,8 @@ découpage des routes et les talus demandent des opérations sur les polygones.
 - `tools/build_roads.py` écrit `data/grenoble/roads.json` : un graphe dont les nœuds sont
   les extrémités de voies et les nœuds OSM partagés, et dont les arêtes sont des tronçons
   avec catégorie, largeur (balise `width`, sinon `lanes` × 3,25 m, sinon une valeur par
-  catégorie), niveau et indicateurs (sens unique, rond-point, pont, tunnel, couloir bus,
+  catégorie ; portée à 5,5 m pour les rues à double sens, et à 6,5 m à double sens ou
+  4 m à sens unique sur les tronçons parcourus par la ligne 17, #45), niveau et indicateurs (sens unique, rond-point, pont, tunnel, couloir bus,
   bretelle). Les voies de desserte et les voies bus sont incluses, pas les allées de
   parking.
 - Des tableaux compacts (tables des catégories et indicateurs en tête de fichier,
