@@ -34,7 +34,8 @@ player's bus, for a few dozen vehicles at 60 steps per second in the browser.
 
 ## Rejected alternatives
 
-- **Traffic lights from OSM**: few are tagged, and timing them is guesswork.
+- **Traffic lights from OSM**: few are tagged, and timing them is guesswork (revisited in
+  ADR 0008).
 - **A traffic library (SUMO and the like)**: native, far too heavy for a browser game.
 - **Gipps or Krauss models**: no simpler, and the IDM is the usual reference with
   published parameters.
