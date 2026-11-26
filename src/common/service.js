@@ -89,6 +89,22 @@ export function serviceDate(sid, cal, now) {
 }
 
 /**
+ * The nearest day to `ymd` (the day itself first, then one day after, one before, two after...) on which
+ * a service runs, by its weekdays: a date chosen for its season keeps a timetable of the right day type.
+ * @param {string} ymd "YYYYMMDD" @param {string | undefined} days seven "0"/"1" flags, Monday first
+ * @returns {string} "YYYYMMDD"
+ */
+export function alignDate(ymd, days) {
+  if (!days || !days.includes('1')) return ymd;
+  const day = midnightOf(ymd);
+  for (const shift of [0, 1, -1, 2, -2, 3, -3]) {
+    const ms = day + shift * DAY_MS;
+    if (days[(Math.floor(ms / DAY_MS) + 3) % 7] === '1') return ymdOf(ms);
+  }
+  return ymd;
+}
+
+/**
  * Date of the game for the player, e.g. "jeudi 26 novembre".
  * @param {string} ymd "YYYYMMDD" @param {string} language BCP 47 tag of the page
  */

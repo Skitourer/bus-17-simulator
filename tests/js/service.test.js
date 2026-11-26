@@ -5,6 +5,7 @@ import {
   delta,
   hm,
   hms,
+  alignDate,
   dateLabel,
   parisToUtc,
   readParams,
@@ -193,5 +194,20 @@ describe('parisToUtc', () => {
 describe('dateLabel', () => {
   it('names the day in the language of the page', () => {
     expect(dateLabel('20261126', 'fr')).toBe('jeudi 26 novembre');
+  });
+});
+
+describe('alignDate', () => {
+  it('keeps a running day and moves to the nearest running day otherwise', () => {
+    // Saturday 2026-07-18 with weekdays only: Friday 17 is one day before, Monday 20 two days after
+    expect(alignDate('20260720', '1111100')).toBe('20260720');
+    expect(alignDate('20260718', '1111100')).toBe('20260717');
+    expect(alignDate('20260719', '1111100')).toBe('20260720');
+    expect(alignDate('20260715', '0000001')).toBe('20260712');
+  });
+
+  it('keeps the date without a calendar', () => {
+    expect(alignDate('20260718', undefined)).toBe('20260718');
+    expect(alignDate('20260718', '0000000')).toBe('20260718');
   });
 });

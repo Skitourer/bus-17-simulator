@@ -47,16 +47,29 @@ export function digits(g, str, x, y, color) {
 
 // ---------------------------------------------------------------- decor
 /** @param {number} seed */
-export function tree(seed) {
+/**
+ * A street tree with the foliage of the season (#70): bare branches show through as the leaves thin out.
+ * @param {number} seed
+ * @param {{dark: string, middle: string, light: string, leaves: number}} foliage CSS colours and leafiness 0..1
+ */
+export function tree(seed, foliage) {
   const r = rng(seed);
   const [c, g] = cv(40, 64);
   g.fillStyle = '#5a4030';
   g.fillRect(18, 34, 4, 30);
   g.fillStyle = '#7a5a40';
   g.fillRect(18, 34, 1, 30);
-  const blobs = 14;
+  // branches: forks from the trunk up into the crown
+  g.fillStyle = '#5a4030';
+  for (let i = 0; i < 7; i++) {
+    const a = -Math.PI / 2 + (r() - 0.5) * 2.2,
+      length = 10 + r() * 10;
+    for (let k = 0; k < length; k++)
+      g.fillRect(Math.round(20 + Math.cos(a) * k), Math.round(34 + Math.sin(a) * k * 1.1), 1, 1);
+  }
+  const blobs = Math.round(14 * foliage.leaves);
   for (let pass = 0; pass < 3; pass++) {
-    g.fillStyle = ['#2f5d2a', '#3f7a35', '#62a04c'][pass];
+    g.fillStyle = [foliage.dark, foliage.middle, foliage.light][pass];
     for (let i = 0; i < blobs; i++) {
       const a = r() * Math.PI * 2,
         d = r() * 11 * (1 - pass * 0.25);

@@ -11,6 +11,7 @@ import {
   ServiceClock,
   serviceLabel,
   serviceDate,
+  alignDate,
   dateLabel,
   parisToUtc,
   hms,
@@ -21,6 +22,7 @@ import {
 import { skyAt } from '../common/astro.js';
 import { skyLook, towards } from './daylight.js';
 import { setBillboardLight } from './instances.js';
+import { dayOfYear, seasonLook } from './season.js';
 import { Ground } from './ground.js';
 import { buildWorld } from './world.js';
 import { makeBus, setBusLights } from './bus3d.js';
@@ -328,7 +330,12 @@ async function load() {
   });
   $('loadMsg').textContent = t('game.loadingStreets');
   await new Promise((r) => setTimeout(r, 30));
-  world = buildWorld(scene, hf, { map, tiles, stops: places, lane }, track, S);
+  // the date only sets the light and the season; the timetable stays the one of the chosen day (#70)
+  gameDate = P.date
+    ? alignDate(P.date, line.calendar[P.day]?.days)
+    : serviceDate(P.day, line.calendar, new Date());
+  const season = seasonLook(dayOfYear(gameDate), S.seasons);
+  world = buildWorld(scene, hf, { map, tiles, stops: places, lane }, track, S, season);
   otherBuses = new OtherBuses(scene, busGeometry(S, 'std'), S.budget);
   solid = { hit: (x, y) => world.index.hit(x, y) || fleet.hit(x, y) };
   bus = makeBus(B, S.lights);
@@ -345,7 +352,6 @@ async function load() {
   minimap.setTrack(track);
   if (P.map) minimap.zoomBy(P.map);
   buildSynoptic();
-  gameDate ||= serviceDate(P.day, line.calendar, new Date());
   $('svc').textContent = t('game.serviceInfo', {
     date: dateLabel(gameDate, document.documentElement.lang),
     day: serviceLabel(P.day, line.calendar),

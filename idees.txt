@@ -16,6 +16,7 @@ Fait
     Bus articulé (#54)
     Mode debug activable dans les réglages et avec F9 (#67)
     Date et heure du jeu, soleil et lune réels, cycle jour/nuit, lampadaires, fenêtres et phares (#55)
+    Choix de la saison ou d'une date : couleurs du paysage, arbres, neige sur les montagnes (#70)
 
 À faire
     Optimisation : ne pas afficher ni simuler tous les objets mobiles de la carte (#47, #12, #19)

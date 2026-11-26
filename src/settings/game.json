@@ -1197,6 +1197,325 @@
       "doc": "Half-angle of the headlight beam."
     }
   },
+  "seasons": {
+    "keys": {
+      "winter": {
+        "day": {
+          "value": 20,
+          "unit": "day of year",
+          "min": 1,
+          "max": 365,
+          "integer": true,
+          "doc": "Winter (mid-January): day of the year of this key moment; the landscape is blended between the two nearest moments, across the new year."
+        },
+        "land": {
+          "value": "#a19e8b",
+          "unit": "colour",
+          "doc": "Winter (mid-January): colour of the plain ground of the city."
+        },
+        "park": {
+          "value": "#8b9068",
+          "unit": "colour",
+          "doc": "Winter (mid-January): colour of the parks and lawns."
+        },
+        "forest": {
+          "value": "#5f6449",
+          "unit": "colour",
+          "doc": "Winter (mid-January): colour of the woods of the city map."
+        },
+        "lowland": {
+          "value": "#8d9173",
+          "unit": "colour",
+          "doc": "Winter (mid-January): colour of the valley floor around the city."
+        },
+        "mountainForest": {
+          "value": "#3e5a3d",
+          "unit": "colour",
+          "doc": "Winter (mid-January): colour of the forests of the mountains."
+        },
+        "leafDark": {
+          "value": "#5c4a38",
+          "unit": "colour",
+          "doc": "Winter (mid-January): dark foliage of the street trees."
+        },
+        "leafMiddle": {
+          "value": "#6e5a44",
+          "unit": "colour",
+          "doc": "Winter (mid-January): middle foliage of the street trees."
+        },
+        "leafLight": {
+          "value": "#84705a",
+          "unit": "colour",
+          "doc": "Winter (mid-January): light foliage of the street trees."
+        },
+        "leaves": {
+          "value": 0,
+          "unit": "ratio",
+          "min": 0,
+          "max": 1,
+          "doc": "Winter (mid-January): how leafy the street trees are (0 bare branches, 1 full)."
+        },
+        "snowLine": {
+          "value": 900,
+          "unit": "m",
+          "min": 0,
+          "max": 5000,
+          "doc": "Winter (mid-January): altitude above which the mountains are white with snow."
+        }
+      },
+      "spring": {
+        "day": {
+          "value": 110,
+          "unit": "day of year",
+          "min": 1,
+          "max": 365,
+          "integer": true,
+          "doc": "Spring (mid-April): day of the year of this key moment; the landscape is blended between the two nearest moments, across the new year."
+        },
+        "land": {
+          "value": "#aaa88c",
+          "unit": "colour",
+          "doc": "Spring (mid-April): colour of the plain ground of the city."
+        },
+        "park": {
+          "value": "#88b25c",
+          "unit": "colour",
+          "doc": "Spring (mid-April): colour of the parks and lawns."
+        },
+        "forest": {
+          "value": "#618c46",
+          "unit": "colour",
+          "doc": "Spring (mid-April): colour of the woods of the city map."
+        },
+        "lowland": {
+          "value": "#9aae72",
+          "unit": "colour",
+          "doc": "Spring (mid-April): colour of the valley floor around the city."
+        },
+        "mountainForest": {
+          "value": "#4b6e3e",
+          "unit": "colour",
+          "doc": "Spring (mid-April): colour of the forests of the mountains."
+        },
+        "leafDark": {
+          "value": "#3a7030",
+          "unit": "colour",
+          "doc": "Spring (mid-April): dark foliage of the street trees."
+        },
+        "leafMiddle": {
+          "value": "#56953f",
+          "unit": "colour",
+          "doc": "Spring (mid-April): middle foliage of the street trees."
+        },
+        "leafLight": {
+          "value": "#8cc464",
+          "unit": "colour",
+          "doc": "Spring (mid-April): light foliage of the street trees."
+        },
+        "leaves": {
+          "value": 0.85,
+          "unit": "ratio",
+          "min": 0,
+          "max": 1,
+          "doc": "Spring (mid-April): how leafy the street trees are (0 bare branches, 1 full)."
+        },
+        "snowLine": {
+          "value": 1700,
+          "unit": "m",
+          "min": 0,
+          "max": 5000,
+          "doc": "Spring (mid-April): altitude above which the mountains are white with snow."
+        }
+      },
+      "summer": {
+        "day": {
+          "value": 200,
+          "unit": "day of year",
+          "min": 1,
+          "max": 365,
+          "integer": true,
+          "doc": "Summer (mid-July): day of the year of this key moment; the landscape is blended between the two nearest moments, across the new year."
+        },
+        "land": {
+          "value": "#a9a68c",
+          "unit": "colour",
+          "doc": "Summer (mid-July): colour of the plain ground of the city."
+        },
+        "park": {
+          "value": "#7ea25a",
+          "unit": "colour",
+          "doc": "Summer (mid-July): colour of the parks and lawns."
+        },
+        "forest": {
+          "value": "#557c41",
+          "unit": "colour",
+          "doc": "Summer (mid-July): colour of the woods of the city map."
+        },
+        "lowland": {
+          "value": "#93a072",
+          "unit": "colour",
+          "doc": "Summer (mid-July): colour of the valley floor around the city."
+        },
+        "mountainForest": {
+          "value": "#4b6b3e",
+          "unit": "colour",
+          "doc": "Summer (mid-July): colour of the forests of the mountains."
+        },
+        "leafDark": {
+          "value": "#2f5d2a",
+          "unit": "colour",
+          "doc": "Summer (mid-July): dark foliage of the street trees."
+        },
+        "leafMiddle": {
+          "value": "#3f7a35",
+          "unit": "colour",
+          "doc": "Summer (mid-July): middle foliage of the street trees."
+        },
+        "leafLight": {
+          "value": "#62a04c",
+          "unit": "colour",
+          "doc": "Summer (mid-July): light foliage of the street trees."
+        },
+        "leaves": {
+          "value": 1,
+          "unit": "ratio",
+          "min": 0,
+          "max": 1,
+          "doc": "Summer (mid-July): how leafy the street trees are (0 bare branches, 1 full)."
+        },
+        "snowLine": {
+          "value": 2900,
+          "unit": "m",
+          "min": 0,
+          "max": 5000,
+          "doc": "Summer (mid-July): altitude above which the mountains are white with snow."
+        }
+      },
+      "autumn": {
+        "day": {
+          "value": 295,
+          "unit": "day of year",
+          "min": 1,
+          "max": 365,
+          "integer": true,
+          "doc": "Autumn (late October): day of the year of this key moment; the landscape is blended between the two nearest moments, across the new year."
+        },
+        "land": {
+          "value": "#aca487",
+          "unit": "colour",
+          "doc": "Autumn (late October): colour of the plain ground of the city."
+        },
+        "park": {
+          "value": "#9c9a5a",
+          "unit": "colour",
+          "doc": "Autumn (late October): colour of the parks and lawns."
+        },
+        "forest": {
+          "value": "#7d6c3c",
+          "unit": "colour",
+          "doc": "Autumn (late October): colour of the woods of the city map."
+        },
+        "lowland": {
+          "value": "#a29a6c",
+          "unit": "colour",
+          "doc": "Autumn (late October): colour of the valley floor around the city."
+        },
+        "mountainForest": {
+          "value": "#565c3a",
+          "unit": "colour",
+          "doc": "Autumn (late October): colour of the forests of the mountains."
+        },
+        "leafDark": {
+          "value": "#8a4a22",
+          "unit": "colour",
+          "doc": "Autumn (late October): dark foliage of the street trees."
+        },
+        "leafMiddle": {
+          "value": "#c0702a",
+          "unit": "colour",
+          "doc": "Autumn (late October): middle foliage of the street trees."
+        },
+        "leafLight": {
+          "value": "#e0a040",
+          "unit": "colour",
+          "doc": "Autumn (late October): light foliage of the street trees."
+        },
+        "leaves": {
+          "value": 0.75,
+          "unit": "ratio",
+          "min": 0,
+          "max": 1,
+          "doc": "Autumn (late October): how leafy the street trees are (0 bare branches, 1 full)."
+        },
+        "snowLine": {
+          "value": 2300,
+          "unit": "m",
+          "min": 0,
+          "max": 5000,
+          "doc": "Autumn (late October): altitude above which the mountains are white with snow."
+        }
+      }
+    },
+    "forestFrom": {
+      "value": 450,
+      "unit": "m",
+      "min": 0,
+      "max": 3000,
+      "doc": "Altitude where the forests of the mountains start."
+    },
+    "forestBlend": {
+      "value": 250,
+      "unit": "m",
+      "min": 1,
+      "max": 1000,
+      "doc": "Height over which the valley floor turns into forest."
+    },
+    "treeLine": {
+      "value": 1500,
+      "unit": "m",
+      "min": 500,
+      "max": 3000,
+      "doc": "Altitude where the forests give way to rock (Northern Alps: about 1 800 m for the last trees, lower for dense forest)."
+    },
+    "rockFrom": {
+      "value": 1750,
+      "unit": "m",
+      "min": 500,
+      "max": 4000,
+      "doc": "Altitude above which the mountains are bare rock."
+    },
+    "rockColor": {
+      "value": "#8c8679",
+      "unit": "colour",
+      "doc": "Colour of the rock of the mountains."
+    },
+    "snowColor": {
+      "value": "#f3f5f8",
+      "unit": "colour",
+      "doc": "Colour of the snow."
+    },
+    "snowFade": {
+      "value": 250,
+      "unit": "m",
+      "min": 1,
+      "max": 1000,
+      "doc": "Height over which the snow cover goes from none to full."
+    },
+    "snowEdge": {
+      "value": 180,
+      "unit": "m",
+      "min": 0,
+      "max": 1000,
+      "doc": "The snow line moves up and down by up to this much from place to place."
+    },
+    "snowOnForest": {
+      "value": 0.55,
+      "unit": "ratio",
+      "min": 0,
+      "max": 1,
+      "doc": "Share of white on a snowy forest (the trees stay partly dark)."
+    }
+  },
   "world": {
     "roadLift": {
       "value": 0.05,
