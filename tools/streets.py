@@ -12,7 +12,15 @@ from typing import Any
 import numpy as np
 import shapely
 from geo import Point, gauss_smooth
-from shapely import LineString, MultiLineString, MultiPolygon, Polygon, STRtree, box, prepare
+from shapely import (
+    LineString,
+    MultiLineString,
+    MultiPolygon,
+    Polygon,
+    STRtree,
+    box,
+    prepare,
+)
 from shapely.geometry.base import BaseGeometry
 from shapely.geometry.polygon import orient
 from shapely.ops import substring
@@ -28,6 +36,7 @@ from shapes import (
     intersects,
     locate,
     points,
+    polygon_parts,
     polygons,
 )
 
@@ -224,6 +233,9 @@ def road_pieces(surface: Polygon | MultiPolygon, ox: float, oy: float, n: int, s
 MIN_BUILDING_AREA = 12.0  # m2, same threshold as build_buildings.py
 BUILDING_CLEARANCE = 0.3  # m kept between a clipped building and the carriageway
 TREE_CLEARANCE = 1.0  # m: no tree trunk closer than this to the carriageway
+# The part of a building above a passage is drawn from this height: room for a bus (3.2 m tall, plus the
+# roof equipment) with a margin
+PASSAGE_CLEARANCE = 4.5  # m
 TREE_DENSITY = {'park': 1 / 700, 'forest': 1 / 160}  # trees per m2 seeded in OSM parks and woods
 MAX_SEEDED_TREES = 800  # per OSM area, keeps big forests cheap to draw
 
@@ -250,6 +262,47 @@ def clip_building(ring: Sequence[Point], keep_out: BaseGeometry) -> list[list[Po
         if isinstance(part, Polygon) and part.area >= MIN_BUILDING_AREA:
             exterior = orient(part).exterior
             out.append([(float(x), float(y)) for x, y in list(exterior.coords)[:-1]])
+    return out
+
+
+def passage_zone(edges: Sequence[RoadEdge]) -> BaseGeometry:
+    """Ground under the building passages: their carriageway grown by the building clearance."""
+    shapes = [
+        LineString(e.coords).buffer(e.width / 2 + BUILDING_CLEARANCE, quad_segs=2)
+        for e in edges
+        if 'passage' in e.flags
+    ]
+    zone = shapely.union_all(shapes)
+    prepare(zone)
+    return zone
+
+
+def lintels(ring: Sequence[Point], zone: BaseGeometry, height: float) -> list[list[Point]]:
+    """Parts of a footprint over a passage (CCW rings), drawn above it when the building is tall enough."""
+    if height < PASSAGE_CLEARANCE + 1.0:
+        return []
+    footprint = Polygon(ring)
+    if not footprint.is_valid:
+        footprint = footprint.buffer(0)
+    if not footprint.intersects(zone):
+        return []
+    return [
+        [(float(x), float(y)) for x, y in list(orient(part).exterior.coords)[:-1]]
+        for part in polygon_parts(footprint.intersection(zone))
+        if part.area >= 1.0
+    ]
+
+
+def tunnel_portals(edges: Sequence[RoadEdge]) -> list[tuple[float, float, float, float]]:
+    """Mouths of the tunnels (x, y, heading into the tunnel, width): tunnel ends joining an open road."""
+    open_nodes = {n for e in edges if e.level != 'tunnel' for n in (e.a, e.b)}
+    out: list[tuple[float, float, float, float]] = []
+    for e in edges:
+        if e.level != 'tunnel' or len(e.coords) < 2:
+            continue
+        for node, (x0, y0), (x1, y1) in ((e.a, e.coords[0], e.coords[1]), (e.b, e.coords[-1], e.coords[-2])):
+            if node in open_nodes:
+                out.append((x0, y0, math.atan2(y1 - y0, x1 - x0), e.width))
     return out
 
 

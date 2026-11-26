@@ -15,7 +15,9 @@ correspondait pas à ce qui était dessiné.
   `data/grenoble/tiles/` :
   - la hauteur des routes : le relief naturel lissé le long de chaque route, raccordé à
     une hauteur commune à chaque carrefour ; les ponts droits entre leurs extrémités ; les
-    tunnels laissés de côté ;
+    tunnels laissés de côté (une entrée en béton est dessinée où ils rejoignent une route à
+    l'air libre ; les passages sous immeuble sont des rues, la partie du bâtiment au-dessus
+    dessinée à partir de 4,5 m, #14) ;
   - une grille de sol de 10 m mise à la hauteur de la route sur la chaussée et 2,5 m à
     côté, puis raccordée au relief naturel sur 8 m (talus) ;
   - la chaussée : union de tous les tronçons à leur vraie largeur (carrefours et
