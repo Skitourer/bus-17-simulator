@@ -9,7 +9,7 @@ from typing import cast
 import numpy as np
 import numpy.typing as npt
 import shapely
-from shapely import LineString, Polygon
+from shapely import LineString, MultiPolygon, Polygon
 from shapely.geometry.base import BaseGeometry
 
 type FloatArray = npt.NDArray[np.float64]
@@ -69,3 +69,12 @@ def clip(geom: BaseGeometry, area: Polygon) -> BaseGeometry:
 def contains(geom: BaseGeometry, pts: GeometryArray) -> npt.NDArray[np.bool_]:
     """Which points lie inside `geom`."""
     return np.asarray(shapely.contains(geom, pts), dtype=np.bool_)
+
+
+def polygon_parts(geom: BaseGeometry) -> list[Polygon]:
+    """Polygons of a geometry (empty for lines and points)."""
+    if isinstance(geom, Polygon):
+        return [] if geom.is_empty else [geom]
+    if isinstance(geom, MultiPolygon):
+        return list(geom.geoms)
+    return [p for g in getattr(geom, 'geoms', []) for p in polygon_parts(g)]

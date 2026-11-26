@@ -1516,6 +1516,51 @@
       "doc": "Share of white on a snowy forest (the trees stay partly dark)."
     }
   },
+  "guidance": {
+    "laneWidth": {
+      "value": 3.25,
+      "unit": "m",
+      "min": 2.5,
+      "max": 4,
+      "source": "CEREMA urban street design guides: lanes of 3.0 to 3.5 m (same value as tools/roads.py)",
+      "doc": "Width of a traffic lane: the guidance strip is drawn in the middle of the right-most lane of each road."
+    },
+    "snapReach": {
+      "value": 12,
+      "unit": "m",
+      "min": 2,
+      "max": 40,
+      "doc": "Farthest road centre line a route point is matched to; beyond it the strip keeps the bus lane of the route."
+    },
+    "snapAngle": {
+      "value": 60,
+      "unit": "°",
+      "min": 10,
+      "max": 90,
+      "doc": "Largest angle between the route and a road for the route to be matched to it: keeps the strip off cross streets and off the opposite lane."
+    },
+    "snapSpread": {
+      "value": 3,
+      "unit": "m",
+      "min": 0.5,
+      "max": 10,
+      "doc": "Usual distance between the GTFS route and the road centre line it runs on: a road this far costs as much as a road at the largest angle."
+    },
+    "jumpCost": {
+      "value": 25,
+      "unit": "cost",
+      "min": 1,
+      "max": 1000,
+      "doc": "Cost of the match leaving a road for one it is not connected to (or for no road), in squared snapSpread units: about 15 m of distance with the default spread, so the match does not flicker between parallel roads."
+    },
+    "smoothing": {
+      "value": 2,
+      "unit": "m",
+      "min": 0,
+      "max": 30,
+      "doc": "Half-length of the moving average of the strip: rounds the corners of the junctions."
+    }
+  },
   "world": {
     "roofPitch": {
       "value": 0.6,
@@ -1818,6 +1863,76 @@
       "min": 10,
       "max": 500,
       "doc": "The player's bus is looked for along each route within this distance of where it was last found."
+    }
+  },
+  "signals": {
+    "green": {
+      "value": 27,
+      "unit": "s",
+      "min": 6,
+      "max": 90,
+      "source": "CEREMA, Les carrefours à feux: urban cycles of 60 to 90 s; IISR part 6: at least 6 s of green",
+      "doc": "Green time of each phase of a signalised junction (two phases per cycle)."
+    },
+    "amber": {
+      "value": 3,
+      "unit": "s",
+      "min": 3,
+      "max": 5,
+      "source": "IISR part 6, art. 110-1: amber of 3 s in built-up areas (5 s outside)",
+      "doc": "Amber time after each green."
+    },
+    "allRed": {
+      "value": 2,
+      "unit": "s",
+      "min": 0,
+      "max": 6,
+      "source": "IISR part 6: clearance red of 1 to 3 s in town",
+      "doc": "Time both phases stay red, so that the junction empties before the other phase goes."
+    },
+    "stopLineGap": {
+      "value": 4,
+      "unit": "m",
+      "min": 0,
+      "max": 15,
+      "doc": "Distance between the edge of the widest crossing road and the stop line: room for the zebra crossing."
+    },
+    "poleSetback": {
+      "value": 0.5,
+      "unit": "m",
+      "min": 0,
+      "max": 3,
+      "doc": "Distance of the light poles beyond the right edge of the road, on the sidewalk."
+    },
+    "junctionReach": {
+      "value": 6,
+      "unit": "m",
+      "min": 1,
+      "max": 30,
+      "doc": "Reach of a signalised junction beyond its farthest node: the bus entering it on red is told."
+    },
+    "poleHeight": {
+      "value": 2.4,
+      "unit": "m",
+      "min": 1.5,
+      "max": 6,
+      "source": "IISR part 6: lower edge of the light heads 2.30 to 3.50 m above the sidewalk",
+      "doc": "Height of the bottom of the light heads above the sidewalk."
+    },
+    "lensSize": {
+      "value": 0.2,
+      "unit": "m",
+      "min": 0.1,
+      "max": 0.4,
+      "source": "NF EN 12368: lenses of 200 mm in town",
+      "doc": "Size of a lamp of the light heads."
+    },
+    "redMinSpeed": {
+      "value": 1,
+      "unit": "m/s",
+      "min": 0,
+      "max": 5,
+      "doc": "Slower than this when entering a junction on red, the bus is not counted as crossing on red (it is being placed)."
     }
   },
   "traffic": {

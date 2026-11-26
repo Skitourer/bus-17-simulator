@@ -13,7 +13,9 @@ each read a terrain that did not match what was drawn.
 - `tools/build_streets.py` precomputes, with shapely, 500 m tiles (each file under 1 MB) in
   `data/grenoble/tiles/`:
   - road heights: the natural terrain smoothed along each road, tied to a common height
-    at every junction; bridges straight between their ends; tunnels left out;
+    at every junction; bridges straight between their ends; tunnels left out (a concrete
+    mouth is drawn where they meet an open road; building passages are streets, the building
+    part above them drawn from 4.5 m, #14);
   - a 10 m ground grid set to the road height on the carriageway and 2.5 m beside it,
     then blended back to the natural terrain over 8 m (banks);
   - the carriageway: union of all road pieces at their real width (junctions and

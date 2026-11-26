@@ -16,6 +16,7 @@ from roads import (
     parse_float,
     road_width,
     route_edges,
+    signal_groups,
     split_ways,
 )
 
@@ -129,3 +130,43 @@ def test_coverage_gap_inside_the_route() -> None:
     b = Edge(3, 4, [(60.0, 0.0), (100.0, 0.0)], 2, {})
     gaps = coverage_gaps([(0.0, 0.0), (100.0, 0.0)], [a, b], 5.0, 1.0)
     assert gaps == [(46.0, 55.0)]
+
+
+def crossroads_edges(nodes: dict[int, Point], centre: int, arms: list[int]) -> list[Edge]:
+    """Edges from a centre node to each arm node."""
+    return [Edge(centre, a, [nodes[centre], nodes[a]], 1, {}) for a in arms]
+
+
+def test_signal_groups_maps_signals_to_the_nearest_junction() -> None:
+    nodes = {1: (0.0, 0.0), 2: (-100.0, 0.0), 3: (100.0, 0.0), 4: (0.0, 100.0), 5: (500.0, 0.0)}
+    edges = [*crossroads_edges(nodes, 1, [2, 3, 4]), Edge(3, 5, [nodes[3], nodes[5]], 2, {})]
+    # one signal before the stop line, one far from any junction (a pedestrian light), one on a bend
+    signals = [(12.0, 3.0), (300.0, 0.0), (99.0, 2.0)]
+    assert signal_groups(signals, nodes, edges, reach=25, gather=30) == [[1]]
+
+
+def test_signal_groups_gathers_close_junctions_in_one_cycle() -> None:
+    nodes = {
+        1: (0.0, 0.0),
+        2: (20.0, 0.0),
+        3: (-100.0, 0.0),
+        4: (0.0, 100.0),
+        5: (120.0, 0.0),
+        6: (20.0, 100.0),
+        7: (200.0, 0.0),
+        8: (200.0, 100.0),
+        9: (300.0, 0.0),
+    }
+    edges = [
+        *crossroads_edges(nodes, 1, [3, 4]),
+        Edge(1, 2, [nodes[1], nodes[2]], 1, {}),
+        *crossroads_edges(nodes, 2, [5, 6]),
+        *crossroads_edges(nodes, 7, [5, 8, 9]),
+    ]
+    signals = [nodes[1], nodes[2], (201.0, 1.0)]
+    assert signal_groups(signals, nodes, edges, reach=25, gather=30) == [[1, 2], [7]]
+
+
+def test_signal_groups_without_junctions() -> None:
+    nodes = {1: (0.0, 0.0), 2: (10.0, 0.0)}
+    assert signal_groups([(0.0, 0.0)], nodes, [Edge(1, 2, [nodes[1], nodes[2]], 1, {})], 25, 30) == []

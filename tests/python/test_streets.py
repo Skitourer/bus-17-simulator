@@ -7,6 +7,7 @@ from streets import (
     BANK,
     BUILDING_CLEARANCE,
     CROSSING_DEPTH,
+    PASSAGE_CLEARANCE,
     SIDEWALK,
     STRIPE,
     TREE_CLEARANCE,
@@ -22,9 +23,11 @@ from streets import (
     junction_radii,
     keep_out_zone,
     kerb_lines,
+    lintels,
     load_edges,
     natural_profiles,
     node_heights,
+    passage_zone,
     road_pieces,
     road_profiles,
     sample_positions,
@@ -33,6 +36,7 @@ from streets import (
     sidewalk_zone,
     smoothstep,
     trimmed,
+    tunnel_portals,
 )
 
 
@@ -233,3 +237,28 @@ def test_crossings_cross_main_roads_next_to_junctions() -> None:
         assert poly.area == pytest.approx(STRIPE * CROSSING_DEPTH)
         assert -10 < poly.centroid.y < -5  # just south of the junction, on the primary road
     assert crossings([RoadEdge(0, 1, 8.0, frozenset(), [(0.0, 0.0), (0.0, 5.0)], 'primary')], {0: 5.0}) == []
+
+
+def test_lintels_keep_the_part_of_a_tall_building_over_a_passage() -> None:
+    passage = RoadEdge(1, 2, 4.0, frozenset({'passage'}), [(0.0, -20.0), (0.0, 20.0)])
+    street = RoadEdge(2, 3, 6.0, frozenset(), [(0.0, 20.0), (0.0, 60.0)])
+    zone = passage_zone([passage, street])
+    block = [(-10.0, -5.0), (10.0, -5.0), (10.0, 5.0), (-10.0, 5.0)]
+    parts = lintels(block, zone, PASSAGE_CLEARANCE + 10)
+    assert len(parts) == 1
+    assert Polygon(parts[0]).area == pytest.approx((4.0 + 2 * BUILDING_CLEARANCE) * 10, rel=0.02)
+    assert Polygon(parts[0]).exterior.is_ccw
+    # too low to span the passage, or away from it
+    assert lintels(block, zone, PASSAGE_CLEARANCE) == []
+    assert lintels([(x + 50, y) for x, y in block], zone, 20) == []
+
+
+def test_tunnel_portals_stand_where_a_tunnel_meets_an_open_road() -> None:
+    road = RoadEdge(1, 2, 6.0, frozenset(), [(-50.0, 0.0), (0.0, 0.0)])
+    tunnel = RoadEdge(2, 3, 7.0, frozenset({'tunnel'}), [(0.0, 0.0), (0.0, 100.0)])
+    blind = RoadEdge(4, 5, 7.0, frozenset({'tunnel'}), [(300.0, 0.0), (300.0, 100.0)])
+    portals = tunnel_portals([road, tunnel, blind])
+    assert portals == [(0.0, 0.0, pytest.approx(np.pi / 2), 7.0)]
+    out = RoadEdge(3, 6, 6.0, frozenset(), [(0.0, 100.0), (0.0, 150.0)])
+    ends = tunnel_portals([road, tunnel, out])
+    assert [round(h, 3) for _, _, h, _ in ends] == [round(np.pi / 2, 3), round(-np.pi / 2, 3)]

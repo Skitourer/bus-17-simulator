@@ -3,6 +3,7 @@
 import numpy as np
 import pytest
 from shapely import MultiPolygon, Polygon, box
+from shapes import polygon_parts
 from streets import TerrainGrid
 from water import (
     FREEBOARD,
@@ -10,7 +11,6 @@ from water import (
     boundary_lines,
     gaussian_blur,
     min_filter,
-    polygon_parts,
     shore_lines,
     water_area,
     water_cut,

@@ -1,5 +1,6 @@
 """Pure road-network logic: OSM ways -> graph of junctions and road pieces (no network, no files)."""
 
+import math
 from collections import Counter
 from collections.abc import Sequence
 from dataclasses import dataclass, field
@@ -178,3 +179,27 @@ def coverage_gaps(
     if start is not None:
         gaps.append((start, line.length))
     return gaps
+
+
+def signal_groups(
+    signals: Sequence[Point], nodes: dict[int, Point], edges: Sequence[Edge], reach: float, gather: float
+) -> list[list[int]]:
+    """Junctions with traffic lights, as groups of node ids sharing one light cycle.
+
+    A signal is mapped to the nearest junction (three roads or more) within `reach` m: OSM puts the signal
+    on the junction node or on each approach, a few metres before the stop line. Signalised junctions
+    closer than `gather` m (dual carriageways crossing) form one group, so their lights stay in step.
+    """
+    degree = Counter(n for e in edges for n in (e.a, e.b))
+    junctions = [n for n, d in degree.items() if d >= 3]
+    lit: set[int] = set()
+    for sx, sy in signals:
+        best = min(junctions, key=lambda n: (nodes[n][0] - sx) ** 2 + (nodes[n][1] - sy) ** 2, default=None)
+        if best is not None and math.dist(nodes[best], (sx, sy)) <= reach:
+            lit.add(best)
+    groups: list[list[int]] = []
+    for node in sorted(lit):
+        near = [g for g in groups if any(math.dist(nodes[node], nodes[other]) <= gather for other in g)]
+        merged = [node] + [n for g in near for n in g]
+        groups = [g for g in groups if g not in near] + [sorted(merged)]
+    return sorted(groups)

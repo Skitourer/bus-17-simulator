@@ -8,9 +8,9 @@ from collections.abc import Callable, Sequence
 
 import numpy as np
 import shapely
-from shapely import LineString, MultiLineString, MultiPolygon, Polygon, box
+from shapely import LineString, MultiLineString, Polygon, box
 from shapely.geometry.base import BaseGeometry
-from shapes import FloatArray, clip, intersections, intersects
+from shapes import FloatArray, clip, intersections, intersects, polygon_parts
 from streets import grid_triangles
 
 MIN_AREA = 20.0  # m2: smaller OSM water areas (fountains, basins) are left painted on the ground
@@ -39,15 +39,6 @@ def water_area(rings: Sequence[Sequence[float]], bounds: tuple[float, float, flo
     if not parts:
         return Polygon()
     return clip(shapely.union_all(parts), box(*bounds))
-
-
-def polygon_parts(geom: BaseGeometry) -> list[Polygon]:
-    """Polygons of a geometry (empty for lines and points)."""
-    if isinstance(geom, Polygon):
-        return [] if geom.is_empty else [geom]
-    if isinstance(geom, MultiPolygon):
-        return list(geom.geoms)
-    return [p for g in getattr(geom, 'geoms', []) for p in polygon_parts(g)]
 
 
 def gaussian_blur(grid: FloatArray, sigma: float) -> FloatArray:
