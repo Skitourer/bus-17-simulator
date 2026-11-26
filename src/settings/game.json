@@ -461,7 +461,13 @@
         "max": 1.45,
         "doc": "Sky view: angle of the camera above the horizon."
       },
-      "fov": { "value": 30, "unit": "°", "min": 10, "max": 100, "doc": "Sky view: vertical field of view." },
+      "fov": {
+        "value": 30,
+        "unit": "°",
+        "min": 10,
+        "max": 100,
+        "doc": "Sky view: vertical field of view."
+      },
       "ahead": {
         "value": 0,
         "unit": "m",
@@ -520,7 +526,13 @@
         "max": 0.8,
         "doc": "Cabin view: angle of the view below the horizon."
       },
-      "fov": { "value": 70, "unit": "°", "min": 30, "max": 100, "doc": "Cabin view: vertical field of view." }
+      "fov": {
+        "value": 70,
+        "unit": "°",
+        "min": 30,
+        "max": 100,
+        "doc": "Cabin view: vertical field of view."
+      }
     },
     "passenger": {
       "eyeFromFront": {
@@ -568,8 +580,20 @@
         "integer": true,
         "doc": "Mirrors: height of their internal image (HD-2D pixels)."
       },
-      "aspect": { "value": 0.8, "unit": "ratio", "min": 0.4, "max": 2, "doc": "Mirrors: width / height." },
-      "fov": { "value": 28, "unit": "°", "min": 10, "max": 90, "doc": "Mirrors: vertical field of view." },
+      "aspect": {
+        "value": 0.8,
+        "unit": "ratio",
+        "min": 0.4,
+        "max": 2,
+        "doc": "Mirrors: width / height."
+      },
+      "fov": {
+        "value": 28,
+        "unit": "°",
+        "min": 10,
+        "max": 90,
+        "doc": "Mirrors: vertical field of view."
+      },
       "widthShare": {
         "value": 0.1,
         "unit": "screen width",
@@ -709,11 +733,6 @@
       "max": 100000,
       "doc": "Farthest distance drawn; the sky dome sits just inside it. Middle choice of the player (default); presets.viewDistance holds the others."
     },
-    "fogColor": {
-      "value": "#c9d8e4",
-      "unit": "colour",
-      "doc": "Colour of the fog and of the sky at the horizon."
-    },
     "fogNear": {
       "value": 900,
       "unit": "m",
@@ -727,36 +746,6 @@
       "min": 1000,
       "max": 100000,
       "doc": "Distance where the fog hides everything. Middle choice of the player (default); presets.viewDistance holds the others."
-    },
-    "skyTopColor": { "value": "#3f74bd", "unit": "colour", "doc": "Colour of the sky at the zenith." },
-    "skyMiddleColor": { "value": "#9cc0e0", "unit": "colour", "doc": "Colour of the sky halfway up." },
-    "skyLightIntensity": {
-      "value": 1.6,
-      "unit": "ratio",
-      "min": 0,
-      "max": 10,
-      "doc": "Intensity of the ambient light from the sky and the ground."
-    },
-    "sunIntensity": {
-      "value": 2.4,
-      "unit": "ratio",
-      "min": 0,
-      "max": 10,
-      "doc": "Intensity of the sunlight."
-    },
-    "sunAzimuth": {
-      "value": 215,
-      "unit": "°",
-      "min": 0,
-      "max": 360,
-      "doc": "Direction of the sun, clockwise from north (215° = south-west, afternoon)."
-    },
-    "sunElevation": {
-      "value": 34,
-      "unit": "°",
-      "min": 5,
-      "max": 90,
-      "doc": "Height of the sun above the horizon."
     },
     "shadowMapSize": {
       "value": 2048,
@@ -772,6 +761,440 @@
       "min": 20,
       "max": 1000,
       "doc": "Half side of the square around the bus where shadows are drawn."
+    }
+  },
+  "daylight": {
+    "keys": {
+      "day": {
+        "elevation": {
+          "value": 12,
+          "unit": "°",
+          "min": -90,
+          "max": 90,
+          "doc": "Day: sun elevation of this key moment; the look is blended between the two nearest moments."
+        },
+        "skyTop": {
+          "value": "#3f74bd",
+          "unit": "colour",
+          "doc": "Day: colour of the sky at the zenith."
+        },
+        "skyMiddle": {
+          "value": "#9cc0e0",
+          "unit": "colour",
+          "doc": "Day: colour of the sky halfway up."
+        },
+        "horizon": {
+          "value": "#c9d8e4",
+          "unit": "colour",
+          "doc": "Day: colour of the fog and of the sky at the horizon."
+        },
+        "light": {
+          "value": "#fff1d6",
+          "unit": "colour",
+          "doc": "Day: colour of the sunlight."
+        },
+        "lightIntensity": {
+          "value": 2.4,
+          "unit": "ratio",
+          "min": 0,
+          "max": 10,
+          "doc": "Day: intensity of the sunlight."
+        },
+        "ambientSky": {
+          "value": "#dfeaff",
+          "unit": "colour",
+          "doc": "Day: ambient light coming from the sky."
+        },
+        "ambientGround": {
+          "value": "#6d6450",
+          "unit": "colour",
+          "doc": "Day: ambient light bounced by the ground."
+        },
+        "ambientIntensity": {
+          "value": 1.6,
+          "unit": "ratio",
+          "min": 0,
+          "max": 10,
+          "doc": "Day: intensity of the ambient light."
+        },
+        "night": {
+          "value": 0,
+          "unit": "ratio",
+          "min": 0,
+          "max": 1,
+          "doc": "Day: how much the street lights, windows and vehicle lights shine (0 off, 1 full)."
+        }
+      },
+      "golden": {
+        "elevation": {
+          "value": 3,
+          "unit": "°",
+          "min": -90,
+          "max": 90,
+          "doc": "Low sun: sun elevation of this key moment; the look is blended between the two nearest moments."
+        },
+        "skyTop": {
+          "value": "#4a6ea6",
+          "unit": "colour",
+          "doc": "Low sun: colour of the sky at the zenith."
+        },
+        "skyMiddle": {
+          "value": "#d6b08c",
+          "unit": "colour",
+          "doc": "Low sun: colour of the sky halfway up."
+        },
+        "horizon": {
+          "value": "#efc39a",
+          "unit": "colour",
+          "doc": "Low sun: colour of the fog and of the sky at the horizon."
+        },
+        "light": {
+          "value": "#ffbf7a",
+          "unit": "colour",
+          "doc": "Low sun: colour of the sunlight."
+        },
+        "lightIntensity": {
+          "value": 1.7,
+          "unit": "ratio",
+          "min": 0,
+          "max": 10,
+          "doc": "Low sun: intensity of the sunlight."
+        },
+        "ambientSky": {
+          "value": "#e6d2bd",
+          "unit": "colour",
+          "doc": "Low sun: ambient light coming from the sky."
+        },
+        "ambientGround": {
+          "value": "#5f5040",
+          "unit": "colour",
+          "doc": "Low sun: ambient light bounced by the ground."
+        },
+        "ambientIntensity": {
+          "value": 1.2,
+          "unit": "ratio",
+          "min": 0,
+          "max": 10,
+          "doc": "Low sun: intensity of the ambient light."
+        },
+        "night": {
+          "value": 0.15,
+          "unit": "ratio",
+          "min": 0,
+          "max": 1,
+          "doc": "Low sun: how much the street lights, windows and vehicle lights shine (0 off, 1 full)."
+        }
+      },
+      "sunset": {
+        "elevation": {
+          "value": -2,
+          "unit": "°",
+          "min": -90,
+          "max": 90,
+          "doc": "Sunset: sun elevation of this key moment; the look is blended between the two nearest moments."
+        },
+        "skyTop": {
+          "value": "#2f4170",
+          "unit": "colour",
+          "doc": "Sunset: colour of the sky at the zenith."
+        },
+        "skyMiddle": {
+          "value": "#a8708a",
+          "unit": "colour",
+          "doc": "Sunset: colour of the sky halfway up."
+        },
+        "horizon": {
+          "value": "#e39a78",
+          "unit": "colour",
+          "doc": "Sunset: colour of the fog and of the sky at the horizon."
+        },
+        "light": {
+          "value": "#ff8c5a",
+          "unit": "colour",
+          "doc": "Sunset: colour of the sunlight."
+        },
+        "lightIntensity": {
+          "value": 0.6,
+          "unit": "ratio",
+          "min": 0,
+          "max": 10,
+          "doc": "Sunset: intensity of the sunlight."
+        },
+        "ambientSky": {
+          "value": "#9c8aa6",
+          "unit": "colour",
+          "doc": "Sunset: ambient light coming from the sky."
+        },
+        "ambientGround": {
+          "value": "#3c3236",
+          "unit": "colour",
+          "doc": "Sunset: ambient light bounced by the ground."
+        },
+        "ambientIntensity": {
+          "value": 1.1,
+          "unit": "ratio",
+          "min": 0,
+          "max": 10,
+          "doc": "Sunset: intensity of the ambient light."
+        },
+        "night": {
+          "value": 0.6,
+          "unit": "ratio",
+          "min": 0,
+          "max": 1,
+          "doc": "Sunset: how much the street lights, windows and vehicle lights shine (0 off, 1 full)."
+        }
+      },
+      "dusk": {
+        "elevation": {
+          "value": -7,
+          "unit": "°",
+          "min": -90,
+          "max": 90,
+          "doc": "Dusk (end of civil twilight at -6°): sun elevation of this key moment; the look is blended between the two nearest moments."
+        },
+        "skyTop": {
+          "value": "#141d3e",
+          "unit": "colour",
+          "doc": "Dusk (end of civil twilight at -6°): colour of the sky at the zenith."
+        },
+        "skyMiddle": {
+          "value": "#3a3462",
+          "unit": "colour",
+          "doc": "Dusk (end of civil twilight at -6°): colour of the sky halfway up."
+        },
+        "horizon": {
+          "value": "#6a4f6e",
+          "unit": "colour",
+          "doc": "Dusk (end of civil twilight at -6°): colour of the fog and of the sky at the horizon."
+        },
+        "light": {
+          "value": "#ff8c5a",
+          "unit": "colour",
+          "doc": "Dusk (end of civil twilight at -6°): colour of the sunlight."
+        },
+        "lightIntensity": {
+          "value": 0,
+          "unit": "ratio",
+          "min": 0,
+          "max": 10,
+          "doc": "Dusk (end of civil twilight at -6°): intensity of the sunlight."
+        },
+        "ambientSky": {
+          "value": "#4f5a8a",
+          "unit": "colour",
+          "doc": "Dusk (end of civil twilight at -6°): ambient light coming from the sky."
+        },
+        "ambientGround": {
+          "value": "#1d1c24",
+          "unit": "colour",
+          "doc": "Dusk (end of civil twilight at -6°): ambient light bounced by the ground."
+        },
+        "ambientIntensity": {
+          "value": 0.75,
+          "unit": "ratio",
+          "min": 0,
+          "max": 10,
+          "doc": "Dusk (end of civil twilight at -6°): intensity of the ambient light."
+        },
+        "night": {
+          "value": 0.9,
+          "unit": "ratio",
+          "min": 0,
+          "max": 1,
+          "doc": "Dusk (end of civil twilight at -6°): how much the street lights, windows and vehicle lights shine (0 off, 1 full)."
+        }
+      },
+      "night": {
+        "elevation": {
+          "value": -14,
+          "unit": "°",
+          "min": -90,
+          "max": 90,
+          "doc": "Night: sun elevation of this key moment; the look is blended between the two nearest moments."
+        },
+        "skyTop": {
+          "value": "#03060f",
+          "unit": "colour",
+          "doc": "Night: colour of the sky at the zenith."
+        },
+        "skyMiddle": {
+          "value": "#0a1226",
+          "unit": "colour",
+          "doc": "Night: colour of the sky halfway up."
+        },
+        "horizon": {
+          "value": "#141c30",
+          "unit": "colour",
+          "doc": "Night: colour of the fog and of the sky at the horizon."
+        },
+        "light": {
+          "value": "#ff8c5a",
+          "unit": "colour",
+          "doc": "Night: colour of the sunlight."
+        },
+        "lightIntensity": {
+          "value": 0,
+          "unit": "ratio",
+          "min": 0,
+          "max": 10,
+          "doc": "Night: intensity of the sunlight."
+        },
+        "ambientSky": {
+          "value": "#34446e",
+          "unit": "colour",
+          "doc": "Night: ambient light coming from the sky."
+        },
+        "ambientGround": {
+          "value": "#101116",
+          "unit": "colour",
+          "doc": "Night: ambient light bounced by the ground."
+        },
+        "ambientIntensity": {
+          "value": 0.45,
+          "unit": "ratio",
+          "min": 0,
+          "max": 10,
+          "doc": "Night: intensity of the ambient light."
+        },
+        "night": {
+          "value": 1,
+          "unit": "ratio",
+          "min": 0,
+          "max": 1,
+          "doc": "Night: how much the street lights, windows and vehicle lights shine (0 off, 1 full)."
+        }
+      }
+    },
+    "moonIntensity": {
+      "value": 0.5,
+      "unit": "ratio",
+      "min": 0,
+      "max": 5,
+      "doc": "Intensity of the light of a full moon high in the sky; it fades with the lit fraction and near the horizon."
+    },
+    "moonColor": {
+      "value": "#a9bcff",
+      "unit": "colour",
+      "doc": "Colour of the moonlight."
+    },
+    "minLightElevation": {
+      "value": 8,
+      "unit": "°",
+      "min": 0,
+      "max": 45,
+      "doc": "The sun or moon light comes from at least this high, so that shadows stay short at sunrise and sunset."
+    }
+  },
+  "lights": {
+    "lampSpacing": {
+      "value": 32,
+      "unit": "m",
+      "min": 10,
+      "max": 200,
+      "doc": "Distance between two street lights along a kerb (Grenoble streets: about 25 to 40 m)."
+    },
+    "lampHeight": {
+      "value": 7,
+      "unit": "m",
+      "min": 3,
+      "max": 15,
+      "doc": "Height of the street lights."
+    },
+    "lampGlowSize": {
+      "value": 3,
+      "unit": "m",
+      "min": 0.5,
+      "max": 10,
+      "doc": "Size of the glowing halo of a street light at night."
+    },
+    "lampColor": {
+      "value": "#ffcf8a",
+      "unit": "colour",
+      "doc": "Colour of the street lights (sodium-like warm white)."
+    },
+    "realLights": {
+      "value": 4,
+      "unit": "count",
+      "min": 0,
+      "max": 8,
+      "integer": true,
+      "doc": "Street lights nearest to the bus that really light the scene at night; the others only glow."
+    },
+    "realLightIntensity": {
+      "value": 60,
+      "unit": "cd",
+      "min": 0,
+      "max": 1000,
+      "doc": "Intensity of each real street light at night."
+    },
+    "realLightDistance": {
+      "value": 28,
+      "unit": "m",
+      "min": 5,
+      "max": 100,
+      "doc": "Reach of a real street light."
+    },
+    "realLightFade": {
+      "value": 45,
+      "unit": "m",
+      "min": 5,
+      "max": 200,
+      "doc": "A real street light fades out over this distance from the bus, so that it does not pop when it moves to a nearer lamp."
+    },
+    "windowShare": {
+      "value": 0.35,
+      "unit": "ratio",
+      "min": 0,
+      "max": 1,
+      "doc": "Share of the windows lit at night."
+    },
+    "windowGlow": {
+      "value": 1,
+      "unit": "ratio",
+      "min": 0,
+      "max": 4,
+      "doc": "Brightness of the lit windows at night."
+    },
+    "windowColor": {
+      "value": "#ffd890",
+      "unit": "colour",
+      "doc": "Colour of the lit windows."
+    },
+    "vehicleLightGlow": {
+      "value": 1.4,
+      "unit": "ratio",
+      "min": 0,
+      "max": 4,
+      "doc": "Brightness of the head, tail and destination lights of the buses at night."
+    },
+    "brakeLightGlow": {
+      "value": 1.6,
+      "unit": "ratio",
+      "min": 0,
+      "max": 4,
+      "doc": "Brightness of the brake lights of the player's bus while braking, day and night."
+    },
+    "headlightIntensity": {
+      "value": 400,
+      "unit": "cd",
+      "min": 0,
+      "max": 5000,
+      "doc": "Intensity of the headlights of the player's bus at night."
+    },
+    "headlightDistance": {
+      "value": 70,
+      "unit": "m",
+      "min": 10,
+      "max": 300,
+      "doc": "Reach of the headlights."
+    },
+    "headlightAngle": {
+      "value": 0.45,
+      "unit": "rad",
+      "min": 0.1,
+      "max": 1.2,
+      "doc": "Half-angle of the headlight beam."
     }
   },
   "world": {
@@ -852,7 +1275,11 @@
       "unit": "colour",
       "doc": "Colour of the water seen from above, before the sky reflection."
     },
-    "foamColor": { "value": "#e6eff2", "unit": "colour", "doc": "Colour of the foam along the banks." },
+    "foamColor": {
+      "value": "#e6eff2",
+      "unit": "colour",
+      "doc": "Colour of the foam along the banks."
+    },
     "quayColor": {
       "value": "#8f8a80",
       "unit": "colour",
@@ -936,6 +1363,13 @@
       "min": 0.5,
       "max": 50,
       "doc": "Debug mode: the free-flying camera stays this high above the ground."
+    },
+    "timeStep": {
+      "value": 1800,
+      "unit": "s",
+      "min": 60,
+      "max": 21600,
+      "doc": "Debug mode: the light jumps this much forward or back in time with the time keys."
     }
   },
   "passengers": {
@@ -993,7 +1427,13 @@
       "integer": true,
       "doc": "Number of different people drawn (clothes, skin and hair picked per look)."
     },
-    "height": { "value": 1.7, "unit": "m", "min": 1, "max": 2.2, "doc": "Height of the people sprites." }
+    "height": {
+      "value": 1.7,
+      "unit": "m",
+      "min": 1,
+      "max": 2.2,
+      "doc": "Height of the people sprites."
+    }
   },
   "fleet": {
     "dwellTime": {

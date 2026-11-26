@@ -115,7 +115,7 @@ describe('applyPreferences', () => {
     expect(low.render.internalLines).toBe(SETTINGS.presets.quality.low.internalLines);
     expect(low.render.fogFar).toBe(SETTINGS.presets.viewDistance.near.fogFar);
     expect(low.gameplay.stopDistance).toBe(SETTINGS.presets.difficulty.easy.stopDistance);
-    expect(low.render.fogColor).toBe(SETTINGS.render.fogColor);
+    expect(low.render.fogNear).toBe(SETTINGS.render.fogNear);
     const high = applyPreferences(SETTINGS, {
       ...DEFAULT_PREFERENCES,
       quality: 'high',

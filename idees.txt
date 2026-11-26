@@ -14,11 +14,12 @@ Fait
     Écran titre et menu de configuration (#46), avec sélection du type de bus, de l'horaire,
     du sens de parcours et du jour (vacances scolaires, semaine, samedi, dimanche et fériés)
     Bus articulé (#54)
+    Mode debug activable dans les réglages et avec F9 (#67)
+    Date et heure du jeu, soleil et lune réels, cycle jour/nuit, lampadaires, fenêtres et phares (#55)
 
 À faire
     Optimisation : ne pas afficher ni simuler tous les objets mobiles de la carte (#47, #12, #19)
     Bus des autres horaires, dans le même sens et en sens inverse (#48)
-    Date et heure du jeu, cycle jour/nuit, lampadaires et phares (#55, #17)
     Véhicules lambda et vélos sur la chaussée (#49)
     Personnes qui se promènent dans la rue (#50)
     Hauteurs réelles des bâtiments (IGN BD TOPO) et styles variés (#56, #16)

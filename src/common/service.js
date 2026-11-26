@@ -62,6 +62,67 @@ export function todayService(services, cal, now = new Date()) {
   return null;
 }
 
+/** Calendar date "YYYYMMDD" of a UTC midnight timestamp. @param {number} ms */
+const ymdOf = (ms) => new Date(ms).toISOString().slice(0, 10).replaceAll('-', '');
+/** UTC midnight timestamp of a calendar date "YYYYMMDD". @param {string} ymd */
+const midnightOf = (ymd) => Date.UTC(+ymd.slice(0, 4), +ymd.slice(4, 6) - 1, +ymd.slice(6, 8));
+const DAY_MS = 86400000;
+
+/**
+ * Date of the game (#55) for a service: today when the service runs today, else its next running day in its
+ * period, else its last one (period over); today when the calendar does not know the service.
+ * @param {string} sid @param {import('./types.js').Calendar} cal @param {Date} now local date of the player
+ * @returns {string} "YYYYMMDD"
+ */
+export function serviceDate(sid, cal, now) {
+  const today = Date.UTC(now.getFullYear(), now.getMonth(), now.getDate());
+  const c = cal[sid];
+  if (!c) return ymdOf(today);
+  const start = midnightOf(c.start),
+    end = midnightOf(c.end);
+  // 1970-01-01 was a Thursday: Monday is 0 as in the GTFS days string
+  /** @param {number} ms */
+  const runs = (ms) => c.days[(Math.floor(ms / DAY_MS) + 3) % 7] === '1';
+  for (let ms = Math.max(today, start); ms <= end; ms += DAY_MS) if (runs(ms)) return ymdOf(ms);
+  for (let ms = end; ms >= start; ms -= DAY_MS) if (runs(ms)) return ymdOf(ms);
+  return ymdOf(today);
+}
+
+/**
+ * Date of the game for the player, e.g. "jeudi 26 novembre".
+ * @param {string} ymd "YYYYMMDD" @param {string} language BCP 47 tag of the page
+ */
+export function dateLabel(ymd, language) {
+  return new Intl.DateTimeFormat(language, {
+    weekday: 'long',
+    day: 'numeric',
+    month: 'long',
+    timeZone: 'UTC',
+  }).format(midnightOf(ymd));
+}
+
+/**
+ * Last Sunday of a month at 01:00 UT, when European summer time starts (March) or ends (October)
+ * (EU directive 2000/84/EC). @param {number} year @param {number} month 0-based
+ */
+function lastSundayOneUtc(year, month) {
+  const last = Date.UTC(year, month + 1, 0, 1);
+  return last - new Date(last).getUTCDay() * DAY_MS;
+}
+
+/**
+ * Instant of a local time in Grenoble (Europe/Paris: UTC+1, UTC+2 in summer time), whatever the time zone
+ * of the player's computer. Times past 24:00 (late services) fall on the next day.
+ * @param {string} ymd "YYYYMMDD" @param {number} seconds since local midnight
+ * @returns {number} milliseconds since 1970-01-01 0h UT
+ */
+export function parisToUtc(ymd, seconds) {
+  const winter = midnightOf(ymd) + seconds * 1000 - 3600000;
+  const year = new Date(winter).getUTCFullYear();
+  const summer = winter >= lastSundayOneUtc(year, 2) && winter < lastSundayOneUtc(year, 9);
+  return summer ? winter - 3600000 : winter;
+}
+
 /** @param {string} hm "HH:MM" or "HH:MM:SS" */
 export const toSec = (hm) => {
   const [h, m, s] = hm.split(':').map(Number);
@@ -85,6 +146,8 @@ export function readParams() {
   const q = new URLSearchParams(location.search);
   return {
     dir: +(q.get('dir') || 0),
+    // game date "YYYYMMDD" (#55); empty: derived from the service
+    date: /^\d{8}$/.test(q.get('date') || '') ? q.get('date') || '' : '',
     dep: q.get('dep') || '07:32',
     day: q.get('day') || '',
     bus: q.get('bus') || 'std',

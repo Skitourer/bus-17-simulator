@@ -29,7 +29,7 @@ describe('game.json', () => {
   it('gives plain values', () => {
     const settings = parseSettings(game);
     expect(settings.drive.maxSpeed).toBe(game.drive.maxSpeed.value);
-    expect(settings.render.fogColor).toBe(game.render.fogColor.value);
+    expect(settings.daylight.moonColor).toBe(game.daylight.moonColor.value);
   });
 
   it.each(settingPaths(game))('%s is used by the game', (path) => {
@@ -46,8 +46,8 @@ describe('game.json', () => {
   it('leaves no tunable numeric constant in the code', () => {
     // a module-level UPPER_CASE name bound to a plain number (or arithmetic on numbers)
     const constant = /^(?:export )?const ([A-Z][A-Z0-9_]*) = -?[\d.]+(?:\s*[-+*/]\s*[\d.]+)*\s*[;,]/gm;
-    // not tunable: texture coordinates of the plain wall texel of the facade texture
-    const allowed = ['PLAIN_U'];
+    // not tunable: layout of the facade texture, and calendar and astronomical constants (#55)
+    const allowed = ['PLAIN_U', 'FACADE_BAYS', 'UNIX_EPOCH_JD', 'J2000', 'DAY_MS'];
     const found = SOURCES.flatMap(({ text }) => [...text.matchAll(constant)].map((m) => m[1]));
     expect(found.filter((name) => !allowed.includes(name))).toEqual([]);
   });

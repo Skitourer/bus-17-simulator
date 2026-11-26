@@ -31,6 +31,8 @@ export const BINDINGS = Object.freeze({
   flyUp: ['Space'],
   flyDown: ['KeyX'],
   land: ['Enter'],
+  laterLight: ['KeyT'],
+  earlierLight: ['KeyY'],
 });
 
 /** @typedef {keyof typeof BINDINGS} Action */

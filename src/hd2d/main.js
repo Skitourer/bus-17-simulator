@@ -6,10 +6,24 @@
 import * as THREE from 'three';
 import { Track } from '../world/track.js';
 import { Minimap } from '../ui/minimap.js';
-import { readParams, ServiceClock, serviceLabel, hms, hm, delta, toSec } from '../common/service.js';
+import {
+  readParams,
+  ServiceClock,
+  serviceLabel,
+  serviceDate,
+  dateLabel,
+  parisToUtc,
+  hms,
+  hm,
+  delta,
+  toSec,
+} from '../common/service.js';
+import { skyAt } from '../common/astro.js';
+import { skyLook, towards } from './daylight.js';
+import { setBillboardLight } from './instances.js';
 import { Ground } from './ground.js';
 import { buildWorld } from './world.js';
-import { makeBus } from './bus3d.js';
+import { makeBus, setBusLights } from './bus3d.js';
 import { busGeometry } from './trailer.js';
 import { Drive, obstacles } from './drive.js';
 import { Post } from './post.js';
@@ -49,7 +63,8 @@ renderer.shadowMap.enabled = true;
 renderer.shadowMap.type = THREE.PCFShadowMap;
 const post = new Post(renderer, S.render.internalLines, S.render.tiltShiftBand);
 const scene = new THREE.Scene();
-const fogColor = new THREE.Color(S.render.fogColor);
+// sky, fog and lights follow the sun and the moon (#55): set by updateDaylight()
+const fogColor = new THREE.Color();
 scene.fog = new THREE.Fog(fogColor, S.render.fogNear, S.render.fogFar);
 scene.background = fogColor;
 const camera = new THREE.PerspectiveCamera(32, 16 / 9, 1, S.render.viewDistance);
@@ -63,8 +78,8 @@ const sky = new THREE.Mesh(
     depthWrite: false,
     fog: false,
     uniforms: {
-      top: { value: new THREE.Color(S.render.skyTopColor) },
-      mid: { value: new THREE.Color(S.render.skyMiddleColor) },
+      top: { value: new THREE.Color() },
+      mid: { value: new THREE.Color() },
       bot: { value: fogColor },
     },
     vertexShader:
@@ -81,16 +96,20 @@ const sky = new THREE.Mesh(
 sky.renderOrder = -1;
 scene.add(sky);
 
-// lumieres : soleil d'apres-midi au sud-ouest, ombres autour du bus
-const hemi = new THREE.HemisphereLight('#dfeaff', '#6d6450', S.render.skyLightIntensity);
+// lumieres : ciel et sol, soleil (ou lune) avec les ombres autour du bus
+const hemi = new THREE.HemisphereLight();
 scene.add(hemi);
-const sun = new THREE.DirectionalLight('#fff1d6', S.render.sunIntensity);
-const sunAzimuth = (S.render.sunAzimuth * Math.PI) / 180,
-  sunElevation = (S.render.sunElevation * Math.PI) / 180;
-const sunDir = new THREE.Vector3(
-  Math.sin(sunAzimuth) * Math.cos(sunElevation),
-  Math.sin(sunElevation),
-  -Math.cos(sunAzimuth) * Math.cos(sunElevation),
+const sun = new THREE.DirectionalLight();
+const sunDir = new THREE.Vector3(0, 1, 0);
+// the street lights nearest to the bus really light the scene at night; a fixed count keeps the shaders
+const lampLights = Array.from({ length: S.lights.realLights }, () => {
+  const light = new THREE.PointLight(S.lights.lampColor, 0, S.lights.realLightDistance);
+  scene.add(light);
+  return light;
+});
+// one beam per headlight, left and right
+const headlights = [-1, 1].map(
+  () => new THREE.SpotLight('#fff4dc', 0, S.lights.headlightDistance, S.lights.headlightAngle, 0.5),
 );
 sun.castShadow = true;
 sun.shadow.mapSize.set(S.render.shadowMapSize, S.render.shadowMapSize);
@@ -160,6 +179,12 @@ const playerLength = B.trailer
     B.trailer.trailerRearOverhang
   : B.bodyLength;
 const clock = new ServiceClock(P.dep);
+/** date of the game "YYYYMMDD" (#55), from the URL or the service @type {string} */
+let gameDate = P.date;
+/** debug mode: shift of the light from the clock (s) */
+let lightShift = 0;
+/** sun elevation of the last daylight update (°), for the debug panel */
+let sunElevation = 0;
 let bumps = 0,
   progress = 0,
   offT = 0,
@@ -306,14 +331,27 @@ async function load() {
   world = buildWorld(scene, hf, { map, tiles, stops: places, lane }, track, S);
   otherBuses = new OtherBuses(scene, busGeometry(S, 'std'), S.budget);
   solid = { hit: (x, y) => world.index.hit(x, y) || fleet.hit(x, y) };
-  bus = makeBus(B);
+  bus = makeBus(B, S.lights);
   scene.add(bus.group);
+  // headlights at the front corners of the bus, aimed at the road ahead
+  headlights.forEach((light, i) => {
+    const side = (i ? 1 : -1) * (B.bodyWidth / 2 - 0.35);
+    light.position.set(B.bodyLength - B.rearOverhang, 0.9, side);
+    light.target.position.set(B.bodyLength - B.rearOverhang + 30, 0, side);
+    bus.group.add(light, light.target);
+  });
   if (bus.trailer) scene.add(bus.trailer.group);
   minimap = new Minimap($('map'), map, line);
   minimap.setTrack(track);
   if (P.map) minimap.zoomBy(P.map);
   buildSynoptic();
-  $('svc').textContent = t('game.serviceInfo', { day: serviceLabel(P.day, line.calendar), time: P.dep });
+  gameDate ||= serviceDate(P.day, line.calendar, new Date());
+  $('svc').textContent = t('game.serviceInfo', {
+    date: dateLabel(gameDate, document.documentElement.lang),
+    day: serviceLabel(P.day, line.calendar),
+    time: P.dep,
+  });
+  updateDaylight();
   placeOnRoute(P.s !== null ? P.s : Math.max(0, track.stops[0].s - 4));
   // arrets deja derriere le point de depart (mode test)
   const plan = drawService(track.stops.length, serviceSeed(P.dep, P.dir), S.gameplay, S.passengers);
@@ -638,11 +676,48 @@ function flyCamera(dt) {
   camera.lookAt(look.x, look.z, -look.y);
 }
 
+/** Sky, fog and lights for the sun and the moon over Grenoble at the time of the game (#55). */
+function updateDaylight() {
+  const [latitude, longitude] = line.origin;
+  const now = skyAt(parisToUtc(gameDate, clock.t + lightShift), latitude, longitude);
+  const look = skyLook(now.sun, now.moon, now.moonLit, S.daylight);
+  sunElevation = now.sun.elevation;
+  const srgb = THREE.SRGBColorSpace;
+  fogColor.setRGB(...look.horizon, srgb);
+  /** @type {THREE.Fog} */ (scene.fog).color.copy(fogColor);
+  sky.material.uniforms.top.value.setRGB(...look.skyTop, srgb);
+  sky.material.uniforms.mid.value.setRGB(...look.skyMiddle, srgb);
+  world.water.uniforms.skyTop.value.setRGB(...look.skyTop, srgb);
+  world.water.uniforms.skyMid.value.setRGB(...look.skyMiddle, srgb);
+  hemi.color.setRGB(...look.ambientSky, srgb);
+  hemi.groundColor.setRGB(...look.ambientGround, srgb);
+  hemi.intensity = look.ambientIntensity;
+  sun.color.setRGB(...look.light.colour, srgb);
+  sun.intensity = look.light.intensity;
+  sunDir.set(...towards(look.light));
+  world.setNight(look.night);
+  setBillboardLight(look.billboard);
+  setBusLights(look.night * S.lights.vehicleLightGlow);
+  for (const light of headlights) light.intensity = (look.night * S.lights.headlightIntensity) / 2;
+  const c = drive.center;
+  const near = world.lamps.nearest(c.x, c.y, lampLights.length);
+  lampLights.forEach((light, i) => {
+    const place = near[i];
+    // the farther lamp fades out before its light moves to another lamp
+    const fade = place
+      ? Math.max(0, 1 - Math.hypot(place[0] - c.x, place[1] - c.y) / S.lights.realLightFade)
+      : 0;
+    light.intensity = look.night * S.lights.realLightIntensity * fade;
+    if (place) light.position.set(place[0], hf.h(place[0], place[1]) + S.lights.lampHeight - 0.5, -place[1]);
+  });
+}
+
 let lastHud = 0;
 function hud() {
   const now = performance.now();
   if (now - lastHud < 100) return;
   lastHud = now;
+  updateDaylight();
   if (debug) debugPanel();
   $('clk').textContent = hms(clock.t);
   $('spd').textContent = String(Math.round(Math.abs(drive.v) * 3.6));
@@ -776,6 +851,10 @@ function debugKey(e) {
     drive.tune(turboParams);
   } else if (is('nextStop') || is('previousStop')) {
     placeAtStop(stepStop(track.stops, progress - B.rearOverhang + doorAhead(), is('nextStop') ? 1 : -1));
+  } else if (is('laterLight') || is('earlierLight')) {
+    lightShift += (is('laterLight') ? 1 : -1) * S.debug.timeStep;
+    updateDaylight();
+    toast(t('debug.lightTime', { time: hm(clock.t + lightShift) }));
   } else if (is('ghost')) {
     ghost = !ghost;
     toast(t(ghost ? 'debug.ghostOn' : 'debug.ghostOff'));
@@ -814,6 +893,7 @@ function debugPanel() {
     models: (stress?.shown.models ?? 0) + otherBuses.shown,
     buses: fleet.buses.length,
     tiles: world.tiles.count,
+    sun: sunElevation.toFixed(1),
     sprites: (stress?.shown.sprites ?? 0) + crowd.pool.geometry.instanceCount,
   });
 }

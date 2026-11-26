@@ -4,7 +4,14 @@
  * departure), the settings (preferences kept in the browser) and the credits. Choices are remembered
  * locally.
  */
-import { serviceLabel, sortedServices, todayService, toSec } from './common/service.js';
+import {
+  dateLabel,
+  serviceDate,
+  serviceLabel,
+  sortedServices,
+  todayService,
+  toSec,
+} from './common/service.js';
 import { LANGUAGES, initI18n, keyLabelParams, t } from './i18n/i18n.js';
 import {
   CHOICES,
@@ -34,7 +41,7 @@ const save = () => {
   }
 };
 
-const sel = { dir: saved.dir ?? 1, bus: saved.bus === 'art' ? 'art' : 'std', day: '', dep: '' };
+const sel = { dir: saved.dir ?? 1, bus: saved.bus === 'art' ? 'art' : 'std', day: '', dep: '', date: '' };
 /** @type {import('./common/types.js').LineData} */
 let line;
 
@@ -98,6 +105,11 @@ function render() {
       render();
     },
   );
+  // the game takes place on a day the service runs (#55)
+  sel.date = serviceDate(sel.day, line.calendar, new Date());
+  $('dateNote').textContent = t('menu.gameDate', {
+    date: dateLabel(sel.date, document.documentElement.lang),
+  });
 
   const deps = d.services[sel.day] || [];
   const now = new Date(),
@@ -133,7 +145,13 @@ function render() {
 }
 
 $('goBtn').onclick = () => {
-  const q = new URLSearchParams({ dir: String(sel.dir), day: sel.day, dep: sel.dep, bus: sel.bus });
+  const q = new URLSearchParams({
+    dir: String(sel.dir),
+    day: sel.day,
+    date: sel.date,
+    dep: sel.dep,
+    bus: sel.bus,
+  });
   location.href = 'hd2d.html?' + q;
 };
 
