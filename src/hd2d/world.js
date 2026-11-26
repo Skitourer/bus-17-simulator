@@ -619,6 +619,62 @@ function routeStrip(hf, track, guide) {
   return m;
 }
 
+/**
+ * Tunnel mouths (#14): a concrete box over the first metres of each tunnel, open towards the road, dark
+ * inside. The ground is not dug: the road disappears into the box.
+ * @param {Ground} hf @param {string} key tile @param {number[][]} portals [x, y, heading (mrad), width] (dm)
+ */
+function tunnelMouths(hf, key, portals) {
+  const [ox, oy] = tileOrigin(hf, key);
+  /** @type {number[]} */
+  const P = [];
+  /** @type {number[]} */
+  const C = [];
+  const concrete = new THREE.Color('#9d998f'),
+    dark = new THREE.Color('#0b0b0c');
+  const m = new THREE.Matrix4();
+  // a cut-and-cover mouth: the clearance of the building passages, 1 m walls and roof, 10 m deep
+  const clearance = 4.5,
+    wall = 1,
+    depth = 10;
+  /** @param {THREE.BufferGeometry} g @param {THREE.Color} col */
+  const add = (g, col) => {
+    const flat = g.toNonIndexed().applyMatrix4(m);
+    P.push(...flat.attributes.position.array);
+    for (let k = 0; k < flat.attributes.position.count; k++) C.push(col.r, col.g, col.b);
+  };
+  for (const [xd, yd, mrad, widthDm] of portals) {
+    const x = ox + xd / 10,
+      y = oy + yd / 10,
+      w = widthDm / 10 + 1;
+    m.makeRotationY(mrad / 1000).setPosition(x, hf.h(x, y), -y);
+    // local frame: +x into the tunnel, +y up, +z across the road
+    for (const side of [-1, 1])
+      add(
+        new THREE.BoxGeometry(depth, clearance, wall).translate(
+          depth / 2,
+          clearance / 2,
+          (side * (w + wall)) / 2,
+        ),
+        concrete,
+      );
+    add(
+      new THREE.BoxGeometry(depth, wall, w + 2 * wall).translate(depth / 2, clearance + wall / 2, 0),
+      concrete,
+    );
+    // the dark inside, a little behind the mouth
+    add(new THREE.PlaneGeometry(w, clearance).rotateY(-Math.PI / 2).translate(0.3, clearance / 2, 0), dark);
+  }
+  const geo = new THREE.BufferGeometry();
+  geo.setAttribute('position', new THREE.Float32BufferAttribute(P, 3));
+  geo.setAttribute('color', new THREE.Float32BufferAttribute(C, 3));
+  geo.computeVertexNormals();
+  const mesh = new THREE.Mesh(geo, new THREE.MeshLambertMaterial({ vertexColors: true }));
+  mesh.castShadow = true;
+  mesh.receiveShadow = true;
+  return mesh;
+}
+
 // ------------------------------------------------------------------ batiments
 const WALLS = [
   '#e8d6b0',
@@ -718,20 +774,18 @@ function walls(lights) {
   return wallMaterial;
 }
 
-/** batiments extrudes d'une tuile, fusionnes en deux maillages (murs, toits) */
 /**
+ * Buildings of a tile, extruded and merged into two meshes (walls, roofs). With `lifts`, each building
+ * starts that high above the ground (parts over a passage, #14): no plinth, and an underside.
  * @param {Ground} hf @param {import('../common/types.js').BuildingsData} data @param {number} seed colour stream
- * @param {THREE.Material} wallMaterial
+ * @param {THREE.Material} wallMaterial @param {number[]} [lifts] m, one per building
  */
-function buildings(hf, data, seed, wallMaterial) {
-  const WP = [],
-    WU = [],
-    WC = [],
-    RP = [],
-    RC = [];
+function buildings(hf, data, seed, wallMaterial, lifts) {
+  /** @type {number[][]} positions, uvs and colours of the walls; positions and colours of the roofs */
+  const [WP, WU, WC, RP, RC] = [[], [], [], [], []];
   const r = rng(seed);
   const col = new THREE.Color();
-  for (const b of data.b) {
+  data.b.forEach((b, index) => {
     const h = b[0] / 10,
       kind = b[1];
     const ring = [];
@@ -743,9 +797,10 @@ function buildings(hf, data, seed, wallMaterial) {
       zmin = Math.min(zmin, z);
       zmax = Math.max(zmax, z);
     }
+    const lift = lifts?.[index] ?? 0;
     const top = zmax + h,
-      base = zmin - 0.5,
-      floor = zmax + 0.2;
+      base = lift ? zmax + lift : zmin - 0.5,
+      floor = lift ? base : zmax + 0.2;
     col.set(kind === 3 ? '#d8cbb0' : WALLS[Math.floor(r() * WALLS.length)]);
     let u = 0;
     for (let i = 0; i < ring.length; i++) {
@@ -756,9 +811,11 @@ function buildings(hf, data, seed, wallMaterial) {
         u1 = (u + L) / 3;
       // deux triangles par quad (ordre anti-horaire vu de l'exterieur : l'anneau est anti-horaire)
       // socle en pierre du point le plus bas au rez-de-chaussee : aucun mur n'est coupe par le relief
-      WP.push(x0, base, -y0, x1, base, -y1, x1, floor, -y1, x0, base, -y0, x1, floor, -y1, x0, floor, -y0);
-      for (let k = 0; k < 6; k++) WU.push(PLAIN_U, PLAIN_V);
-      for (let k = 0; k < 6; k++) WC.push(PLINTH.r, PLINTH.g, PLINTH.b);
+      if (!lift) {
+        WP.push(x0, base, -y0, x1, base, -y1, x1, floor, -y1, x0, base, -y0, x1, floor, -y1, x0, floor, -y0);
+        for (let k = 0; k < 6; k++) WU.push(PLAIN_U, PLAIN_V);
+        for (let k = 0; k < 6; k++) WC.push(PLINTH.r, PLINTH.g, PLINTH.b);
+      }
       // facade du rez-de-chaussee au toit
       WP.push(x0, floor, -y0, x1, floor, -y1, x1, top, -y1, x0, floor, -y0, x1, top, -y1, x0, top, -y0);
       const vf = (floor - top) / 3;
@@ -776,8 +833,14 @@ function buildings(hf, data, seed, wallMaterial) {
         RP.push(ring[k][0], top, -ring[k][1]);
         RC.push(rc.r, rc.g, rc.b);
       }
+      // underside of a building over a passage, in the plinth colour
+      if (lift)
+        for (const k of t) {
+          RP.push(ring[k][0], base, -ring[k][1]);
+          RC.push(PLINTH.r, PLINTH.g, PLINTH.b);
+        }
     }
-  }
+  });
   const wg = new THREE.BufferGeometry();
   wg.setAttribute('position', new THREE.Float32BufferAttribute(WP, 3));
   wg.setAttribute('uv', new THREE.Float32BufferAttribute(WU, 2));
@@ -1103,6 +1166,10 @@ function stops(hf, places, blocked) {
 function tileObjects(ground, tiles) {
   /** @type {import('../common/types.js').BuildingsData} */
   const out = { attribution: '', b: [], trees: [] };
+  /** @type {import('../common/types.js').BuildingsData} parts of buildings over the passages */
+  const over = { attribution: '', b: [], trees: [] };
+  /** @type {number[]} height of each part of `over` above the ground (m) */
+  const lifts = [];
   /** @type {number[]} */
   const trees = [];
   const ix = ground.index;
@@ -1112,10 +1179,14 @@ function tileObjects(ground, tiles) {
       oy = (ix.y0 + tj * ix.size) * 10;
     for (const [h, kind, ...ring] of tile.buildings)
       out.b.push([h, kind, ...ring.map((v, k) => v + (k % 2 ? oy : ox))]);
+    for (const [h, kind, base, ...ring] of tile.lintels ?? []) {
+      over.b.push([h, kind, ...ring.map((v, k) => v + (k % 2 ? oy : ox))]);
+      lifts.push(base / 10);
+    }
     for (let k = 0; k + 1 < tile.trees.length; k += 2)
       trees.push((tile.trees[k] + ox) / 10, (tile.trees[k + 1] + oy) / 10);
   }
-  return { buildings: out, trees };
+  return { buildings: out, trees, over, lifts };
 }
 
 // ------------------------------------------------------------------ assemblage
@@ -1155,6 +1226,11 @@ export function buildWorld(scene, hf, data, track, settings, season) {
       const houses = buildings(hf, objects.buildings, 3 + keys.indexOf(key), walls(lights));
       const block = new THREE.Group();
       block.add(houses.walls, houses.roofs);
+      if (objects.over.b.length) {
+        const above = buildings(hf, objects.over, 3 + keys.indexOf(key), walls(lights), objects.lifts);
+        block.add(above.walls, above.roofs);
+      }
+      if (tile.portals?.length) streets.add(tunnelMouths(hf, key, tile.portals));
       return {
         fineGround: terrainTile(hf, key, tile, groundMaterial),
         streets,

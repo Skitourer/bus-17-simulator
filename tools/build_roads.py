@@ -55,7 +55,10 @@ def edge_flags(tags: dict[str, str]) -> list[str]:
         flags.append('roundabout')
     if tags.get('bridge', 'no') != 'no':
         flags.append('bridge')
-    if tags.get('tunnel', 'no') != 'no' or tags.get('covered') == 'yes':
+    tunnel = tags.get('tunnel', 'no')
+    if tunnel == 'building_passage' or (tunnel == 'no' and tags.get('covered') == 'yes'):
+        flags.append('passage')  # at street level under a building: drawn and driven like a street
+    elif tunnel != 'no':
         flags.append('tunnel')
     if has_bus_lane(tags):
         flags.append('bus_lane')
@@ -65,7 +68,7 @@ def edge_flags(tags: dict[str, str]) -> list[str]:
 
 
 CLASSES = sorted({cls for cls, _ in ROAD_CLASSES.values()})
-FLAGS = ['oneway', 'oneway_reverse', 'roundabout', 'bridge', 'tunnel', 'bus_lane', 'link']
+FLAGS = ['oneway', 'oneway_reverse', 'roundabout', 'bridge', 'tunnel', 'bus_lane', 'link', 'passage']
 
 
 def edge_record(e: Edge, index: dict[int, int], on_bus_route: bool) -> list[int]:

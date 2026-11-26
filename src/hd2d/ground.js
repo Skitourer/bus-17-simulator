@@ -28,6 +28,9 @@ import { Heightfield } from './heightfield.js';
  * @property {number[][]} centre_lines dashed centre lines: [x, y, ...] (dm, relative)
  * @property {number[][]} crossings zebra stripes: [x, y, x, y, x, y, x, y] (dm, relative)
  * @property {number[][]} buildings [height, kind, x, y, ...] (dm; clipped off the carriageway, counter-clockwise)
+ * @property {number[][]} [lintels] [height, kind, base, x, y, ...] parts of buildings over a passage, drawn
+ * from `base` above the ground to `height` (dm, counter-clockwise)
+ * @property {number[][]} [portals] tunnel mouths [x, y, heading into the tunnel (mrad), width] (dm, relative)
  * @property {number[]} trees [x, y, ...] (dm, relative to the tile origin)
  * @property {number[][][]} water water polygons cut along the ground triangles, like `road`
  * @property {number[]} water_level n x n water surface heights (dm), like `ground`; empty without water

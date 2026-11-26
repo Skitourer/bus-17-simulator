@@ -14,6 +14,10 @@ Geometry: see tools/streets.py and ADR 0003. All coordinates in decimetres.
                       "centre_lines": [[x, y, ...], ...]   (dashed, stopped before junctions),
                       "crossings": [[x, y, x, y, x, y, x, y], ...]   (zebra stripes),
                       "buildings": [[height, kind, x, y, ...], ...]   (clipped off the carriageway, CCW),
+                      "lintels": [[height, kind, base, x, y, ...], ...]   (parts of buildings over a
+                                          passage, drawn from `base` above the ground to `height`),
+                      "portals": [[x, y, heading, width], ...]   (tunnel mouths; heading into the tunnel
+                                                                  in milliradians),
                       "trees": [x, y, ...]   (OSM and seeded, off roads and buildings),
                       "water": [[ring, ...], ...]   (water areas cut along the ground triangles, like "road"),
                       "water_level": [z, ...]   (n x n water surface, like "ground"; [] without water),
@@ -38,6 +42,7 @@ from shapes import clip, coordinates, interpolate
 from sources import ROOT, read_json, write_json
 from streets import (
     BUILDING_CLEARANCE,
+    PASSAGE_CLEARANCE,
     PROFILE_STEP,
     TREE_CLEARANCE,
     Profile,
@@ -52,13 +57,16 @@ from streets import (
     junction_radii,
     keep_out_zone,
     kerb_lines,
+    lintels,
     load_edges,
+    passage_zone,
     road_pieces,
     road_profiles,
     sample_positions,
     seeded_trees,
     shaped_ground,
     sidewalk_zone,
+    tunnel_portals,
 )
 from water import shore_lines, water_area, water_cut, water_level
 
@@ -118,17 +126,30 @@ def group_by_tile(
     return out
 
 
+type Footprints = dict[TileKey, list[tuple[int, int, list[Point]]]]
+
+
 def buildings_and_trees(
-    data: dict[str, Any], polys: dict[str, list[list[float]]], surface: BaseGeometry, bx0: float, by0: float
-) -> tuple[dict[TileKey, list[tuple[int, int, list[Point]]]], dict[TileKey, list[Point]]]:
-    """Buildings clipped off the carriageway and trees cleared of roads and buildings, grouped by tile."""
+    data: dict[str, Any],
+    polys: dict[str, list[list[float]]],
+    surface: BaseGeometry,
+    passages: BaseGeometry,
+    origin: Point,
+) -> tuple[Footprints, Footprints, dict[TileKey, list[Point]]]:
+    """Buildings clipped off the carriageway, their parts over passages, and trees cleared of roads and
+    buildings, grouped by tile."""
+    bx0, by0 = origin
     buildings: defaultdict[TileKey, list[tuple[int, int, list[Point]]]] = defaultdict(list)
+    over: defaultdict[TileKey, list[tuple[int, int, list[Point]]]] = defaultdict(list)
     footprints: list[Polygon] = []
     building_zone = keep_out_zone(surface, BUILDING_CLEARANCE)
     clipped = 0
     for rec in data['b']:
         h, kind, *flat = (int(v) for v in rec)
         ring = [(flat[k] / 10, flat[k + 1] / 10) for k in range(0, len(flat), 2)]
+        for part in lintels(ring, passages, h / 10):
+            c = Polygon(part).representative_point()
+            over[tile_of(c.x, c.y, bx0, by0)].append((h, kind, part))
         parts = clip_building(ring, building_zone)
         clipped += parts != [ring]
         for part in parts:
@@ -143,7 +164,8 @@ def buildings_and_trees(
     for x, y in trees:
         by_tile[tile_of(x, y, bx0, by0)].append((x, y))
     print(f'  {len(footprints)} batiments ({clipped} recoupes par la chaussee), {len(trees)} arbres')
-    return buildings, by_tile
+    print(f'  {sum(len(v) for v in over.values())} morceaux au-dessus des passages (> {PASSAGE_CLEARANCE} m)')
+    return buildings, over, by_tile
 
 
 def main() -> None:
@@ -165,9 +187,17 @@ def main() -> None:
     zebras = group_by_tile([(poly, True) for poly in crossings(edges, radii)], bx0, by0)
     kerbs = group_by_tile([(line, False) for line in kerb_lines(surface, sidewalks)], bx0, by0)
     print('batiments et arbres...')
-    by_tile_buildings, by_tile_trees = buildings_and_trees(
-        read_json(os.path.join(DATA, 'buildings.json')), map_data['polys'], surface, bx0, by0
+    by_tile_buildings, by_tile_lintels, by_tile_trees = buildings_and_trees(
+        read_json(os.path.join(DATA, 'buildings.json')),
+        map_data['polys'],
+        surface,
+        passage_zone(edges),
+        (bx0, by0),
     )
+    portals: defaultdict[TileKey, list[tuple[float, float, float, float]]] = defaultdict(list)
+    for portal in tunnel_portals(edges):
+        portals[tile_of(portal[0], portal[1], bx0, by0)].append(portal)
+    print(f'  {sum(len(v) for v in portals.values())} entrees de tunnel')
 
     nx, ny = math.ceil((bx1 - bx0) / TILE), math.ceil((by1 - by0) / TILE)
     print('eau (niveau et rives)...')
@@ -215,6 +245,19 @@ def main() -> None:
                     'buildings': [
                         [h, kind, *(v for x, y in ring for v in (dm(x - ox), dm(y - oy)))]
                         for h, kind, ring in by_tile_buildings.get((i, j), [])
+                    ],
+                    'lintels': [
+                        [
+                            h,
+                            kind,
+                            dm(PASSAGE_CLEARANCE),
+                            *(v for x, y in ring for v in (dm(x - ox), dm(y - oy))),
+                        ]
+                        for h, kind, ring in by_tile_lintels.get((i, j), [])
+                    ],
+                    'portals': [
+                        [dm(x - ox), dm(y - oy), round(heading * 1000), dm(width)]
+                        for x, y, heading, width in portals.get((i, j), [])
                     ],
                     'trees': [v for x, y in by_tile_trees.get((i, j), []) for v in (dm(x - ox), dm(y - oy))],
                     'water': rings_of(MultiPolygon(wet_pieces), ox, oy) if wet_pieces else [],
