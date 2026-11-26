@@ -26,6 +26,7 @@
  * @property {number} desired speed it wants (m/s) @property {number} length @property {number} width
  * @property {number} variant look (colour) @property {number} x @property {number} y @property {number} h
  * @property {number} reserved junction node it may cross, -1 when none
+ * @property {number} previous lane driven before this one, -1 when none
  * @property {boolean} [gone] reached the end of a road that leaves the map
  */
 
@@ -360,6 +361,7 @@ export class Traffic {
     let lane = this.network.lanes[v.lane];
     if (v.s >= lane.length && v.next >= 0) {
       v.s -= lane.length;
+      v.previous = v.lane;
       v.lane = v.next;
       lane = this.network.lanes[v.lane];
       v.next = this.network.nextLane(v.lane, this.random);
@@ -375,23 +377,34 @@ export class Traffic {
 
   /** Position and heading of a vehicle; the heading looks a little ahead to round the corners. @param {Vehicle} v */
   place(v) {
-    const lane = this.network.lanes[v.lane];
-    const at = this.network.pointAt(v.lane, v.s, this.offset(v, lane));
-    let s = v.s + this.p.headingAhead,
-      id = v.lane;
-    if (s > lane.length && v.next >= 0) {
-      s -= lane.length;
-      id = v.next;
-    }
-    const ahead = this.network.pointAt(
-      id,
-      Math.min(s, this.network.lanes[id].length),
-      this.offset(v, this.network.lanes[id]),
-    );
-    v.x = at.x;
-    v.y = at.y;
+    // both axles on the path, the vehicle between them: the rear follows the road instead of swinging out
+    const half = (v.length * this.p.wheelbaseShare) / 2;
+    const front = this.pathPoint(v, v.s + half),
+      rear = this.pathPoint(v, v.s - half);
+    v.x = (front.x + rear.x) / 2;
+    v.y = (front.y + rear.y) / 2;
     v.h =
-      Math.hypot(ahead.x - at.x, ahead.y - at.y) > 0.5 ? Math.atan2(ahead.y - at.y, ahead.x - at.x) : at.h;
+      Math.hypot(front.x - rear.x, front.y - rear.y) > 0.1
+        ? Math.atan2(front.y - rear.y, front.x - rear.x)
+        : front.h;
+  }
+
+  /**
+   * Point of a vehicle's path at distance `s` along its lane, before it on the previous lane or past it on
+   * the next one.
+   * @param {Vehicle} v @param {number} s
+   */
+  pathPoint(v, s) {
+    const lanes = this.network.lanes;
+    let id = v.lane;
+    if (s > lanes[id].length && v.next >= 0) {
+      s -= lanes[id].length;
+      id = v.next;
+    } else if (s < 0 && v.previous >= 0) {
+      id = v.previous;
+      s += lanes[id].length;
+    }
+    return this.network.pointAt(id, Math.min(Math.max(s, 0), lanes[id].length), this.offset(v, lanes[id]));
   }
 
   /** Speed a vehicle wants on a lane. @param {boolean} bike @param {Lane} lane */
@@ -449,6 +462,7 @@ export class Traffic {
         y: 0,
         h: 0,
         reserved: -1,
+        previous: -1,
       };
       v.v = v.desired / 2;
       this.place(v);

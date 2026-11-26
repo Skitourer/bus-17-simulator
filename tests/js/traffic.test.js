@@ -60,6 +60,7 @@ function car(traffic, lane, s, more = {}) {
     y: 0,
     h: 0,
     reserved: -1,
+    previous: -1,
     ...more,
   };
   traffic.place(v);
@@ -207,6 +208,26 @@ describe('Traffic', () => {
     car(traffic, laneOf(n, 1, 2), 150, { v: 8 });
     run(traffic, 20);
     expect(traffic.vehicles).toEqual([]);
+  });
+
+  it('keeps both axles on the path in a bend, the rear on the road it leaves', () => {
+    const n = new RoadNetwork(crossroads(), P.speeds);
+    const traffic = quiet(n);
+    const west = laneOf(n, 0, 1),
+      north = laneOf(n, 1, 2);
+    const c = car(traffic, north, 0.5, { previous: west });
+    const half = (P.carLength * P.wheelbaseShare) / 2;
+    const rear = traffic.pathPoint(c, c.s - half),
+      front = traffic.pathPoint(c, c.s + half);
+    const offset = traffic.offset(c, n.lanes[west]);
+    // the car stands between its axles, pointing from the rear one to the front one
+    expect(c.x).toBeCloseTo((rear.x + front.x) / 2);
+    expect(c.h).toBeCloseTo(Math.atan2(front.y - rear.y, front.x - rear.x));
+    // the rear axle is still on the west road (right of it), the front one on the north road
+    expect(rear.y).toBeCloseTo(-offset, 1);
+    expect(front.x).toBeCloseTo(200 + offset, 1);
+    expect(c.h).toBeGreaterThan(0);
+    expect(c.h).toBeLessThan(Math.PI / 2);
   });
 
   it('fills the streets around the bus and empties them when it leaves', () => {

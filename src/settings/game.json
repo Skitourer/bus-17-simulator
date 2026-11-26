@@ -1979,12 +1979,12 @@
       "max": 60,
       "doc": "A junction held longer than this by a blocked vehicle is given to the next one."
     },
-    "headingAhead": {
-      "value": 3,
-      "unit": "m",
-      "min": 0.5,
-      "max": 10,
-      "doc": "A vehicle points at its path this far ahead, to round the corners."
+    "wheelbaseShare": {
+      "value": 0.6,
+      "unit": "ratio",
+      "min": 0.3,
+      "max": 0.9,
+      "doc": "Distance between the axles as a share of the vehicle length; both axles stay on the path, so the rear follows the road in the bends."
     },
     "spawnRadius": {
       "value": 300,
@@ -2043,6 +2043,27 @@
       "min": 50,
       "max": 2000,
       "doc": "Vehicles are drawn up to this distance from the camera."
+    },
+    "beamLength": {
+      "value": 14,
+      "unit": "m",
+      "min": 2,
+      "max": 40,
+      "doc": "Length of the pool of light the headlights of a car throw on the road at night."
+    },
+    "beamWidth": {
+      "value": 6,
+      "unit": "m",
+      "min": 1,
+      "max": 15,
+      "doc": "Width of the pool of light of the headlights."
+    },
+    "beamGlow": {
+      "value": 0.55,
+      "unit": "ratio",
+      "min": 0,
+      "max": 2,
+      "doc": "Brightness of the pool of light of the headlights at night."
     }
   },
   "tiles": {

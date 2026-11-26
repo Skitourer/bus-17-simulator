@@ -747,6 +747,7 @@ function updateDaylight() {
   sunDir.set(...towards(look.light));
   world.setNight(look.night);
   setBillboardLight(look.billboard);
+  trafficLook.setNight(look.night);
   setBusLights(look.night * S.lights.vehicleLightGlow);
   for (const light of headlights) light.intensity = (look.night * S.lights.headlightIntensity) / 2;
   const c = drive.center;

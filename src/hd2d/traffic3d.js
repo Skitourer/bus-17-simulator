@@ -43,6 +43,29 @@ function mergeBoxes(parts) {
   return geometry;
 }
 
+/**
+ * Pool of light thrown on the road by the headlights: bright near the car, widening and fading ahead.
+ */
+function beamTexture() {
+  const size = 32;
+  const c = document.createElement('canvas');
+  c.width = c.height = size;
+  const g = /** @type {CanvasRenderingContext2D} */ (c.getContext('2d'));
+  const image = g.createImageData(size, size);
+  for (let j = 0; j < size; j++)
+    for (let i = 0; i < size; i++) {
+      const along = i / (size - 1),
+        across = Math.abs(j / (size - 1) - 0.5) * 2;
+      const spread = 0.35 + 0.65 * along;
+      const level = Math.pow(1 - along, 1.5) * Math.max(0, 1 - across / spread);
+      image.data.set([255, 241, 204, Math.round(255 * level)], (j * size + i) * 4);
+    }
+  g.putImageData(image, 0, 0);
+  const texture = new THREE.CanvasTexture(c);
+  texture.colorSpace = THREE.SRGBColorSpace;
+  return texture;
+}
+
 /** @param {string} colour @param {string} [glow] emissive colour of a light */
 function material(colour, glow) {
   const m = new THREE.MeshLambertMaterial({ color: colour });
@@ -97,11 +120,39 @@ export class TrafficLook {
       ),
       light: pool(boxes([0.06, 0.1, 0.1, B * 0.46, 0.8, 0]), material('#f4f0dc', '#fff4d0')),
     };
+    // light of the headlights on the road, shown at night only
+    this.beamMaterial = new THREE.MeshBasicMaterial({
+      map: beamTexture(),
+      transparent: true,
+      opacity: 0,
+      depthWrite: false,
+      blending: THREE.AdditiveBlending,
+      polygonOffset: true,
+      polygonOffsetFactor: -4,
+      polygonOffsetUnits: -8,
+    });
+    this.beam = pool(
+      new THREE.PlaneGeometry(p.beamLength, p.beamWidth)
+        .rotateX(-Math.PI / 2)
+        .translate(L / 2 + p.beamLength / 2, 0.3, 0),
+      this.beamMaterial,
+    );
+    this.beam.mesh.castShadow = false;
+    this.beam.mesh.renderOrder = 15;
     this.colour = new THREE.Color();
     // the colour attribute exists from the start: adding it later would rebuild the shaders
     for (const mesh of [this.cars.body.mesh, this.bikes.rider.mesh])
       for (let i = 0; i < capacity; i++) mesh.setColorAt(i, this.colour.set('#ffffff'));
     this.shown = 0;
+  }
+
+  /**
+   * Night level of the headlight pools, 0 (day) to 1 (night).
+   * @param {number} level
+   */
+  setNight(level) {
+    this.beamMaterial.opacity = level * this.p.beamGlow;
+    this.beamMaterial.visible = level > 0.01;
   }
 
   /**
@@ -128,11 +179,13 @@ export class TrafficLook {
         bikes++;
       } else {
         for (const part of Object.values(this.cars)) part.set(cars, v.x, v.y, z, v.h);
+        this.beam.set(cars, v.x, v.y, z, v.h);
         this.cars.body.mesh.setColorAt(cars, this.colour.set(CAR_COLOURS[v.variant % CAR_COLOURS.length]));
         cars++;
       }
     }
     for (const part of Object.values(this.cars)) part.show(cars);
+    this.beam.show(this.beamMaterial.visible ? cars : 0);
     for (const part of Object.values(this.bikes)) part.show(bikes);
     for (const mesh of [this.cars.body.mesh, this.bikes.rider.mesh])
       if (mesh.instanceColor) mesh.instanceColor.needsUpdate = true;
