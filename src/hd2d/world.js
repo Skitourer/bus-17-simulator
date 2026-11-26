@@ -12,6 +12,7 @@ import { tree, shelter, stopPole } from './sprites.js';
 import { quayWalls, waterSurface } from './water.js';
 import { BillboardPool } from './instances.js';
 import { TileSet } from './tileset.js';
+import { PlaceGrid, placesAlong } from './lamps.js';
 
 /** @typedef {import('./ground.js').Ground} Ground */
 /** @typedef {import('./ground.js').TileData} TileData */
@@ -636,30 +637,90 @@ const PLAIN_U = 0.02,
 /** @type {Record<number, string>} roof colour by building kind (see geo.building_kind) */
 const ROOFS = { 0: '#8a8d93', 1: '#a0543c', 2: '#7c8086', 3: '#6e8a95' };
 
-function facadeTexture() {
-  // une travee x un etage (3 m x 3 m) : mur blanc (teinte par couleur de sommet), fenetre, appui
-  const { c, g } = canvas(16, 16);
+/** Bays and floors of the facade texture: the lit windows repeat every FACADE_BAYS bays and floors. */
+const FACADE_BAYS = 8;
+
+/**
+ * One bay by one floor (3 m x 3 m) of the facade, 16 px, at (x, y) of the canvas.
+ * @param {CanvasRenderingContext2D} g @param {number} x @param {number} y
+ */
+function facadeBay(g, x, y) {
+  // mur blanc (teinte par couleur de sommet), fenetre, appui, volets
   g.fillStyle = '#ffffff';
-  g.fillRect(0, 0, 16, 16);
+  g.fillRect(x, y, 16, 16);
   g.fillStyle = '#eeeeee';
-  g.fillRect(0, 15, 16, 1);
+  g.fillRect(x, y + 15, 16, 1);
   g.fillStyle = '#2d3a4e';
-  g.fillRect(5, 4, 6, 8);
+  g.fillRect(x + 5, y + 4, 6, 8);
   g.fillStyle = '#5d7896';
-  g.fillRect(6, 5, 2, 2);
+  g.fillRect(x + 6, y + 5, 2, 2);
   g.fillStyle = '#d0d0d0';
-  g.fillRect(4, 12, 8, 1);
+  g.fillRect(x + 4, y + 12, 8, 1);
   g.fillStyle = '#9a8a74';
-  g.fillRect(3, 4, 2, 8);
-  g.fillRect(11, 4, 2, 8); // volets
-  const t = NEAREST(new THREE.CanvasTexture(c));
+  g.fillRect(x + 3, y + 4, 2, 8);
+  g.fillRect(x + 11, y + 4, 2, 8);
+}
+
+/** @param {THREE.Texture} t */
+function facadeRepeat(t) {
   t.wrapS = t.wrapT = THREE.RepeatWrapping;
+  // the building UVs count bays and floors; the texture holds FACADE_BAYS of each
+  t.repeat.set(1 / FACADE_BAYS, 1 / FACADE_BAYS);
   return t;
 }
 
+function facadeTexture() {
+  const size = 16 * FACADE_BAYS;
+  const { c, g } = canvas(size, size);
+  for (let i = 0; i < FACADE_BAYS; i++) for (let j = 0; j < FACADE_BAYS; j++) facadeBay(g, i * 16, j * 16);
+  return facadeRepeat(NEAREST(new THREE.CanvasTexture(c)));
+}
+
+/**
+ * Windows lit at night (#55): grey to white where a window glows, black elsewhere.
+ * @param {number} share lit share of the windows
+ */
+function windowGlowTexture(share) {
+  const size = 16 * FACADE_BAYS;
+  const { c, g } = canvas(size, size);
+  g.fillStyle = '#000000';
+  g.fillRect(0, 0, size, size);
+  const r = rng(55);
+  for (let i = 0; i < FACADE_BAYS; i++)
+    for (let j = 0; j < FACADE_BAYS; j++) {
+      if (r() >= share) continue;
+      // curtains: not every lit window is as bright
+      const level = Math.round(170 + r() * 85);
+      g.fillStyle = 'rgb(' + [level, level, level].join(',') + ')';
+      g.fillRect(i * 16 + 5, j * 16 + 4, 6, 8);
+    }
+  return facadeRepeat(NEAREST(new THREE.CanvasTexture(c)));
+}
+
+/** @type {THREE.MeshLambertMaterial | null} */
+let wallMaterial = null;
+/**
+ * Material of the walls of every tile, with the lit windows (off by day).
+ * @param {import('../settings/settings.js').Settings['lights']} lights
+ */
+function walls(lights) {
+  wallMaterial ??= new THREE.MeshLambertMaterial({
+    map: shared('facade', facadeTexture),
+    emissiveMap: shared('windows', () => windowGlowTexture(lights.windowShare)),
+    emissive: new THREE.Color(lights.windowColor),
+    emissiveIntensity: 0,
+    vertexColors: true,
+    side: THREE.DoubleSide,
+  });
+  return wallMaterial;
+}
+
 /** batiments extrudes d'une tuile, fusionnes en deux maillages (murs, toits) */
-/** @param {Ground} hf @param {import('../common/types.js').BuildingsData} data @param {number} seed colour stream */
-function buildings(hf, data, seed) {
+/**
+ * @param {Ground} hf @param {import('../common/types.js').BuildingsData} data @param {number} seed colour stream
+ * @param {THREE.Material} wallMaterial
+ */
+function buildings(hf, data, seed, wallMaterial) {
   const WP = [],
     WU = [],
     WC = [],
@@ -719,14 +780,7 @@ function buildings(hf, data, seed) {
   wg.setAttribute('uv', new THREE.Float32BufferAttribute(WU, 2));
   wg.setAttribute('color', new THREE.Float32BufferAttribute(WC, 3));
   wg.computeVertexNormals();
-  const walls = new THREE.Mesh(
-    wg,
-    new THREE.MeshLambertMaterial({
-      map: shared('facade', facadeTexture),
-      vertexColors: true,
-      side: THREE.DoubleSide,
-    }),
-  );
+  const walls = new THREE.Mesh(wg, wallMaterial);
   const rg = new THREE.BufferGeometry();
   rg.setAttribute('position', new THREE.Float32BufferAttribute(RP, 3));
   rg.setAttribute('color', new THREE.Float32BufferAttribute(RC, 3));
@@ -870,6 +924,99 @@ function treeBillboards(hf, positions) {
   return pool.mesh;
 }
 
+// ------------------------------------------------------------------ lampadaires
+/**
+ * Kerb lines of tiles in world metres, flat [x0, y0, x1, y1, ...].
+ * @param {Ground} ground @param {Map<string, TileData>} tiles
+ */
+function kerbLines(ground, tiles) {
+  const out = [];
+  for (const [key, tile] of tiles) {
+    const [ox, oy] = tileOrigin(ground, key);
+    for (const line of tile.kerbs) out.push(line.map((v, k) => (k % 2 ? oy : ox) + v / 10));
+  }
+  return out;
+}
+
+/** Soft round halo of the street lights. */
+function glowTexture() {
+  const { c, g } = canvas(16, 16);
+  const gradient = g.createRadialGradient(8, 8, 0, 8, 8, 8);
+  gradient.addColorStop(0, 'rgba(255, 255, 255, 1)');
+  gradient.addColorStop(0.35, 'rgba(255, 255, 255, 0.55)');
+  gradient.addColorStop(1, 'rgba(255, 255, 255, 0)');
+  g.fillStyle = gradient;
+  g.fillRect(0, 0, 16, 16);
+  return new THREE.CanvasTexture(c);
+}
+
+/** @type {THREE.PointsMaterial | null} */
+let lampGlow = null;
+/** @param {import('../settings/settings.js').Settings['lights']} lights */
+function glowMaterial(lights) {
+  lampGlow ??= new THREE.PointsMaterial({
+    color: lights.lampColor,
+    size: lights.lampGlowSize,
+    map: shared('glow', glowTexture),
+    transparent: true,
+    opacity: 0,
+    depthWrite: false,
+    blending: THREE.AdditiveBlending,
+  });
+  return lampGlow;
+}
+
+/**
+ * Street lights of a tile (#55): a pole with its lamp every lampSpacing metres along the kerbs, and the
+ * halo of the lamp, shown at night.
+ * @param {Ground} ground @param {number[]} places flat [x, y, ...] world metres
+ * @param {import('../settings/settings.js').Settings['lights']} lights
+ */
+function streetLamps(ground, places, lights) {
+  const group = new THREE.Group();
+  const n = places.length / 2;
+  if (!n) return group;
+  const pole = new THREE.BoxGeometry(0.18, lights.lampHeight, 0.18).translate(0, lights.lampHeight / 2, 0);
+  const head = new THREE.BoxGeometry(0.7, 0.22, 0.4).translate(0, lights.lampHeight, 0);
+  const material = new THREE.MeshLambertMaterial({ color: '#4a4f57' });
+  const poles = new THREE.InstancedMesh(pole, material, n);
+  const heads = new THREE.InstancedMesh(head, material, n);
+  const matrix = new THREE.Matrix4();
+  for (let i = 0; i < n; i++) {
+    const x = places[i * 2],
+      y = places[i * 2 + 1],
+      z = ground.h(x, y);
+    matrix.makeTranslation(x, z, -y);
+    poles.setMatrixAt(i, matrix);
+    heads.setMatrixAt(i, matrix);
+  }
+  group.add(poles, heads);
+  return group;
+}
+
+/**
+ * Halos of all the street lights in one mesh, drawn whatever the tiles around the bus: the city lights
+ * stay on in the distance instead of appearing with each tile.
+ * @param {Ground} ground @param {number[]} places flat [x, y, ...] world metres
+ * @param {import('../settings/settings.js').Settings['lights']} lights
+ */
+function lampHalos(ground, places, lights) {
+  const n = places.length / 2;
+  const glow = new Float32Array(n * 3);
+  for (let i = 0; i < n; i++) {
+    const x = places[i * 2],
+      y = places[i * 2 + 1];
+    // just under the lamp head, so that the head does not hide it from above
+    glow.set([x, ground.h(x, y) + lights.lampHeight - 0.4, -y], i * 3);
+  }
+  const points = new THREE.BufferGeometry();
+  points.setAttribute('position', new THREE.BufferAttribute(glow, 3));
+  const halos = new THREE.Points(points, glowMaterial(lights));
+  halos.renderOrder = 20;
+  halos.frustumCulled = false;
+  return halos;
+}
+
 // ------------------------------------------------------------------ arrets
 /**
  * True when a building stands where the shelter would go: some streets of the route have a sidewalk too
@@ -971,6 +1118,7 @@ function tileObjects(ground, tiles) {
  */
 export function buildWorld(scene, hf, data, track, settings) {
   const street = settings.world;
+  const { lights } = settings;
   scene.add(terrainCoarse(hf.natural));
   const groundMaterial = new THREE.MeshLambertMaterial({ map: groundTexture(data.map, hf.bounds) });
   const ix = hf.index;
@@ -988,8 +1136,13 @@ export function buildWorld(scene, hf, data, track, settings) {
       const one = new Map([[key, tile]]);
       const objects = tileObjects(hf, one);
       const streets = new THREE.Group();
-      streets.add(roadSurface(hf, one, street), sidewalks(hf, one, street), streetDetails(hf, one, street));
-      const houses = buildings(hf, objects.buildings, 3 + keys.indexOf(key));
+      streets.add(
+        roadSurface(hf, one, street),
+        sidewalks(hf, one, street),
+        streetDetails(hf, one, street),
+        streetLamps(hf, placesAlong(kerbLines(hf, one), lights.lampSpacing), lights),
+      );
+      const houses = buildings(hf, objects.buildings, 3 + keys.indexOf(key), walls(lights));
       const block = new THREE.Group();
       block.add(houses.walls, houses.roofs);
       return {
@@ -1002,7 +1155,7 @@ export function buildWorld(scene, hf, data, track, settings) {
     settings.tiles,
   );
   scene.add(bridges(hf));
-  const water = waterSurface(hf, data.tiles, settings.water, settings.render);
+  const water = waterSurface(hf, data.tiles, settings.water);
   scene.add(water, quayWalls(hf, data.tiles, settings.water));
   const route = routeStrip(hf, track, data.lane);
   scene.add(route);
@@ -1010,8 +1163,23 @@ export function buildWorld(scene, hf, data, track, settings) {
   const footprints = footprintsOf(tileObjects(hf, data.tiles).buildings);
   const blocked = data.stops.map((place) => shelterBlocked(footprints, place));
   scene.add(stops(hf, data.stops, blocked));
+  // every street light: halos everywhere, and the few real lights that follow the bus at night
+  const lampPlaces = placesAlong(kerbLines(hf, data.tiles), lights.lampSpacing);
+  scene.add(lampHalos(hf, lampPlaces, lights));
+  const lamps = new PlaceGrid(lampPlaces, 100);
   return {
     route,
+    lamps,
+    /**
+     * Night level of the street lights and the windows, 0 (day) to 1 (night).
+     * @param {number} level
+     */
+    setNight(level) {
+      walls(lights).emissiveIntensity = level * lights.windowGlow;
+      const glow = glowMaterial(lights);
+      glow.opacity = level;
+      glow.visible = level > 0.01;
+    },
     index: new FootprintIndex(footprints, track),
     water: water.material,
     shelters: blocked.map((b) => !b),

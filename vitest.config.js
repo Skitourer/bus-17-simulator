@@ -14,6 +14,7 @@ export default defineConfig({
       // pure logic only; rendering and UI modules are checked in the browser
       include: [
         'src/common/service.js',
+        'src/common/astro.js',
         'src/common/keys.js',
         'src/i18n/i18n.js',
         'src/world/track.js',
@@ -27,6 +28,8 @@ export default defineConfig({
         'src/hd2d/budget.js',
         'src/hd2d/fleet.js',
         'src/hd2d/tiling.js',
+        'src/hd2d/daylight.js',
+        'src/hd2d/lamps.js',
         'src/hd2d/debug.js',
         'src/hd2d/stops.js',
         'src/hd2d/views.js',

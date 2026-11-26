@@ -11,6 +11,17 @@ import * as THREE from 'three';
  * Sprites of one atlas (variants side by side), anchored at their feet, turned around the vertical axis to
  * face the camera.
  */
+/** Light on every billboard (#55): white by day, dark at night; billboards have no normals to light. */
+const BILLBOARD_LIGHT = { value: new THREE.Color(1, 1, 1) };
+
+/**
+ * Colour the billboards are multiplied by, sRGB 0..1.
+ * @param {[number, number, number]} tint
+ */
+export function setBillboardLight(tint) {
+  BILLBOARD_LIGHT.value.setRGB(...tint, THREE.SRGBColorSpace);
+}
+
 export class BillboardPool {
   /**
    * @param {HTMLCanvasElement | THREE.Texture} atlas variants of equal width, side by side (a texture may be
@@ -40,8 +51,11 @@ export class BillboardPool {
     geometry.instanceCount = 0;
     this.geometry = geometry;
     this.capacity = capacity;
+    const uniforms = THREE.UniformsUtils.merge([THREE.UniformsLib.fog, { map: { value: map } }]);
+    // shared by reference (merge would copy it): one update lights every pool
+    uniforms.light = BILLBOARD_LIGHT;
     const material = new THREE.ShaderMaterial({
-      uniforms: THREE.UniformsUtils.merge([THREE.UniformsLib.fog, { map: { value: map } }]),
+      uniforms,
       fog: true,
       vertexShader: `
         attribute vec3 offset; attribute vec2 scale; attribute float variant;
@@ -58,12 +72,13 @@ export class BillboardPool {
         }`,
       fragmentShader: `
         uniform sampler2D map;
+        uniform vec3 light;
         varying vec2 vUv;
         #include <fog_pars_fragment>
         void main() {
           vec4 c = texture2D(map, vUv);
           if (c.a < 0.5) discard;
-          gl_FragColor = vec4(c.rgb, 1.0);
+          gl_FragColor = vec4(c.rgb * light, 1.0);
           #include <colorspace_fragment>
           #include <fog_fragment>
         }`,

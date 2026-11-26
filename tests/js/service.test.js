@@ -5,7 +5,10 @@ import {
   delta,
   hm,
   hms,
+  dateLabel,
+  parisToUtc,
   readParams,
+  serviceDate,
   serviceDayType,
   serviceLabel,
   sortedServices,
@@ -108,10 +111,12 @@ describe('readParams', () => {
 
   it('reads the game parameters from the URL', () => {
     vi.stubGlobal('location', {
-      search: '?dir=1&dep=09:15&day=svc&bus=art&s=150&auto&map=2&debug&stop=saint-laurent&stress=200',
+      search:
+        '?dir=1&date=20261224&dep=09:15&day=svc&bus=art&s=150&auto&map=2&debug&stop=saint-laurent&stress=200',
     });
     expect(readParams()).toEqual({
       dir: 1,
+      date: '20261224',
       dep: '09:15',
       day: 'svc',
       bus: 'art',
@@ -129,6 +134,7 @@ describe('readParams', () => {
     vi.stubGlobal('location', { search: '' });
     expect(readParams()).toMatchObject({
       dir: 0,
+      date: '',
       dep: '07:32',
       day: '',
       bus: 'std',
@@ -138,5 +144,54 @@ describe('readParams', () => {
       stop: '',
       stress: 0,
     });
+  });
+});
+
+describe('serviceDate', () => {
+  it('is today when the service runs today', () => {
+    // Saturday 2026-09-05
+    expect(serviceDate('X-SAHfi-Samedi', CAL, new Date(2026, 8, 5, 10))).toBe('20260905');
+  });
+
+  it('is the next running day in the period', () => {
+    // Thursday 2026-09-03 -> Sunday 2026-09-06
+    expect(serviceDate('X-DFHfi-Dimanche', CAL, new Date(2026, 8, 3))).toBe('20260906');
+    // before the period: its first running day, Monday 2027-01-04
+    expect(serviceDate('X-LVIfi-Semaine', CAL, new Date(2026, 11, 20))).toBe('20270101');
+  });
+
+  it('is the last running day of a period that is over, else today', () => {
+    // Friday 2026-03-20 is the last day of X-other
+    expect(serviceDate('X-other', CAL, new Date(2026, 5, 1))).toBe('20260320');
+    expect(serviceDate('X-none', CAL, new Date(2026, 5, 1))).toBe('20260601');
+    const never = { 'X-never': { days: '0000000', start: '20260101', end: '20260110' } };
+    expect(serviceDate('X-never', never, new Date(2026, 5, 1))).toBe('20260601');
+  });
+});
+
+describe('parisToUtc', () => {
+  it('is UTC+1 in winter and UTC+2 in summer time', () => {
+    expect(new Date(parisToUtc('20261126', 7 * 3600 + 32 * 60)).toISOString()).toBe(
+      '2026-11-26T06:32:00.000Z',
+    );
+    expect(new Date(parisToUtc('20260621', 12 * 3600)).toISOString()).toBe('2026-06-21T10:00:00.000Z');
+  });
+
+  it('changes on the last Sundays of March and October at 01:00 UT', () => {
+    // 2026: summer time from Sunday 29 March to Sunday 25 October
+    expect(new Date(parisToUtc('20260329', 1 * 3600)).toISOString()).toBe('2026-03-29T00:00:00.000Z');
+    expect(new Date(parisToUtc('20260329', 4 * 3600)).toISOString()).toBe('2026-03-29T02:00:00.000Z');
+    expect(new Date(parisToUtc('20261025', 4 * 3600)).toISOString()).toBe('2026-10-25T03:00:00.000Z');
+    expect(new Date(parisToUtc('20261024', 4 * 3600)).toISOString()).toBe('2026-10-24T02:00:00.000Z');
+  });
+
+  it('puts times past midnight on the next day', () => {
+    expect(new Date(parisToUtc('20261126', 25 * 3600)).toISOString()).toBe('2026-11-27T00:00:00.000Z');
+  });
+});
+
+describe('dateLabel', () => {
+  it('names the day in the language of the page', () => {
+    expect(dateLabel('20261126', 'fr')).toBe('jeudi 26 novembre');
   });
 });

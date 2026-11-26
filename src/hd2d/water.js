@@ -58,9 +58,9 @@ void main() {
 /**
  * Water surfaces of every tile, one mesh.
  * @param {Ground} ground @param {Map<string, TileData>} tiles
- * @param {Settings['water']} params @param {Settings['render']} render
+ * @param {Settings['water']} params
  */
-export function waterSurface(ground, tiles, params, render) {
+export function waterSurface(ground, tiles, params) {
   /** @type {number[]} */
   const P = [];
   /** @type {number[]} */
@@ -101,8 +101,9 @@ export function waterSurface(ground, tiles, params, render) {
         foamWidth: { value: params.foamWidth },
         deep: { value: new THREE.Color(params.deepColor) },
         foam: { value: new THREE.Color(params.foamColor) },
-        skyTop: { value: new THREE.Color(render.skyTopColor) },
-        skyMid: { value: new THREE.Color(render.skyMiddleColor) },
+        // reflected sky, set with the daylight (#55)
+        skyTop: { value: new THREE.Color() },
+        skyMid: { value: new THREE.Color() },
       },
     ]),
     vertexShader: VERTEX,

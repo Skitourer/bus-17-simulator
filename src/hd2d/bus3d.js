@@ -110,6 +110,87 @@ function side(bus, spec) {
   });
 }
 
+/** Destination sign of the front: line number and text. @param {CanvasRenderingContext2D} g @param {number} w */
+function frontSign(g, w) {
+  digits(g, '17', 9, 4, C.amber);
+  g.fillStyle = C.amber;
+  g.fillRect(19, 6, w - 28, 1);
+  g.fillRect(19, 8, w - 32, 1);
+}
+
+/** @param {CanvasRenderingContext2D} g @param {number} w @param {string} colour */
+function headlights(g, w, colour) {
+  g.fillStyle = colour;
+  g.fillRect(2, 42, 6, 4);
+  g.fillRect(w - 8, 42, 6, 4);
+}
+
+/** Line number of the rear sign. @param {CanvasRenderingContext2D} g @param {number} w */
+function rearSign(g, w) {
+  digits(g, '17', w / 2 - 4, 4, C.amber);
+}
+
+/** @param {CanvasRenderingContext2D} g @param {number} w @param {string} colour */
+function tailLights(g, w, colour) {
+  g.fillStyle = colour;
+  g.fillRect(1, 36, 4, 9);
+  g.fillRect(w - 5, 36, 4, 9);
+}
+
+/**
+ * What glows at night on the front or the back (#55): black but for the lights and the destination sign.
+ * @param {BusSettings} bus @param {boolean} back
+ */
+function glow(bus, back) {
+  const PPM = bus.texturePixelsPerMetre;
+  return tex(Math.round(bus.bodyWidth * PPM) * 2, Math.round(bus.bodyHeight * PPM) * 2, (g, w, h) => {
+    g.fillStyle = '#000';
+    g.fillRect(0, 0, w, h);
+    if (back) {
+      rearSign(g, w);
+      tailLights(g, w, C.redHi);
+    } else {
+      frontSign(g, w);
+      headlights(g, w, '#ffffff');
+    }
+  });
+}
+
+/** Front and back materials of every bus, lit together at night. @type {Set<THREE.MeshLambertMaterial>} */
+const glowing = new Set();
+
+/**
+ * Face of a bus with its lights, registered to glow at night.
+ * @param {THREE.Texture} map @param {THREE.Texture} emissiveMap
+ */
+function lightedFace(map, emissiveMap) {
+  const material = new THREE.MeshLambertMaterial({
+    map,
+    emissiveMap,
+    emissive: '#ffffff',
+    emissiveIntensity: 0,
+  });
+  glowing.add(material);
+  return material;
+}
+
+/**
+ * Head, tail and sign lights of all the buses, 0 (off) and up.
+ * @param {number} level
+ */
+export function setBusLights(level) {
+  lightLevel = level;
+  for (const material of glowing)
+    material.emissiveIntensity = braking.has(material) ? Math.max(level, brakeGlow) : level;
+}
+
+/** Light level of the last setBusLights call. */
+let lightLevel = 0;
+/** Brightness of the brake lights, set by makeBus. */
+let brakeGlow = 1;
+/** Back faces whose brake lights are on. @type {Set<THREE.MeshLambertMaterial>} */
+const braking = new Set();
+
 /** @param {BusSettings} bus */
 function front(bus) {
   const PPM = bus.texturePixelsPerMetre;
@@ -118,10 +199,7 @@ function front(bus) {
     g.fillRect(0, 0, w, h);
     g.fillStyle = '#111';
     g.fillRect(6, 3, w - 12, 7); // girouette
-    digits(g, '17', 9, 4, C.amber);
-    g.fillStyle = C.amber;
-    g.fillRect(19, 6, w - 28, 1);
-    g.fillRect(19, 8, w - 32, 1);
+    frontSign(g, w);
     g.fillStyle = C.glass;
     g.fillRect(2, 11, w - 4, 22); // pare-brise
     g.fillStyle = C.glassHi;
@@ -130,9 +208,7 @@ function front(bus) {
     g.fillRect(w / 2 - 1, 11, 1, 22);
     g.fillStyle = C.green;
     g.fillRect(0, 35, w, 4);
-    g.fillStyle = C.light;
-    g.fillRect(2, 42, 6, 4);
-    g.fillRect(w - 8, 42, 6, 4); // phares
+    headlights(g, w, C.light);
     g.fillStyle = C.amber;
     g.fillRect(2, 47, 3, 2);
     g.fillRect(w - 5, 47, 3, 2);
@@ -149,16 +225,14 @@ function rear(bus, brake) {
     g.fillRect(0, 0, w, h);
     g.fillStyle = '#111';
     g.fillRect(12, 3, w - 24, 7);
-    digits(g, '17', w / 2 - 4, 4, C.amber);
+    rearSign(g, w);
     g.fillStyle = C.glass;
     g.fillRect(4, 12, w - 8, 15);
     g.fillStyle = C.green;
     g.fillRect(0, 30, w, 5);
     g.fillStyle = C.shade;
     for (let i = 0; i < 4; i++) g.fillRect(14, 38 + i * 2, w - 28, 1);
-    g.fillStyle = brake ? C.redHi : C.red;
-    g.fillRect(1, 36, 4, 9);
-    g.fillRect(w - 5, 36, 4, 9);
+    tailLights(g, w, brake ? C.redHi : C.red);
     g.fillStyle = C.amber;
     g.fillRect(1, 33, 4, 2);
     g.fillRect(w - 5, 33, 4, 2);
@@ -169,8 +243,12 @@ function rear(bus, brake) {
   });
 }
 
-/** @param {BusSettings} bus */
-export function makeBus(bus) {
+/**
+ * @param {BusSettings} bus
+ * @param {import('../settings/settings.js').Settings['lights']} lights
+ */
+export function makeBus(bus, lights) {
+  brakeGlow = lights.brakeLightGlow;
   const PPM = bus.texturePixelsPerMetre;
   const grp = new THREE.Group();
   const body = new THREE.Group(); // caisse (inclinee selon le relief et le roulis)
@@ -189,10 +267,10 @@ export function makeBus(bus) {
     rearB = rear(bus, true);
   const arches = [bus.rearOverhang, bus.rearOverhang + bus.wheelbase];
   const doors = bus.trailer ? FRONT_BODY_DOORS : STANDARD_DOORS;
-  const rearMat = new THREE.MeshLambertMaterial({ map: rearN });
+  const rearMat = lightedFace(rearN, glow(bus, true));
   const joint = new THREE.MeshLambertMaterial({ color: C.bumper });
   const mats = [
-    new THREE.MeshLambertMaterial({ map: front(bus) }), // +X avant
+    lightedFace(front(bus), glow(bus, false)), // +X avant
     bus.trailer ? joint : rearMat, // -X arriere (soufflet pour un bus articule)
     new THREE.MeshLambertMaterial({ map: roofTex }), // +Y toit
     new THREE.MeshLambertMaterial({ color: '#222' }), // -Y dessous
@@ -226,6 +304,9 @@ export function makeBus(bus) {
     /** @param {boolean} on */
     setBrake(on) {
       rearMat.map = on ? rearB : rearN;
+      if (on) braking.add(rearMat);
+      else braking.delete(rearMat);
+      rearMat.emissiveIntensity = on ? Math.max(lightLevel, brakeGlow) : lightLevel;
     },
   };
 }
@@ -306,8 +387,8 @@ export function busLook(bus, open) {
     },
   );
   const materials = [
-    new THREE.MeshLambertMaterial({ map: front(bus) }),
-    new THREE.MeshLambertMaterial({ map: rear(bus, false) }),
+    lightedFace(front(bus), glow(bus, false)),
+    lightedFace(rear(bus, false), glow(bus, true)),
     new THREE.MeshLambertMaterial({ map: roof }),
     new THREE.MeshLambertMaterial({ color: '#222' }),
     new THREE.MeshLambertMaterial({
