@@ -270,3 +270,21 @@ button {
   border-color: var(--yellow);
   color: var(--yellow);
 }
+.date-field {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+  margin: 10px 0 6px;
+  color: var(--muted);
+  font-size: 14px;
+}
+.date-field input {
+  background: var(--dark);
+  color: var(--txt);
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  padding: 6px 8px;
+  font: inherit;
+  color-scheme: dark;
+}

@@ -13,6 +13,9 @@ import { quayWalls, waterSurface } from './water.js';
 import { BillboardPool } from './instances.js';
 import { TileSet } from './tileset.js';
 import { PlaceGrid, placesAlong } from './lamps.js';
+import { mountainColour } from './season.js';
+
+/** @typedef {ReturnType<typeof import('./season.js').seasonLook>} SeasonLook */
 
 /** @typedef {import('./ground.js').Ground} Ground */
 /** @typedef {import('./ground.js').TileData} TileData */
@@ -57,23 +60,26 @@ function rng(seed) {
 
 // ------------------------------------------------------------------ relief
 const GROUND = {
-  land: '#a9a68c',
-  park: '#7ea25a',
-  forest: '#557c41',
   water: '#5d8fb5',
   tram: '#8b8377',
 };
 
+/** CSS colour of an sRGB [r, g, b] in 0..1. @param {number[]} c */
+const css = (c) => `rgb(${c.map((v) => Math.round(v * 255)).join(',')})`;
+
 /** carte OSM peinte en texture de sol (1 pixel ~ 1,7 m) */
-/** @param {import('../common/types.js').MapData | null} map @param {{x0: number, y0: number, x1: number, y1: number}} b */
-function groundTexture(map, b) {
+/**
+ * @param {import('../common/types.js').MapData | null} map @param {{x0: number, y0: number, x1: number, y1: number}} b
+ * @param {SeasonLook} season colours of the ground for the date of the game
+ */
+function groundTexture(map, b, season) {
   const W = 4096,
     H = Math.round((4096 * (b.y1 - b.y0)) / (b.x1 - b.x0));
   const { c, g } = canvas(W, H);
   const sx = W / (b.x1 - b.x0),
     sy = H / (b.y1 - b.y0);
   g.setTransform(sx, 0, 0, -sy, -b.x0 * sx, b.y1 * sy);
-  g.fillStyle = GROUND.land;
+  g.fillStyle = css(season.land);
   g.fillRect(b.x0, b.y0, b.x1 - b.x0, b.y1 - b.y0);
   /** @param {number[][]} list @param {string} col */
   const poly = (list, col) => {
@@ -100,8 +106,8 @@ function groundTexture(map, b) {
     g.stroke();
   };
   if (map) {
-    poly(map.polys.forest, GROUND.forest);
-    poly(map.polys.park, GROUND.park);
+    poly(map.polys.forest, css(season.forest));
+    poly(map.polys.park, css(season.park));
     poly(map.polys.water, GROUND.water);
     lines(map.lines.river, GROUND.water, 30);
     lines(map.lines.rail, GROUND.tram, 5);
@@ -219,19 +225,16 @@ function terrainTileLight(ground, key, material, every) {
   return new THREE.Mesh(geo, material);
 }
 
-/** @param {import('./heightfield.js').Heightfield} hf */
-function terrainCoarse(hf) {
+/**
+ * @param {import('./heightfield.js').Heightfield} hf @param {SeasonLook} season
+ * @param {import('../settings/settings.js').Settings['seasons']} seasons
+ */
+function terrainCoarse(hf, season, seasons) {
   const g = hf.coarse,
     b = hf.bounds;
   const geo = new THREE.PlaneGeometry(1, 1, g.nx - 1, g.ny - 1);
   const pos = geo.attributes.position;
   const col = new Float32Array(pos.count * 3);
-  /** @param {string} h */
-  const C = (h) => new THREE.Color(h);
-  const cLow = C('#93a072'),
-    cForest = C('#4b6b3e'),
-    cRock = C('#8c8679'),
-    cSnow = C('#f3f5f8');
   const tmp = new THREE.Color();
   for (let j = 0; j < g.ny; j++) {
     for (let i = 0; i < g.nx; i++) {
@@ -242,11 +245,9 @@ function terrainCoarse(hf) {
       // sous la zone fine, on enfonce la grille large (elle ne doit pas traverser la ville)
       if (x > b.x0 - 150 && x < b.x1 + 150 && y > b.y0 - 150 && y < b.y1 + 150) z -= 40;
       pos.setXYZ(k, x, z, -y);
-      if (z > 2050) tmp.copy(cSnow);
-      else if (z > 1750) tmp.copy(cRock).lerp(cSnow, (z - 1750) / 300);
-      else if (z > 1500) tmp.copy(cForest).lerp(cRock, (z - 1500) / 250);
-      else if (z > 450) tmp.copy(cLow).lerp(cForest, Math.min(1, (z - 450) / 250));
-      else tmp.copy(cLow);
+      // an irregular snow line: smooth waves over a few hundred metres, the same at every visit
+      const edge = 0.6 * Math.sin(x / 700) + 0.4 * Math.sin(y / 530 + x / 1300);
+      tmp.setRGB(...mountainColour(z, edge, season, seasons), THREE.SRGBColorSpace);
       col[k * 3] = tmp.r;
       col[k * 3 + 1] = tmp.g;
       col[k * 3 + 2] = tmp.b;
@@ -900,14 +901,20 @@ export class FootprintIndex {
 }
 
 // ------------------------------------------------------------------ arbres (sprites en billboard, un seul appel de dessin)
-/** @param {Ground} hf @param {number[]} positions flat [x, y, ...] */
-function treeBillboards(hf, positions) {
+/** @param {Ground} hf @param {number[]} positions flat [x, y, ...] @param {SeasonLook} season */
+function treeBillboards(hf, positions, season) {
   const VAR = 4,
     TW = 40,
     TH = 64;
   const atlas = shared('trees', () => {
     const { c, g } = canvas(TW * VAR, TH);
-    for (let i = 0; i < VAR; i++) g.drawImage(tree(i + 1), i * TW, 0);
+    const foliage = {
+      dark: css(season.leafDark),
+      middle: css(season.leafMiddle),
+      light: css(season.leafLight),
+      leaves: season.leaves,
+    };
+    for (let i = 0; i < VAR; i++) g.drawImage(tree(i + 1, foliage), i * TW, 0);
     return new THREE.CanvasTexture(c);
   });
   const n = positions.length / 2;
@@ -1115,12 +1122,13 @@ function tileObjects(ground, tiles) {
  * @param {{map: import('../common/types.js').MapData | null, tiles: Map<string, TileData>, stops: import('./kerb.js').StopPlace[], lane: Float64Array}} data
  * @param {import('../world/track.js').Track} track
  * @param {import('../settings/settings.js').Settings} settings
+ * @param {SeasonLook} season landscape of the date of the game (#70)
  */
-export function buildWorld(scene, hf, data, track, settings) {
+export function buildWorld(scene, hf, data, track, settings, season) {
   const street = settings.world;
   const { lights } = settings;
-  scene.add(terrainCoarse(hf.natural));
-  const groundMaterial = new THREE.MeshLambertMaterial({ map: groundTexture(data.map, hf.bounds) });
+  scene.add(terrainCoarse(hf.natural, season, settings.seasons));
+  const groundMaterial = new THREE.MeshLambertMaterial({ map: groundTexture(data.map, hf.bounds, season) });
   const ix = hf.index;
   const keys = [...data.tiles.keys()];
   const tiles = keys.map((key) => {
@@ -1148,7 +1156,7 @@ export function buildWorld(scene, hf, data, track, settings) {
       return {
         fineGround: terrainTile(hf, key, tile, groundMaterial),
         streets,
-        trees: treeBillboards(hf, objects.trees),
+        trees: treeBillboards(hf, objects.trees, season),
         buildings: block,
       };
     },

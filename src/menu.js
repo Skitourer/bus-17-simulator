@@ -5,6 +5,7 @@
  * locally.
  */
 import {
+  alignDate,
   dateLabel,
   serviceDate,
   serviceLabel,
@@ -12,6 +13,8 @@ import {
   todayService,
   toSec,
 } from './common/service.js';
+import { loadSettings } from './settings/settings.js';
+import { dateOfDay } from './hd2d/season.js';
 import { LANGUAGES, initI18n, keyLabelParams, t } from './i18n/i18n.js';
 import {
   CHOICES,
@@ -26,7 +29,7 @@ import {
 /** @param {string} id */
 const $ = (id) => /** @type {HTMLElement} */ (document.getElementById(id));
 const KEY = 'bus17.menu';
-/** @type {{dir?: number, bus?: string}} */
+/** @type {{dir?: number, bus?: string, season?: string, customDate?: string}} */
 let saved = {};
 try {
   saved = JSON.parse(localStorage.getItem(KEY) || '{}') || {};
@@ -41,7 +44,19 @@ const save = () => {
   }
 };
 
-const sel = { dir: saved.dir ?? 1, bus: saved.bus === 'art' ? 'art' : 'std', day: '', dep: '', date: '' };
+const SEASONS = ['winter', 'spring', 'summer', 'autumn'];
+const sel = {
+  dir: saved.dir ?? 1,
+  bus: saved.bus === 'art' ? 'art' : 'std',
+  day: '',
+  dep: '',
+  date: '',
+  // '' the service date, a season, or 'custom' for the date field (#70)
+  season: SEASONS.includes(saved.season ?? '') || saved.season === 'custom' ? (saved.season ?? '') : '',
+  customDate: /^\d{8}$/.test(saved.customDate ?? '') ? (saved.customDate ?? '') : '',
+};
+/** @type {import('./settings/settings.js').Settings['seasons']} */
+let seasons;
 /** @type {import('./common/types.js').LineData} */
 let line;
 
@@ -105,11 +120,7 @@ function render() {
       render();
     },
   );
-  // the game takes place on a day the service runs (#55)
-  sel.date = serviceDate(sel.day, line.calendar, new Date());
-  $('dateNote').textContent = t('menu.gameDate', {
-    date: dateLabel(sel.date, document.documentElement.lang),
-  });
+  renderSeason();
 
   const deps = d.services[sel.day] || [];
   const now = new Date(),
@@ -154,6 +165,44 @@ $('goBtn').onclick = () => {
   });
   location.href = 'hd2d.html?' + q;
 };
+
+/**
+ * Date of the game (#55, #70): the service date, the middle of a season or a date of the player, moved to
+ * the nearest day of the chosen day type.
+ */
+function renderSeason() {
+  const serviceDay = serviceDate(sel.day, line.calendar, new Date());
+  const year = +serviceDay.slice(0, 4);
+  /** @type {string} */
+  let wanted = serviceDay;
+  if (sel.season === 'custom' && sel.customDate) wanted = sel.customDate;
+  else if (SEASONS.includes(sel.season))
+    wanted = dateOfDay(year, seasons.keys[/** @type {keyof typeof seasons.keys} */ (sel.season)].day);
+  sel.date = alignDate(wanted, line.calendar[sel.day]?.days);
+  chips(
+    $('seasonChips'),
+    [
+      { value: '', label: t('menu.seasonService') },
+      ...SEASONS.map((value) => ({ value, label: t('menu.' + value) })),
+    ],
+    sel.season,
+    (season) => {
+      sel.season = season;
+      render();
+    },
+  );
+  const input = /** @type {HTMLInputElement} */ ($('dateInput'));
+  input.value = `${sel.date.slice(0, 4)}-${sel.date.slice(4, 6)}-${sel.date.slice(6, 8)}`;
+  input.onchange = () => {
+    if (!/^\d{4}-\d{2}-\d{2}$/.test(input.value)) return;
+    sel.season = 'custom';
+    sel.customDate = input.value.replaceAll('-', '');
+    render();
+  };
+  $('dateNote').textContent = t('menu.gameDate', {
+    date: dateLabel(sel.date, document.documentElement.lang),
+  });
+}
 
 /** @param {string} text */
 function emptyNote(text) {
@@ -324,6 +373,7 @@ async function start() {
   renderSettings();
   showScreen();
   try {
+    seasons = (await loadSettings()).seasons;
     const res = await fetch('data/grenoble/17.json');
     if (!res.ok) throw new Error(`HTTP ${res.status}`);
     line = await res.json();
