@@ -560,29 +560,31 @@ function bridges(ground) {
   return m;
 }
 
-/** trace de la ligne au sol : chevrons verts (guidage, touche G) */
 /**
+ * Guidance strip (key G): green chevrons along the guidance line, on the drivable surface (the bridge deck
+ * at the height of the route, not the ground below).
  * @param {Ground} hf @param {import('../world/track.js').Track} track
- * @param {Float64Array} lane offset of the bus lane at each route point (m to the right)
+ * @param {import('./guidance.js').GuidanceLine} guide one point per route point
  */
-function routeStrip(hf, track, lane) {
+function routeStrip(hf, track, guide) {
   const P = [],
     U = [],
     I = [];
+  const last = track.n - 1;
   for (let i = 0; i < track.n; i += 2) {
-    const h = track.h[i],
-      x = track.x[i],
-      y = track.y[i];
+    const a = Math.max(0, i - 1),
+      b = Math.min(last, i + 1);
+    const h = Math.atan2(guide.y[b] - guide.y[a], guide.x[b] - guide.x[a]);
     const nx = Math.sin(h),
       ny = -Math.cos(h);
-    // in the bus lane
-    const cx = x + nx * lane[i],
-      cy = y + ny * lane[i];
+    const cx = guide.x[i],
+      cy = guide.y[i];
     const lx = cx - nx * 0.9,
       ly = cy - ny * 0.9,
       rx = cx + nx * 0.9,
       ry = cy + ny * 0.9;
-    P.push(lx, hf.h(lx, ly) + 0.32, -ly, rx, hf.h(rx, ry) + 0.32, -ry);
+    const z = track.z[i];
+    P.push(lx, hf.surface(lx, ly, z) + 0.32, -ly, rx, hf.surface(rx, ry, z) + 0.32, -ry);
     U.push(0, (i * track.step) / 3, 1, (i * track.step) / 3);
     if (i > 0) {
       const q = (i / 2 - 1) * 2;
@@ -1190,7 +1192,7 @@ function tileObjects(ground, tiles) {
 // ------------------------------------------------------------------ assemblage
 /**
  * @param {THREE.Scene} scene @param {Ground} hf
- * @param {{map: import('../common/types.js').MapData | null, tiles: Map<string, TileData>, stops: import('./kerb.js').StopPlace[], lane: Float64Array}} data
+ * @param {{map: import('../common/types.js').MapData | null, tiles: Map<string, TileData>, stops: import('./kerb.js').StopPlace[], guide: import('./guidance.js').GuidanceLine}} data
  * @param {import('../world/track.js').Track} track
  * @param {import('../settings/settings.js').Settings} settings
  * @param {SeasonLook} season landscape of the date of the game (#70)
@@ -1241,7 +1243,7 @@ export function buildWorld(scene, hf, data, track, settings, season) {
   scene.add(bridges(hf));
   const water = waterSurface(hf, data.tiles, settings.water);
   scene.add(water, quayWalls(hf, data.tiles, settings.water));
-  const route = routeStrip(hf, track, data.lane);
+  const route = routeStrip(hf, track, data.guide);
   scene.add(route);
   // collisions need every building from the start, drawn or not: their outlines are light
   const footprints = footprintsOf(tileObjects(hf, data.tiles).buildings);

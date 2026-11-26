@@ -37,7 +37,8 @@ dans le navigateur.
 
 ## Alternatives rejetées
 
-- **Feux tricolores d'OSM** : peu sont renseignés, et leurs cycles seraient inventés.
+- **Feux tricolores d'OSM** : peu sont renseignés, et leurs cycles seraient inventés (revu
+  dans l'ADR 0008).
 - **Une bibliothèque de trafic (SUMO et autres)** : native, bien trop lourde pour un jeu
   dans le navigateur.
 - **Modèles de Gipps ou de Krauss** : pas plus simples, et l'IDM est la référence usuelle

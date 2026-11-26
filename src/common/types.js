@@ -103,6 +103,7 @@
  * @property {string[]} flags bit i of an edge flag mask -> name
  * @property {number[]} nodes flat [x, y, ...] per graph node
  * @property {number[][]} edges [a, b, class, width_dm, layer, flag_mask, x, y, x, y, ...]
+ * @property {number[][]} [signals] junctions with traffic lights: node indices of each group sharing one cycle
  */
 
 /**

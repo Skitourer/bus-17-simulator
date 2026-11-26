@@ -8,7 +8,8 @@ Output (local frame, coordinates in decimetres, compact arrays to keep the file 
     "classes": ["primary", ...],                          # class index -> name
     "flags": ["oneway", ...],                             # bit i of the flag mask -> name
     "nodes": [x0, y0, x1, y1, ...],                       # graph node i at (x[2i], y[2i+1])
-    "edges": [ [a, b, class, width_dm, layer, flag_mask, x, y, x, y, ...], ... ] }
+    "edges": [ [a, b, class, width_dm, layer, flag_mask, x, y, x, y, ...], ... ],
+    "signals": [ [node, node, ...], ... ] }   # junctions with traffic lights, one cycle per group
 """
 
 import os
@@ -25,6 +26,7 @@ from roads import (
     highway_base,
     road_width,
     route_edges,
+    signal_groups,
     split_ways,
 )
 from sources import ROOT, overpass, read_json, write_json
@@ -37,6 +39,9 @@ GAP_STEP = 5.0  # m between route samples
 SIMPLIFY_M = 0.3  # Douglas-Peucker tolerance: well below a lane width, halves the file size
 ROUTE_TOLERANCE = 6.0  # m: the GTFS shape drifts up to a few metres from the OSM centre line
 ROUTE_SHARE = 0.6  # share of an edge length along the route for the edge to carry the line
+# OSM signals stand on the junction node or a few metres before the stop line of each approach
+SIGNAL_REACH = 25.0  # m from a signal to the junction it controls
+SIGNAL_GATHER = 30.0  # m: signalised junctions this close (dual carriageways crossing) share one cycle
 
 
 def edge_flags(tags: dict[str, str]) -> list[str]:
@@ -101,6 +106,14 @@ def main() -> None:
     index = {nid: i for i, nid in enumerate(nodes)}
     print(f'{len(ways)} voies, {len(nodes)} noeuds, {len(edges)} troncons')
 
+    signal_query = f'[out:json][timeout:120];node["highway"="traffic_signals"]({bbox});out qt;'
+    print('Requete Overpass (feux)...')
+    signals = [
+        to_xy(el['lat'], el['lon']) for el in overpass(signal_query)['elements'] if el['type'] == 'node'
+    ]
+    groups = signal_groups(signals, nodes, edges, SIGNAL_REACH, SIGNAL_GATHER)
+    print(f'{len(signals)} feux, {len(groups)} carrefours a feux')
+
     routes = [
         [(d['pts'][i], d['pts'][i + 1]) for i in range(0, len(d['pts']), 3)] for d in line['directions']
     ]
@@ -121,6 +134,7 @@ def main() -> None:
             'flags': FLAGS,
             'nodes': [round(v * 10) for xy in nodes.values() for v in xy],
             'edges': [edge_record(e, index, i in on_route) for i, e in enumerate(edges)],
+            'signals': [[index[n] for n in group] for group in groups],
         },
     )
 
