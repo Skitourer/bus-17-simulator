@@ -13,7 +13,8 @@ Geometry: see tools/streets.py and ADR 0003. All coordinates in decimetres.
                       "kerbs": [[x, y, ...], ...]   (carriageway outline along sidewalks),
                       "centre_lines": [[x, y, ...], ...]   (dashed, stopped before junctions),
                       "crossings": [[x, y, x, y, x, y, x, y], ...]   (zebra stripes),
-                      "buildings": [[height, kind, x, y, ...], ...]   (clipped off the carriageway, CCW),
+                      "buildings": [[height, kind, style, roof_rise, x, y, ...], ...]   (see
+                                         build_buildings.py; clipped off the carriageway, CCW),
                       "trees": [x, y, ...]   (OSM and seeded, off roads and buildings),
                       "water": [[ring, ...], ...]   (water areas cut along the ground triangles, like "road"),
                       "water_level": [z, ...]   (n x n water surface, like "ground"; [] without water),
@@ -120,21 +121,22 @@ def group_by_tile(
 
 def buildings_and_trees(
     data: dict[str, Any], polys: dict[str, list[list[float]]], surface: BaseGeometry, bx0: float, by0: float
-) -> tuple[dict[TileKey, list[tuple[int, int, list[Point]]]], dict[TileKey, list[Point]]]:
+) -> tuple[dict[TileKey, list[tuple[list[int], list[Point]]]], dict[TileKey, list[Point]]]:
     """Buildings clipped off the carriageway and trees cleared of roads and buildings, grouped by tile."""
-    buildings: defaultdict[TileKey, list[tuple[int, int, list[Point]]]] = defaultdict(list)
+    buildings: defaultdict[TileKey, list[tuple[list[int], list[Point]]]] = defaultdict(list)
     footprints: list[Polygon] = []
     building_zone = keep_out_zone(surface, BUILDING_CLEARANCE)
     clipped = 0
     for rec in data['b']:
-        h, kind, *flat = (int(v) for v in rec)
+        values = [int(v) for v in rec]
+        head, flat = values[:4], values[4:]  # height, kind, style, roof rise
         ring = [(flat[k] / 10, flat[k + 1] / 10) for k in range(0, len(flat), 2)]
         parts = clip_building(ring, building_zone)
         clipped += parts != [ring]
         for part in parts:
             footprints.append(Polygon(part))
             c = Polygon(part).representative_point()
-            buildings[tile_of(c.x, c.y, bx0, by0)].append((h, kind, part))
+            buildings[tile_of(c.x, c.y, bx0, by0)].append((head, part))
     osm = [(v[k] / 10, v[k + 1] / 10) for v in [data['trees']] for k in range(0, len(v), 2)]
     trees = clear_trees(
         osm + seeded_trees(polys, TREE_SEED), keep_out_zone(surface, TREE_CLEARANCE), footprints
@@ -213,8 +215,8 @@ def main() -> None:
                     'centre_lines': [flat_dm(line, ox, oy) for line in marks.get((i, j), [])],
                     'crossings': [flat_dm(poly, ox, oy) for poly in zebras.get((i, j), [])],
                     'buildings': [
-                        [h, kind, *(v for x, y in ring for v in (dm(x - ox), dm(y - oy)))]
-                        for h, kind, ring in by_tile_buildings.get((i, j), [])
+                        [*head, *(v for x, y in ring for v in (dm(x - ox), dm(y - oy)))]
+                        for head, ring in by_tile_buildings.get((i, j), [])
                     ],
                     'trees': [v for x, y in by_tile_trees.get((i, j), []) for v in (dm(x - ox), dm(y - oy))],
                     'water': rings_of(MultiPolygon(wet_pieces), ox, oy) if wet_pieces else [],

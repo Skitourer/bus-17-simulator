@@ -8,6 +8,7 @@
  * Conversion de repere : local (x est, y nord, z altitude) -> Three (X = x, Y = z, Z = -y).
  */
 import * as THREE from 'three';
+import { hippedRoof } from './roofs.js';
 import { tree, shelter, stopPole } from './sprites.js';
 import { quayWalls, waterSurface } from './water.js';
 import { BillboardPool } from './instances.js';
@@ -618,84 +619,172 @@ function routeStrip(hf, track, lane) {
 }
 
 // ------------------------------------------------------------------ batiments
-const WALLS = [
-  '#e8d6b0',
-  '#dcc29b',
-  '#efe6d4',
-  '#cdb894',
-  '#e6d0aa',
-  '#c3c5c6',
-  '#d9b48c',
-  '#f0e2c4',
-  '#bfb3a3',
-  '#e2c7a6',
+/**
+ * Facade families (#56), in the order of tools/buildings.py: old-town and faubourg blocks, post-war
+ * slabs, modern offices and shops, houses, sheds, public buildings. Each has its wall colours (tinting
+ * the white of the texture), the windows of one 3 m x 3 m bay (16 px) and how to draw the rest of it.
+ * @type {{walls: string[], windows: number[][], draw: (g: CanvasRenderingContext2D, x: number, y: number) => void}[]}
+ */
+const FACADES = [
+  {
+    walls: ['#e8d6b0', '#dcc29b', '#efe6d4', '#cdb894', '#e6d0aa', '#d9b48c', '#f0e2c4', '#e2c7a6'],
+    windows: [[5, 4, 6, 8]],
+    draw(g, x, y) {
+      // window, sill and shutters
+      g.fillStyle = '#d0d0d0';
+      g.fillRect(x + 4, y + 12, 8, 1);
+      g.fillStyle = '#9a8a74';
+      g.fillRect(x + 3, y + 4, 2, 8);
+      g.fillRect(x + 11, y + 4, 2, 8);
+    },
+  },
+  {
+    walls: ['#e9e6df', '#d8d6d0', '#cfc9bd', '#e3ddd0', '#bfc3c6', '#d6cfc4'],
+    windows: [[2, 5, 12, 6]],
+    draw(g, x, y) {
+      // balcony rail under a wide window
+      g.fillStyle = '#b4b4b4';
+      g.fillRect(x, y + 12, 16, 2);
+    },
+  },
+  {
+    walls: ['#c9ccd0', '#b9c0c7', '#d6d3cc', '#aeb6bd'],
+    windows: [[1, 2, 14, 11]],
+    draw(g, x, y) {
+      // glazing bars
+      g.fillStyle = '#8c9298';
+      g.fillRect(x + 8, y + 2, 1, 11);
+      g.fillRect(x, y + 14, 16, 2);
+    },
+  },
+  {
+    walls: ['#efe3cc', '#e8d2b4', '#f2e6d8', '#e0c9a8', '#ead9c6'],
+    windows: [[6, 6, 4, 5]],
+    draw(g, x, y) {
+      g.fillStyle = '#7f9a6a';
+      g.fillRect(x + 4, y + 6, 2, 5);
+      g.fillRect(x + 10, y + 6, 2, 5);
+    },
+  },
+  {
+    walls: ['#b8bcc0', '#9fa7ad', '#c4c0b6', '#8f9aa3'],
+    windows: [[2, 2, 12, 2]],
+    draw(g, x, y) {
+      // corrugated cladding
+      g.fillStyle = '#dedede';
+      for (let k = 0; k < 16; k += 2) g.fillRect(x + k, y + 5, 1, 11);
+    },
+  },
+  {
+    walls: ['#d8cbb0', '#cfc2a6', '#e0d6c2'],
+    windows: [[6, 3, 4, 10]],
+    draw(g, x, y) {
+      // stone courses and a round-headed window
+      g.fillStyle = '#e4e4e4';
+      for (let k = 3; k < 16; k += 4) g.fillRect(x, y + k, 16, 1);
+      g.fillStyle = '#ffffff';
+      g.fillRect(x + 6, y + 3, 1, 1);
+      g.fillRect(x + 9, y + 3, 1, 1);
+    },
+  },
 ];
 /** stone plinth colour, and a texel of the facade texture without window (plain wall) */
 const PLINTH = new THREE.Color('#8f8a80');
 const PLAIN_U = 0.02,
   PLAIN_V = 0.5;
 
-/** @type {Record<number, string>} roof colour by building kind (see geo.building_kind) */
+/** Tile roofs of the pitched roofs, slate on public buildings. */
+const TILES = ['#a0543c', '#8f4a35', '#9c5a44', '#a86a4c'],
+  SLATE = '#5f656d';
+
+/** @type {Record<number, string>} flat roof colour by building kind (see geo.building_kind) */
 const ROOFS = { 0: '#8a8d93', 1: '#a0543c', 2: '#7c8086', 3: '#6e8a95' };
 
 /** Bays and floors of the facade texture: the lit windows repeat every FACADE_BAYS bays and floors. */
 const FACADE_BAYS = 8;
 
 /**
- * One bay by one floor (3 m x 3 m) of the facade, 16 px, at (x, y) of the canvas.
- * @param {CanvasRenderingContext2D} g @param {number} x @param {number} y
+ * One bay by one floor (3 m x 3 m) of a facade family, 16 px, at (x, y) of the canvas.
+ * @param {CanvasRenderingContext2D} g @param {number} style @param {number} x @param {number} y
  */
-function facadeBay(g, x, y) {
-  // mur blanc (teinte par couleur de sommet), fenetre, appui, volets
+function facadeBay(g, style, x, y) {
+  // white wall (tinted by the vertex colour), windows, then the details of the family
   g.fillStyle = '#ffffff';
   g.fillRect(x, y, 16, 16);
   g.fillStyle = '#eeeeee';
   g.fillRect(x, y + 15, 16, 1);
-  g.fillStyle = '#2d3a4e';
-  g.fillRect(x + 5, y + 4, 6, 8);
-  g.fillStyle = '#5d7896';
-  g.fillRect(x + 6, y + 5, 2, 2);
-  g.fillStyle = '#d0d0d0';
-  g.fillRect(x + 4, y + 12, 8, 1);
-  g.fillStyle = '#9a8a74';
-  g.fillRect(x + 3, y + 4, 2, 8);
-  g.fillRect(x + 11, y + 4, 2, 8);
+  for (const [wx, wy, ww, wh] of FACADES[style].windows) {
+    g.fillStyle = '#2d3a4e';
+    g.fillRect(x + wx, y + wy, ww, wh);
+    g.fillStyle = '#5d7896';
+    g.fillRect(x + wx + 1, y + wy + 1, 2, 2);
+  }
+  FACADES[style].draw(g, x, y);
 }
 
 /** @param {THREE.Texture} t */
 function facadeRepeat(t) {
   t.wrapS = t.wrapT = THREE.RepeatWrapping;
-  // the building UVs count bays and floors; the texture holds FACADE_BAYS of each
+  // the building UVs count bays and floors; each family of the atlas holds FACADE_BAYS of each
   t.repeat.set(1 / FACADE_BAYS, 1 / FACADE_BAYS);
   return t;
 }
 
+/** Atlas of the facade families side by side, FACADE_BAYS bays by FACADE_BAYS floors each. */
 function facadeTexture() {
   const size = 16 * FACADE_BAYS;
-  const { c, g } = canvas(size, size);
-  for (let i = 0; i < FACADE_BAYS; i++) for (let j = 0; j < FACADE_BAYS; j++) facadeBay(g, i * 16, j * 16);
+  const { c, g } = canvas(size * FACADES.length, size);
+  FACADES.forEach((_, style) => {
+    for (let i = 0; i < FACADE_BAYS; i++)
+      for (let j = 0; j < FACADE_BAYS; j++) facadeBay(g, style, style * size + i * 16, j * 16);
+  });
   return facadeRepeat(NEAREST(new THREE.CanvasTexture(c)));
 }
 
 /**
- * Windows lit at night (#55): grey to white where a window glows, black elsewhere.
+ * Windows lit at night (#55), in the same atlas: grey to white where a window glows, black elsewhere.
  * @param {number} share lit share of the windows
  */
 function windowGlowTexture(share) {
   const size = 16 * FACADE_BAYS;
-  const { c, g } = canvas(size, size);
+  const { c, g } = canvas(size * FACADES.length, size);
   g.fillStyle = '#000000';
-  g.fillRect(0, 0, size, size);
+  g.fillRect(0, 0, size * FACADES.length, size);
   const r = rng(55);
-  for (let i = 0; i < FACADE_BAYS; i++)
-    for (let j = 0; j < FACADE_BAYS; j++) {
-      if (r() >= share) continue;
-      // curtains: not every lit window is as bright
-      const level = Math.round(170 + r() * 85);
-      g.fillStyle = 'rgb(' + [level, level, level].join(',') + ')';
-      g.fillRect(i * 16 + 5, j * 16 + 4, 6, 8);
-    }
+  FACADES.forEach(({ windows }, style) => {
+    for (let i = 0; i < FACADE_BAYS; i++)
+      for (let j = 0; j < FACADE_BAYS; j++) {
+        if (r() >= share) continue;
+        // curtains: not every lit window is as bright
+        const level = Math.round(170 + r() * 85);
+        g.fillStyle = 'rgb(' + [level, level, level].join(',') + ')';
+        for (const [wx, wy, ww, wh] of windows) g.fillRect(style * size + i * 16 + wx, j * 16 + wy, ww, wh);
+      }
+  });
   return facadeRepeat(NEAREST(new THREE.CanvasTexture(c)));
+}
+
+/**
+ * Sampling of the facade atlas: the family of each vertex (`facade` attribute) picks its column, the bays
+ * repeat inside it. The gradients of the unwrapped UVs keep the mipmap level steady across the repeats.
+ * @param {THREE.MeshLambertMaterial} material
+ */
+function facadeAtlas(material) {
+  const n = FACADES.length.toFixed(1);
+  /** @param {string} map @param {string} uv */
+  const sample = (map, uv) =>
+    `textureGrad(${map}, vec2((vFacade + fract(${uv}.x)) / ${n}, fract(${uv}.y)), ` +
+    `dFdx(${uv}) * vec2(1.0 / ${n}, 1.0), dFdy(${uv}) * vec2(1.0 / ${n}, 1.0))`;
+  material.onBeforeCompile = (shader) => {
+    shader.vertexShader =
+      'attribute float facade;\nvarying float vFacade;\n' +
+      shader.vertexShader.replace('#include <uv_vertex>', '#include <uv_vertex>\n  vFacade = facade;');
+    shader.fragmentShader = ('varying float vFacade;\n' + shader.fragmentShader)
+      .replace('texture2D( map, vMapUv )', sample('map', 'vMapUv'))
+      .replace('texture2D( emissiveMap, vEmissiveMapUv )', sample('emissiveMap', 'vEmissiveMapUv'));
+  };
+  material.customProgramCacheKey = () => 'facade-atlas';
+  return material;
 }
 
 /** @type {THREE.MeshLambertMaterial | null} */
@@ -705,35 +794,38 @@ let wallMaterial = null;
  * @param {import('../settings/settings.js').Settings['lights']} lights
  */
 function walls(lights) {
-  wallMaterial ??= new THREE.MeshLambertMaterial({
-    map: shared('facade', facadeTexture),
-    emissiveMap: shared('windows', () => windowGlowTexture(lights.windowShare)),
-    emissive: new THREE.Color(lights.windowColor),
-    emissiveIntensity: 0,
-    vertexColors: true,
-    side: THREE.DoubleSide,
-  });
+  wallMaterial ??= facadeAtlas(
+    new THREE.MeshLambertMaterial({
+      map: shared('facade', facadeTexture),
+      emissiveMap: shared('windows', () => windowGlowTexture(lights.windowShare)),
+      emissive: new THREE.Color(lights.windowColor),
+      emissiveIntensity: 0,
+      vertexColors: true,
+      side: THREE.DoubleSide,
+    }),
+  );
   return wallMaterial;
 }
 
-/** batiments extrudes d'une tuile, fusionnes en deux maillages (murs, toits) */
 /**
+ * Buildings of a tile, extruded and merged into two meshes (walls, roofs): facade family and colour from
+ * the data, flat or hipped roofs (#56).
  * @param {Ground} hf @param {import('../common/types.js').BuildingsData} data @param {number} seed colour stream
- * @param {THREE.Material} wallMaterial
+ * @param {THREE.Material} wallMaterial @param {{roofPitch: number, roofCompactness: number}} roofShape
  */
-function buildings(hf, data, seed, wallMaterial) {
-  const WP = [],
-    WU = [],
-    WC = [],
-    RP = [],
-    RC = [];
+function buildings(hf, data, seed, wallMaterial, roofShape) {
+  /** @type {number[][]} positions, uvs, colours and families of the walls; positions and colours of the roofs */
+  const [WP, WU, WC, WF, RP, RC] = [[], [], [], [], [], []];
   const r = rng(seed);
   const col = new THREE.Color();
   for (const b of data.b) {
-    const h = b[0] / 10,
-      kind = b[1];
+    const [height, kind, style, riseDm] = b;
+    const h = height / 10;
     const ring = [];
-    for (let i = 2; i < b.length; i += 2) ring.push([b[i] / 10, b[i + 1] / 10]);
+    for (let i = 4; i < b.length; i += 2) ring.push([b[i] / 10, b[i + 1] / 10]);
+    const family = FACADES[style] ?? FACADES[0];
+    // window rhythm of the building: bays of 3 to 4 m
+    const bay = 3 + Math.floor(r() * 3) * 0.5;
     let zmin = 1e9,
       zmax = -1e9;
     for (const [x, y] of ring) {
@@ -744,14 +836,14 @@ function buildings(hf, data, seed, wallMaterial) {
     const top = zmax + h,
       base = zmin - 0.5,
       floor = zmax + 0.2;
-    col.set(kind === 3 ? '#d8cbb0' : WALLS[Math.floor(r() * WALLS.length)]);
+    col.set(family.walls[Math.floor(r() * family.walls.length)]);
     let u = 0;
     for (let i = 0; i < ring.length; i++) {
       const [x0, y0] = ring[i],
         [x1, y1] = ring[(i + 1) % ring.length];
       const L = Math.hypot(x1 - x0, y1 - y0);
-      const u0 = u / 3,
-        u1 = (u + L) / 3;
+      const u0 = u / bay,
+        u1 = (u + L) / bay;
       // deux triangles par quad (ordre anti-horaire vu de l'exterieur : l'anneau est anti-horaire)
       // socle en pierre du point le plus bas au rez-de-chaussee : aucun mur n'est coupe par le relief
       WP.push(x0, base, -y0, x1, base, -y1, x1, floor, -y1, x0, base, -y0, x1, floor, -y1, x0, floor, -y0);
@@ -762,12 +854,29 @@ function buildings(hf, data, seed, wallMaterial) {
       const vf = (floor - top) / 3;
       WU.push(u0, vf, u1, vf, u1, 0, u0, vf, u1, 0, u0, 0);
       for (let k = 0; k < 6; k++) WC.push(col.r, col.g, col.b);
+      for (let k = 0; k < 12; k++) WF.push(k < 6 ? 0 : style);
       u += L;
+    }
+    const shade = (r() - 0.5) * 0.08;
+    const faces = riseDm > 0 ? hippedRoof(ring, riseDm / 10, roofShape) : null;
+    if (faces) {
+      const rc = new THREE.Color(kind === 3 ? SLATE : TILES[Math.floor(r() * TILES.length)]).offsetHSL(
+        0,
+        0,
+        shade,
+      );
+      for (const face of faces)
+        for (let k = 1; k + 1 < face.length; k++)
+          for (const [x, y, z] of [face[0], face[k], face[k + 1]]) {
+            RP.push(x, top + z, -y);
+            RC.push(rc.r, rc.g, rc.b);
+          }
+      continue;
     }
     // toit plat triangule
     const contour = ring.map(([x, y]) => new THREE.Vector2(x, y));
     const tris = THREE.ShapeUtils.triangulateShape(contour, []);
-    const rc = new THREE.Color(ROOFS[kind] || ROOFS[0]).offsetHSL(0, 0, (r() - 0.5) * 0.08);
+    const rc = new THREE.Color(ROOFS[kind] || ROOFS[0]).offsetHSL(0, 0, shade);
     for (const t of tris) {
       for (const k of [t[0], t[2], t[1]]) {
         // normale vers le haut apres conversion Z = -y
@@ -780,6 +889,7 @@ function buildings(hf, data, seed, wallMaterial) {
   wg.setAttribute('position', new THREE.Float32BufferAttribute(WP, 3));
   wg.setAttribute('uv', new THREE.Float32BufferAttribute(WU, 2));
   wg.setAttribute('color', new THREE.Float32BufferAttribute(WC, 3));
+  wg.setAttribute('facade', new THREE.Float32BufferAttribute(WF, 1));
   wg.computeVertexNormals();
   const walls = new THREE.Mesh(wg, wallMaterial);
   const rg = new THREE.BufferGeometry();
@@ -805,7 +915,7 @@ function buildings(hf, data, seed, wallMaterial) {
 function footprintsOf(data) {
   return data.b.map((b) => {
     const ring = [];
-    for (let i = 2; i < b.length; i += 2) ring.push([b[i] / 10, b[i + 1] / 10]);
+    for (let i = 4; i < b.length; i += 2) ring.push([b[i] / 10, b[i + 1] / 10]);
     const xs = ring.map((p) => p[0]),
       ys = ring.map((p) => p[1]);
     return { ring, x0: Math.min(...xs), y0: Math.min(...ys), x1: Math.max(...xs), y1: Math.max(...ys) };
@@ -1108,8 +1218,8 @@ function tileObjects(ground, tiles) {
     const [ti, tj] = key.split('_').map(Number);
     const ox = (ix.x0 + ti * ix.size) * 10,
       oy = (ix.y0 + tj * ix.size) * 10;
-    for (const [h, kind, ...ring] of tile.buildings)
-      out.b.push([h, kind, ...ring.map((v, k) => v + (k % 2 ? oy : ox))]);
+    for (const [h, kind, style, rise, ...ring] of tile.buildings)
+      out.b.push([h, kind, style, rise, ...ring.map((v, k) => v + (k % 2 ? oy : ox))]);
     for (let k = 0; k + 1 < tile.trees.length; k += 2)
       trees.push((tile.trees[k] + ox) / 10, (tile.trees[k + 1] + oy) / 10);
   }
@@ -1150,7 +1260,7 @@ export function buildWorld(scene, hf, data, track, settings, season) {
         streetDetails(hf, one, street),
         streetLamps(hf, placesAlong(kerbLines(hf, one), lights.lampSpacing), lights),
       );
-      const houses = buildings(hf, objects.buildings, 3 + keys.indexOf(key), walls(lights));
+      const houses = buildings(hf, objects.buildings, 3 + keys.indexOf(key), walls(lights), street);
       const block = new THREE.Group();
       block.add(houses.walls, houses.roofs);
       return {

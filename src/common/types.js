@@ -91,7 +91,7 @@
 /**
  * @typedef {object} BuildingsData
  * @property {string} attribution
- * @property {number[][]} b [height_dm, kind, x0, y0, x1, y1, ...] per building
+ * @property {number[][]} b [height_dm, kind, style, roof_rise_dm, x0, y0, x1, y1, ...] per building
  * @property {number[]} trees flat [x, y, ...]
  */
 
