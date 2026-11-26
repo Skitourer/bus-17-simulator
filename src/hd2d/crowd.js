@@ -20,6 +20,19 @@ import { nearestWithin } from './budget.js';
 /** Size of a person sprite (sprites.js `person`), in pixels. */
 const SPRITE = { width: 12, height: 24 };
 
+/**
+ * The people sprites side by side, one per look.
+ * @param {number} looks
+ */
+export function peopleAtlas(looks) {
+  const atlas = document.createElement('canvas');
+  atlas.width = SPRITE.width * looks;
+  atlas.height = SPRITE.height;
+  const g = /** @type {CanvasRenderingContext2D} */ (atlas.getContext('2d'));
+  for (let k = 0; k < looks; k++) g.drawImage(person(k + 1), k * SPRITE.width, 0);
+  return atlas;
+}
+
 export class Crowd {
   /**
    * @param {THREE.Scene} scene @param {Ground} ground
@@ -32,12 +45,7 @@ export class Crowd {
     this.ground = ground;
     this.p = params;
     this.budget = budget;
-    const atlas = document.createElement('canvas');
-    atlas.width = SPRITE.width * params.looks;
-    atlas.height = SPRITE.height;
-    const g = /** @type {CanvasRenderingContext2D} */ (atlas.getContext('2d'));
-    for (let k = 0; k < params.looks; k++) g.drawImage(person(k + 1), k * SPRITE.width, 0);
-    this.pool = new BillboardPool(atlas, params.looks, budget.capacity);
+    this.pool = new BillboardPool(peopleAtlas(params.looks), params.looks, budget.capacity);
     scene.add(this.pool.mesh);
     this.count = 0;
     /** @type {Person[][]} people waiting, by stop */

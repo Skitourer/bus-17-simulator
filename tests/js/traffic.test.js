@@ -174,6 +174,18 @@ describe('Traffic', () => {
     expect(fromWest.s - fromNorth.s).toBeGreaterThan(P.carLength);
   });
 
+  it('gives the junction to the first car of a queue only', () => {
+    const n = new RoadNetwork(crossroads(), P.speeds);
+    const traffic = quiet(n);
+    const lane = laneOf(n, 0, 1);
+    const front = car(traffic, lane, 197, { desired: 0, next: laneOf(n, 1, 3) });
+    const behind = car(traffic, lane, 190, { next: laneOf(n, 1, 3) });
+    traffic.leader(behind, traffic.sortByLane(), []);
+    expect(traffic.reservations.size).toBe(0);
+    traffic.leader(front, traffic.sortByLane(), []);
+    expect(traffic.reservations.get(1)?.owner).toBe(front.id);
+  });
+
   it('gives way to the vehicles already on a roundabout', () => {
     const n = new RoadNetwork(crossroads(), P.speeds);
     const ring = laneOf(n, 2, 1);
@@ -228,6 +240,20 @@ describe('Traffic', () => {
     expect(front.x).toBeCloseTo(200 + offset, 1);
     expect(c.h).toBeGreaterThan(0);
     expect(c.h).toBeLessThan(Math.PI / 2);
+  });
+
+  it('tells when a moving vehicle is about to drive over a point, or a stopped one waits there', () => {
+    const n = new RoadNetwork(crossroads(), P.speeds);
+    const traffic = quiet(n);
+    const c = car(traffic, laneOf(n, 0, 1), 100, { v: 8 });
+    expect(traffic.approaching(120, -1.5, 30, 6)).toBe(true);
+    expect(traffic.approaching(80, -1.5, 30, 6)).toBe(false);
+    expect(traffic.approaching(c.x - 3, c.y, 30, 6)).toBe(true);
+    expect(traffic.waiting(c.x, c.y, 6)).toBe(false);
+    c.v = 0;
+    expect(traffic.approaching(120, -1.5, 30, 6)).toBe(false);
+    expect(traffic.approaching(c.x - 3, c.y, 30, 6)).toBe(false);
+    expect(traffic.waiting(c.x + 3, c.y, 6)).toBe(true);
   });
 
   it('fills the streets around the bus and empties them when it leaves', () => {

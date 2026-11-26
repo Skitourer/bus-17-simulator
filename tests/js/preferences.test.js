@@ -31,6 +31,7 @@ describe('parsePreferences', () => {
       viewDistance: 'far',
       difficulty: 'hard',
       traffic: 'medium',
+      pedestrians: 'medium',
       keys: { accelerate: 'KeyI' },
       debug: false,
     });
@@ -133,6 +134,10 @@ describe('applyPreferences', () => {
         SETTINGS.presets.traffic[traffic].vehicles,
       );
     expect(applyPreferences(SETTINGS, DEFAULT_PREFERENCES).traffic).toEqual(SETTINGS.traffic);
+    for (const pedestrians of /** @type {const} */ (['none', 'low', 'high']))
+      expect(applyPreferences(SETTINGS, { ...DEFAULT_PREFERENCES, pedestrians }).pedestrians.count).toBe(
+        SETTINGS.presets.pedestrians[pedestrians].count,
+      );
   });
 
   it('orders the presets around the game.json values', () => {

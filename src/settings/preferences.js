@@ -1,6 +1,7 @@
 // @ts-check
 /**
- * Player preferences (#46): language, graphics quality, view distance, difficulty, traffic (#49), key
+ * Player preferences (#46): language, graphics quality, view distance, difficulty, traffic (#49),
+ * pedestrians (#50), key
  * bindings and the debug mode (#67), chosen
  * in the settings screen and kept in the browser. They are applied on top of the game.json values: a
  * preset replaces some parameters, the middle choice of each keeps game.json as is.
@@ -14,6 +15,7 @@ export const CHOICES = Object.freeze(
     viewDistance: ['near', 'medium', 'far'],
     difficulty: ['easy', 'normal', 'hard'],
     traffic: ['none', 'low', 'medium', 'high'],
+    pedestrians: ['none', 'low', 'medium', 'high'],
   }),
 );
 
@@ -41,6 +43,7 @@ export const REMAPPABLE = Object.freeze(
  * @property {'near' | 'medium' | 'far'} viewDistance
  * @property {'easy' | 'normal' | 'hard'} difficulty
  * @property {'none' | 'low' | 'medium' | 'high'} traffic density of the cars and bikes (#49)
+ * @property {'none' | 'low' | 'medium' | 'high'} pedestrians people walking in the streets (#50)
  * @property {Partial<Record<import('../common/keys.js').Action, string>>} keys main key of an action, when changed
  * @property {boolean} debug debug mode, for development (#67)
  */
@@ -52,6 +55,7 @@ export const DEFAULT_PREFERENCES = Object.freeze({
   viewDistance: 'far',
   difficulty: 'normal',
   traffic: 'medium',
+  pedestrians: 'medium',
   keys: {},
   debug: false,
 });
@@ -85,6 +89,7 @@ export function parsePreferences(raw, languages) {
     viewDistance: pick(CHOICES.viewDistance, data.viewDistance, DEFAULT_PREFERENCES.viewDistance),
     difficulty: pick(CHOICES.difficulty, data.difficulty, DEFAULT_PREFERENCES.difficulty),
     traffic: pick(CHOICES.traffic, data.traffic, DEFAULT_PREFERENCES.traffic),
+    pedestrians: pick(CHOICES.pedestrians, data.pedestrians, DEFAULT_PREFERENCES.pedestrians),
     keys,
     debug: data.debug === true,
   };
@@ -156,7 +161,8 @@ export function applyPreferences(settings, preferences) {
   const { presets } = settings;
   const render = { ...settings.render },
     gameplay = { ...settings.gameplay },
-    traffic = { ...settings.traffic };
+    traffic = { ...settings.traffic },
+    pedestrians = { ...settings.pedestrians };
   if (preferences.quality === 'low') Object.assign(render, presets.quality.low);
   if (preferences.quality === 'high') Object.assign(render, presets.quality.high);
   if (preferences.viewDistance === 'near') Object.assign(render, presets.viewDistance.near);
@@ -166,5 +172,8 @@ export function applyPreferences(settings, preferences) {
   if (preferences.traffic === 'none') Object.assign(traffic, presets.traffic.none);
   if (preferences.traffic === 'low') Object.assign(traffic, presets.traffic.low);
   if (preferences.traffic === 'high') Object.assign(traffic, presets.traffic.high);
-  return { ...settings, render, gameplay, traffic };
+  if (preferences.pedestrians === 'none') Object.assign(pedestrians, presets.pedestrians.none);
+  if (preferences.pedestrians === 'low') Object.assign(pedestrians, presets.pedestrians.low);
+  if (preferences.pedestrians === 'high') Object.assign(pedestrians, presets.pedestrians.high);
+  return { ...settings, render, gameplay, traffic, pedestrians };
 }

@@ -38,6 +38,9 @@ import { Fleet } from './fleet.js';
 import { OtherBuses } from './otherBuses.js';
 import { RoadNetwork, Traffic } from './traffic.js';
 import { TrafficLook } from './traffic3d.js';
+import { Pedestrians, Walkways, crossingCentres } from './pedestrians.js';
+import { peopleAtlas } from './crowd.js';
+import { BillboardPool } from './instances.js';
 import { SegmentGrid, kerbSegments, laneOffsets, offsetAt, placeStops } from './kerb.js';
 import { Mirrors } from './mirrors.js';
 import { eyePosition, lookTarget, steeringWheelAngle } from './views.js';
@@ -221,6 +224,10 @@ let otherBuses;
 let traffic;
 /** @type {TrafficLook} */
 let trafficLook;
+/** people walking in the streets (#50) @type {Pedestrians} */
+let walkers;
+/** @type {BillboardPool} */
+let walkerSprites;
 /** what stops the player's bus besides the water: buildings and the other buses @type {{hit: (x: number, y: number) => boolean}} */
 let solid;
 // debug mode: free flight, collisions off (ghost), turbo
@@ -345,6 +352,14 @@ async function load() {
   world = buildWorld(scene, hf, { map, tiles, stops: places, lane }, track, S, season);
   otherBuses = new OtherBuses(scene, busGeometry(S, 'std'), S.budget);
   traffic = new Traffic(new RoadNetwork(roads, S.traffic.speeds), S.traffic, Math.random);
+  const walkways = new Walkways(roads, S.traffic.speeds);
+  walkways.addCrossings(
+    crossingCentres(tiles, tileIndex, S.pedestrians.crossingGather),
+    S.pedestrians.crossingReach,
+  );
+  walkers = new Pedestrians(walkways, S.pedestrians, S.passengers.looks, Math.random);
+  walkerSprites = new BillboardPool(peopleAtlas(S.passengers.looks), S.passengers.looks, S.budget.capacity);
+  scene.add(walkerSprites.mesh);
   trafficLook = new TrafficLook(scene, S.traffic, S.budget.capacity);
   solid = { hit: (x, y) => world.index.hit(x, y) || fleet.hit(x, y) || traffic.hit(x, y) };
   bus = makeBus(B, S.lights);
@@ -462,6 +477,37 @@ function trafficObstacles(centre) {
   return out;
 }
 
+/**
+ * Whether the player's bus is about to drive over a point, by the rule of Traffic.approaching.
+ * @param {number} x @param {number} y @param {boolean} impatient only when very close
+ */
+function busComing(x, y, impatient) {
+  const c = drive.center;
+  const dx = x - c.x,
+    dy = y - c.y;
+  const d = Math.hypot(dx, dy);
+  if (drive.v <= 0.5) return false;
+  if (d < S.pedestrians.clearNear + B.bodyLength / 2) return true;
+  return !impatient && d < S.pedestrians.clearRadius && dx * Math.cos(drive.h) + dy * Math.sin(drive.h) > 0;
+}
+
+/**
+ * The people of the streets nearest to the camera, as sprites.
+ * @param {number} x @param {number} y camera (m)
+ */
+function drawWalkers(x, y) {
+  const near = walkers.people
+    .map((q) => ({ q, d: Math.hypot(q.x - x, q.y - y) }))
+    .filter((item) => item.d <= S.pedestrians.drawDistance)
+    .sort((a, b) => a.d - b.d)
+    .slice(0, walkerSprites.capacity);
+  const h = S.passengers.height;
+  near.forEach(({ q }, i) =>
+    walkerSprites.set(i, q.x, q.y, hf.surface(q.x, q.y, hf.h(q.x, q.y)), h * 0.5, h, q.look),
+  );
+  walkerSprites.show(near.length);
+}
+
 /** @param {number} dt */
 function update(dt) {
   const G = S.gameplay;
@@ -483,7 +529,17 @@ function update(dt) {
   if (drive.bump === 0) bumps++;
   const centre = drive.center;
   fleet.update(clock.t, dt, { x: centre.x, y: centre.y, h: drive.h, length: playerLength });
-  traffic.update(dt, centre, trafficObstacles(centre));
+  const busDiscs = trafficObstacles(centre);
+  traffic.update(dt, centre, [...busDiscs, ...walkers.obstacles()]);
+  walkers.update(dt, centre, {
+    vehicleComing: (x, y, impatient) =>
+      traffic.approaching(x, y, impatient ? 0 : S.pedestrians.clearRadius, S.pedestrians.clearNear) ||
+      busComing(x, y, impatient),
+    vehicleWaiting: (x, y) =>
+      traffic.waiting(x, y, S.pedestrians.clearNear) ||
+      (drive.v <= 0.5 && Math.hypot(x - centre.x, y - centre.y) < S.pedestrians.clearNear + B.bodyLength / 2),
+    blocked: (x, y) => busDiscs.some((o) => Math.hypot(o.x - x, o.y - y) < o.r),
+  });
   if (ev) toast(t('toast.' + ev), 'bad');
 
   // suivi du parcours
@@ -616,6 +672,7 @@ function render(dt) {
   crowd.draw(camera.position.x, -camera.position.z);
   world.tiles.update(c.x, c.y, S.tiles.buildBudget);
   otherBuses.draw(fleet.buses, camera.position.x, -camera.position.z);
+  drawWalkers(camera.position.x, -camera.position.z);
   trafficLook.draw(traffic.vehicles, camera.position.x, -camera.position.z, (x, y) =>
     hf.surface(x, y, hf.h(x, y)),
   );
@@ -946,6 +1003,7 @@ function debugPanel() {
     tiles: world.tiles.count,
     sun: sunElevation.toFixed(1),
     traffic: traffic.vehicles.length,
+    walkers: walkers.people.length,
     sprites: (stress?.shown.sprites ?? 0) + crowd.pool.geometry.instanceCount,
   });
 }

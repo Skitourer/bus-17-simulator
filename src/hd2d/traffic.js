@@ -125,9 +125,7 @@ export class RoadNetwork {
    * @param {Omit<Lane, 'pts' | 'cum' | 'length'>} lane @param {number[]} pts
    */
   add(lane, pts) {
-    const cum = new Float64Array(pts.length / 2);
-    for (let k = 1; k < cum.length; k++)
-      cum[k] = cum[k - 1] + Math.hypot(pts[k * 2] - pts[k * 2 - 2], pts[k * 2 + 1] - pts[k * 2 - 1]);
+    const cum = cumulative(pts);
     const id = this.lanes.length;
     this.lanes.push({ ...lane, pts: Float64Array.from(pts), cum, length: cum[cum.length - 1] });
     for (const [map, node] of /** @type {const} */ ([
@@ -146,21 +144,7 @@ export class RoadNetwork {
    */
   pointAt(id, s, offset) {
     const { pts, cum } = this.lanes[id];
-    let k = 1;
-    while (k < cum.length - 1 && cum[k] < s) k++;
-    const x0 = pts[k * 2 - 2],
-      y0 = pts[k * 2 - 1],
-      x1 = pts[k * 2],
-      y1 = pts[k * 2 + 1];
-    const L = cum[k] - cum[k - 1] || 1;
-    const f = Math.min(1, Math.max(0, (s - cum[k - 1]) / L));
-    const dx = (x1 - x0) / L,
-      dy = (y1 - y0) / L;
-    return {
-      x: x0 + (x1 - x0) * f + dy * offset,
-      y: y0 + (y1 - y0) * f - dx * offset,
-      h: Math.atan2(dy, dx),
-    };
+    return polylinePoint(pts, cum, s, offset);
   }
 
   /**
@@ -175,6 +159,36 @@ export class RoadNetwork {
     const choices = ahead.length ? ahead : out;
     return choices.length ? choices[Math.floor(random() * choices.length)] : -1;
   }
+}
+
+/**
+ * Point `offset` metres right of a polyline at distance `s` along it, with the heading there.
+ * @param {ArrayLike<number>} pts flat [x, y, ...] @param {ArrayLike<number>} cum distance at each point
+ * @param {number} s @param {number} offset
+ */
+export function polylinePoint(pts, cum, s, offset) {
+  let k = 1;
+  while (k < cum.length - 1 && cum[k] < s) k++;
+  const x0 = pts[k * 2 - 2],
+    y0 = pts[k * 2 - 1],
+    x1 = pts[k * 2],
+    y1 = pts[k * 2 + 1];
+  const L = cum[k] - cum[k - 1] || 1;
+  const f = Math.min(1, Math.max(0, (s - cum[k - 1]) / L));
+  const dx = (x1 - x0) / L,
+    dy = (y1 - y0) / L;
+  return { x: x0 + (x1 - x0) * f + dy * offset, y: y0 + (y1 - y0) * f - dx * offset, h: Math.atan2(dy, dx) };
+}
+
+/**
+ * Distance at each point of a polyline.
+ * @param {ArrayLike<number>} pts flat [x, y, ...]
+ */
+export function cumulative(pts) {
+  const cum = new Float64Array(pts.length / 2);
+  for (let k = 1; k < cum.length; k++)
+    cum[k] = cum[k - 1] + Math.hypot(pts[k * 2] - pts[k * 2 - 2], pts[k * 2 + 1] - pts[k * 2 - 1]);
+  return cum;
 }
 
 /** @param {number[]} pts flat [x, y, ...] */
@@ -275,6 +289,8 @@ export class Traffic {
         keep(other.s - v.s - (other.length + v.length) / 2, other.v);
         break;
       }
+    // only the first vehicle of a lane may ask for the junction: one behind it would hold it for nothing
+    const first = !(byLane.get(v.lane) ?? []).some((other) => other !== v && other.s > v.s);
     const toEnd = lane.length - v.s;
     if (v.next >= 0 && toEnd < this.p.lookahead) {
       const nextLane = this.network.lanes[v.next];
@@ -285,8 +301,10 @@ export class Traffic {
         }
     }
     // a junction is crossed only with its reservation: else stop before it
-    if (this.network.junctions.has(lane.to) && toEnd < this.p.junctionApproach && !this.reserve(v, lane))
-      keep(toEnd - this.p.stopBack - v.length / 2, 0);
+    if (this.network.junctions.has(lane.to) && toEnd < this.p.junctionApproach) {
+      if (!first) this.release(v);
+      if (!first || !this.reserve(v, lane)) keep(toEnd - this.p.stopBack - v.length / 2, 0);
+    }
     if (v.next < 0) keep(toEnd - v.length / 2, 0);
     this.probe(v, obstacles, keep);
     return { gap, speed };
@@ -468,6 +486,31 @@ export class Traffic {
       this.place(v);
       this.vehicles.push(v);
     }
+  }
+
+  /**
+   * Whether a vehicle is about to drive over a point: a moving one closer than `near`, or closer than
+   * `radius` and heading towards it. A stopped vehicle lets people cross in front of it.
+   * @param {number} x @param {number} y @param {number} radius @param {number} near
+   */
+  approaching(x, y, radius, near) {
+    for (const v of this.vehicles) {
+      const dx = x - v.x,
+        dy = y - v.y;
+      const d = Math.hypot(dx, dy);
+      if (v.v <= 0.5) continue;
+      if (d < near) return true;
+      if (d < radius && dx * Math.cos(v.h) + dy * Math.sin(v.h) > 0) return true;
+    }
+    return false;
+  }
+
+  /**
+   * Whether a stopped vehicle stands closer than `near` to a point (waiting at a crossing).
+   * @param {number} x @param {number} y @param {number} near
+   */
+  waiting(x, y, near) {
+    return this.vehicles.some((v) => v.v <= 0.5 && Math.hypot(x - v.x, y - v.y) < near);
   }
 
   /**

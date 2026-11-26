@@ -17,8 +17,8 @@ dans le navigateur.
   seule formule pour rouler, suivre et s'arrêter, avec des paramètres documentés dans
   `game.json`.
 - Carrefours : **un véhicule à la fois** (une réservation par nœud, premier arrivé ; les
-  véhicules déjà dans un rond-point passent d'abord ; libérée une fois le carrefour franchi,
-  ou après un délai).
+  véhicules déjà dans un rond-point passent d'abord ; seul le premier véhicule d'une voie la
+  demande ; libérée une fois le carrefour franchi, ou après un délai).
 - Les obstacles (les bus) sont des disques ; un véhicule teste des points de son chemin
   devant lui.
 - Les véhicules apparaissent et disparaissent hors de vue autour du bus ; leur nombre est
@@ -29,7 +29,11 @@ dans le navigateur.
 - Pas de moteur physique ni de changement de voie : des files se forment derrière un bus
   arrêté, les voitures ne doublent les vélos que sur les routes larges.
 - Les carrefours écoulent moins que dans la réalité ; suffisant pour la densité du jeu.
-- Les piétons aux passages piétons attendent ceux de #50.
+- Les piétons (#50) marchent des deux côtés des mêmes rues et traversent aux passages
+  piétons des données de rues : ils attendent les véhicules en mouvement, puis s'engagent
+  (au bout d'un moment, sauf véhicule tout proche) ; une personne sur un passage est un
+  obstacle devant lequel les véhicules s'arrêtent, et les piétons laissent passer les
+  véhicules en attente entre deux groupes.
 
 ## Alternatives rejetées
 
