@@ -260,7 +260,7 @@ approved. An approval covers the proposed action only.
   Linux server, no professional network · deliverable: static site on GitHub Pages · API reference: not needed yet.
 - **Architecture**: plain JavaScript ES modules served as static files, no build step.
   Three.js is vendored in `vendor/` (MIT). Python scripts in `tools/` (standard library
-  plus `geo.py`, `roads.py`, `streets.py`, `water.py`, `shapes.py`, `sources.py`; shapely) download OSM / GTFS / IGN data and write the JSON files in `data/grenoble/`.
+  plus `geo.py`, `buildings.py`, `roads.py`, `streets.py`, `water.py`, `shapes.py`, `sources.py`; shapely) download OSM / GTFS / IGN (RGE ALTI, BD TOPO) data and write the JSON files in `data/grenoble/`.
 - **Layout**: `index.html` + `src/menu.js` menu · `hd2d.html` + `src/hd2d/` game · shared
   `src/common/`, `src/world/track.js`, `src/ui/minimap.js`; heights only through
   `src/hd2d/ground.js` · `tests/js/`, `tests/python/` ·

@@ -1,4 +1,4 @@
-"""Downloads from the open-data sources (GTFS, IGN elevation, OSM Overpass), cached in tools/cache/."""
+"""Downloads from the open-data sources (GTFS, IGN elevation and BD TOPO, OSM), cached in tools/cache/."""
 
 import hashlib
 import json
@@ -19,6 +19,9 @@ UA = {'User-Agent': 'bus17-prototype/0.1 (local game prototype)'}
 IGN_URL = 'https://data.geopf.fr/altimetrie/1.0/calcul/alti/rest/elevation.json'
 IGN_RES = 'ign_rge_alti_wld'
 IGN_BATCH = 150  # points per request accepted by the API
+# IGN Geoplateforme WFS (BD TOPO), Licence Ouverte 2.0
+WFS_URL = 'https://data.geopf.fr/wfs/ows'
+WFS_PAGE = 2000  # features per request, well under the server limit of 5000
 OVERPASS_SERVERS = [
     'https://overpass-api.de/api/interpreter',
     'https://overpass.kumi.systems/api/interpreter',
@@ -109,6 +112,49 @@ def overpass(query: str) -> Any:
             json.dump(res, f)
         return res
     raise SystemExit('Overpass injoignable')
+
+
+def wfs_features(typename: str, bbox: tuple[float, float, float, float]) -> list[dict[str, Any]]:
+    """Every GeoJSON feature of an IGN WFS layer in a (south, west, north, east) box, cached by page."""
+    os.makedirs(CACHE, exist_ok=True)
+    south, west, north, east = bbox
+    features: list[dict[str, Any]] = []
+    while True:
+        params = {
+            'SERVICE': 'WFS',
+            'VERSION': '2.0.0',
+            'REQUEST': 'GetFeature',
+            'TYPENAMES': typename,
+            'OUTPUTFORMAT': 'application/json',
+            'SORTBY': 'cleabs',  # stable order, so that the pages do not overlap
+            'COUNT': str(WFS_PAGE),
+            'STARTINDEX': str(len(features)),
+            'BBOX': f'{south:.5f},{west:.5f},{north:.5f},{east:.5f},urn:ogc:def:crs:EPSG::4326',
+        }
+        url = WFS_URL + '?' + urllib.parse.urlencode(params)
+        digest = hashlib.md5(url.encode(), usedforsecurity=False).hexdigest()[:10]
+        cpath = os.path.join(CACHE, f'wfs_{digest}.json')
+        if os.path.exists(cpath):
+            page: list[dict[str, Any]] = read_json(cpath)['features']
+        else:
+            page = _wfs_page(url)
+            with open(cpath, 'w', encoding='utf-8') as f:
+                json.dump({'features': page}, f)
+        features += page
+        print(f'  BD TOPO : {len(features)} objets')
+        if len(page) < WFS_PAGE:
+            return features
+
+
+def _wfs_page(url: str) -> list[dict[str, Any]]:
+    for attempt in range(6):
+        try:
+            res: list[dict[str, Any]] = json.loads(fetch(url, timeout=300))['features']
+            return res
+        except (OSError, ValueError, KeyError) as e:
+            print(f'  wfs: nouvel essai ({e})')
+            time.sleep(5 * (attempt + 1))
+    raise SystemExit('WFS IGN injoignable')
 
 
 def write_json(path: str, value: object, ensure_ascii: bool = False) -> None:

@@ -13,9 +13,10 @@ Geometry: see tools/streets.py and ADR 0003. All coordinates in decimetres.
                       "kerbs": [[x, y, ...], ...]   (carriageway outline along sidewalks),
                       "centre_lines": [[x, y, ...], ...]   (dashed, stopped before junctions),
                       "crossings": [[x, y, x, y, x, y, x, y], ...]   (zebra stripes),
-                      "buildings": [[height, kind, x, y, ...], ...]   (clipped off the carriageway, CCW),
-                      "lintels": [[height, kind, base, x, y, ...], ...]   (parts of buildings over a
-                                          passage, drawn from `base` above the ground to `height`),
+                      "buildings": [[height, kind, style, roof_rise, x, y, ...], ...]   (see
+                                         build_buildings.py; clipped off the carriageway, CCW),
+                      "lintels": [[height, kind, style, 0, base, x, y, ...], ...]   (parts of buildings
+                                  over a passage, drawn from `base` above the ground to `height`),
                       "portals": [[x, y, heading, width], ...]   (tunnel mouths; heading into the tunnel
                                                                   in milliradians),
                       "trees": [x, y, ...]   (OSM and seeded, off roads and buildings),
@@ -126,7 +127,8 @@ def group_by_tile(
     return out
 
 
-type Footprints = dict[TileKey, list[tuple[int, int, list[Point]]]]
+# record head (height, kind, style, roof rise) and ring of each building piece, by tile
+type Footprints = defaultdict[TileKey, list[tuple[list[int], list[Point]]]]
 
 
 def buildings_and_trees(
@@ -139,23 +141,25 @@ def buildings_and_trees(
     """Buildings clipped off the carriageway, their parts over passages, and trees cleared of roads and
     buildings, grouped by tile."""
     bx0, by0 = origin
-    buildings: defaultdict[TileKey, list[tuple[int, int, list[Point]]]] = defaultdict(list)
-    over: defaultdict[TileKey, list[tuple[int, int, list[Point]]]] = defaultdict(list)
+    buildings: Footprints = defaultdict(list)
+    over: Footprints = defaultdict(list)
     footprints: list[Polygon] = []
     building_zone = keep_out_zone(surface, BUILDING_CLEARANCE)
     clipped = 0
     for rec in data['b']:
-        h, kind, *flat = (int(v) for v in rec)
+        values = [int(v) for v in rec]
+        head, flat = values[:4], values[4:]  # height, kind, style, roof rise
         ring = [(flat[k] / 10, flat[k + 1] / 10) for k in range(0, len(flat), 2)]
-        for part in lintels(ring, passages, h / 10):
+        for part in lintels(ring, passages, head[0] / 10):
             c = Polygon(part).representative_point()
-            over[tile_of(c.x, c.y, bx0, by0)].append((h, kind, part))
+            # a flat top: the roof of the building does not fit the piece over the passage
+            over[tile_of(c.x, c.y, bx0, by0)].append(([*head[:3], 0], part))
         parts = clip_building(ring, building_zone)
         clipped += parts != [ring]
         for part in parts:
             footprints.append(Polygon(part))
             c = Polygon(part).representative_point()
-            buildings[tile_of(c.x, c.y, bx0, by0)].append((h, kind, part))
+            buildings[tile_of(c.x, c.y, bx0, by0)].append((head, part))
     osm = [(v[k] / 10, v[k + 1] / 10) for v in [data['trees']] for k in range(0, len(v), 2)]
     trees = clear_trees(
         osm + seeded_trees(polys, TREE_SEED), keep_out_zone(surface, TREE_CLEARANCE), footprints
@@ -243,17 +247,16 @@ def main() -> None:
                     'centre_lines': [flat_dm(line, ox, oy) for line in marks.get((i, j), [])],
                     'crossings': [flat_dm(poly, ox, oy) for poly in zebras.get((i, j), [])],
                     'buildings': [
-                        [h, kind, *(v for x, y in ring for v in (dm(x - ox), dm(y - oy)))]
-                        for h, kind, ring in by_tile_buildings.get((i, j), [])
+                        [*head, *(v for x, y in ring for v in (dm(x - ox), dm(y - oy)))]
+                        for head, ring in by_tile_buildings.get((i, j), [])
                     ],
                     'lintels': [
                         [
-                            h,
-                            kind,
+                            *head,
                             dm(PASSAGE_CLEARANCE),
                             *(v for x, y in ring for v in (dm(x - ox), dm(y - oy))),
                         ]
-                        for h, kind, ring in by_tile_lintels.get((i, j), [])
+                        for head, ring in by_tile_lintels.get((i, j), [])
                     ],
                     'portals': [
                         [dm(x - ox), dm(y - oy), round(heading * 1000), dm(width)]

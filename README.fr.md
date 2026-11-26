@@ -69,7 +69,7 @@ uv run python tools/build_streets.py
 - Code source : [MIT](LICENSE). Three.js (`vendor/`) : MIT, © auteurs de Three.js.
 - Tracé, arrêts, horaires : GTFS M réso (SMMAG), [ODbL](https://opendatacommons.org/licenses/odbl/).
 - Rues, bâtiments, arbres, eau, parcs : © [contributeurs OpenStreetMap](https://www.openstreetmap.org/copyright), ODbL.
-- Altitude : IGN RGE ALTI, [Licence Ouverte 2.0](https://www.etalab.gouv.fr/licence-ouverte-open-licence/).
+- Altitude : IGN RGE ALTI ; bâtiments : IGN BD TOPO, complétée par OpenStreetMap ; [Licence Ouverte 2.0](https://www.etalab.gouv.fr/licence-ouverte-open-licence/).
 
 Les fichiers de `data/` sont des bases de données dérivées et restent sous ODbL /
 Licence Ouverte. La livrée du bus est imaginaire ; ce projet n'est pas affilié à M réso
