@@ -27,7 +27,7 @@ import { eyePosition, lookTarget, steeringWheelAngle } from './views.js';
 import { LANGUAGES, initI18n, t } from '../i18n/i18n.js';
 import { isAction } from '../common/keys.js';
 import { loadSettings } from '../settings/settings.js';
-import { applyPreferences, bindingsWith, loadPreferences } from '../settings/preferences.js';
+import { applyPreferences, bindingsWith, loadPreferences, savePreferences } from '../settings/preferences.js';
 
 /** @param {string} id */
 const $ = (id) => /** @type {HTMLElement} */ (document.getElementById(id));
@@ -35,6 +35,8 @@ const P = readParams();
 if (!location.search) location.replace('index.html');
 const preferences = loadPreferences(storage(), LANGUAGES);
 const bindings = bindingsWith(preferences.keys);
+/** debug mode: forced by `?debug`, or chosen in the settings and switched in game (#67) */
+let debug = P.debug || preferences.debug;
 const S = await boot();
 const B = busGeometry(S, P.bus);
 
@@ -328,8 +330,7 @@ async function load() {
     S.budget,
     bus.interior,
   );
-  if (P.debug && P.stress > 0)
-    stress = new StressTest(scene, track, laneAt, (x, y) => hf.h(x, y), P.stress, S);
+  if (debug && P.stress > 0) stress = new StressTest(scene, track, laneAt, (x, y) => hf.h(x, y), P.stress, S);
   service.reset(progress);
   if (P.stop) {
     const i = findStop(track.stops, P.stop);
@@ -340,11 +341,7 @@ async function load() {
         'bad',
       );
   }
-  if (P.debug) {
-    $('debug').hidden = false;
-    minimap.onPick = (x, y) => void teleport(x, y);
-    toast(t('debug.on'), 'info');
-  }
+  if (debug) showDebug(true);
   // mode test : ?auto&ff=40 -> simule 40 s d'un coup (pilote automatique)
   const ff = +(new URLSearchParams(location.search).get('ff') || 0);
   for (let i = 0; i < ff * S.simulation.stepsPerSecond; i++) update(STEP);
@@ -646,7 +643,7 @@ function hud() {
   const now = performance.now();
   if (now - lastHud < 100) return;
   lastHud = now;
-  if (P.debug) debugPanel();
+  if (debug) debugPanel();
   $('clk').textContent = hms(clock.t);
   $('spd').textContent = String(Math.round(Math.abs(drive.v) * 3.6));
   const c = drive.center;
@@ -693,7 +690,7 @@ function hud() {
   });
 }
 
-// ------------------------------------------------------------------ debug (?debug, src/hd2d/debug.js)
+// ------------------------------------------------------------------ debug (?debug or settings, src/hd2d/debug.js)
 /** Distance along the route of the front door when the bus stands at a stop. */
 const doorAhead = () => B.bodyLength - B.rearOverhang - B.frontDoorSetback;
 
@@ -744,6 +741,31 @@ function setFlying(on) {
     );
   } else orbit.snap();
   toast(t(on ? 'debug.flyOn' : 'debug.flyOff'));
+}
+
+/** Show or hide what the debug mode adds to the screen. @param {boolean} on */
+function showDebug(on) {
+  $('debug').hidden = !on;
+  minimap.onPick = on ? (x, y) => void teleport(x, y) : null;
+  toast(t(on ? 'debug.on' : 'debug.off'), 'info');
+}
+
+/**
+ * Switch the debug mode during the game and remember it in the settings; leaving it lands the free
+ * flight and gives back the collisions and the normal driving.
+ * @param {boolean} on
+ */
+function setDebug(on) {
+  debug = on;
+  if (!on) {
+    if (flying) setFlying(false);
+    ghost = false;
+    flyKeys.up = flyKeys.down = flyKeys.fast = false;
+    drive.tune(S.drive);
+  }
+  preferences.debug = on;
+  savePreferences(storage(), preferences);
+  showDebug(on);
 }
 
 /** Debug keys; returns true when the key was used. @param {KeyboardEvent} e */
@@ -857,12 +879,15 @@ addEventListener('keydown', (e) => {
     placeOnRoute(progress - B.rearOverhang);
     toast(t('toast.busReplaced'));
   }
-  if (P.debug && debugKey(e)) e.preventDefault();
+  if (is('debug')) {
+    setDebug(!debug);
+    e.preventDefault();
+  } else if (debug && debugKey(e)) e.preventDefault();
 });
 addEventListener('keyup', (e) => {
   const k = driveKey(e.code);
   if (k) keys[k] = false;
-  if (P.debug) debugKeyUp(e);
+  if (debug) debugKeyUp(e);
 });
 addEventListener('blur', () => {
   keys.up = keys.down = keys.left = keys.right = false;

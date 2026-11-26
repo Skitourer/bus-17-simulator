@@ -38,7 +38,7 @@ uv run poe check     # ruff, pyright, Python tests
 uv run poe serve     # http://localhost:8017/ without browser caching
 ```
 
-Debug mode, to test the map: open
+Debug mode, to test the map: switch it on in Settings, or press F9 during the game, or open
 `http://localhost:8017/hd2d.html?debug&stop=saint-laurent` (any stop name of the line;
 `dir=1` for the other direction). Shift: turbo · N / B: next / previous stop · click on the
 mini-map: teleport anywhere · K: collisions on/off · F: free flight (arrows or ZQSD, Space / X up and

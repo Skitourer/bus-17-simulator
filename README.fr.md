@@ -38,7 +38,7 @@ uv run poe check     # ruff, pyright, tests Python
 uv run poe serve     # http://localhost:8017/ sans cache navigateur
 ```
 
-Mode debug, pour tester la carte : ouvrir
+Mode debug, pour tester la carte : l'activer dans Réglages, ou appuyer sur F9 en jeu, ou ouvrir
 `http://localhost:8017/hd2d.html?debug&stop=saint-laurent` (n'importe quel nom d'arrêt de
 la ligne ; `dir=1` pour l'autre sens). Maj : turbo · N / B : arrêt suivant / précédent ·
 clic sur la mini-carte : téléporter n'importe où · K : collisions oui/non · F : vol libre (flèches ou

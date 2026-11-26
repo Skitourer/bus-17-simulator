@@ -30,7 +30,14 @@ describe('parsePreferences', () => {
       viewDistance: 'far',
       difficulty: 'hard',
       keys: { accelerate: 'KeyI' },
+      debug: false,
     });
+  });
+
+  it('turns the debug mode on only for a stored true', () => {
+    expect(parsePreferences({ debug: true }, ['fr']).debug).toBe(true);
+    expect(parsePreferences({ debug: 'yes' }, ['fr']).debug).toBe(false);
+    expect(parsePreferences({ debug: 1 }, ['fr']).debug).toBe(false);
   });
 
   it('falls back to the defaults for anything but an object', () => {
@@ -48,7 +55,7 @@ describe('loadPreferences and savePreferences', () => {
       getItem: (/** @type {string} */ k) => data.get(k) ?? null,
       setItem: (/** @type {string} */ k, /** @type {string} */ v) => void data.set(k, v),
     };
-    const prefs = { ...DEFAULT_PREFERENCES, quality: /** @type {const} */ ('low') };
+    const prefs = { ...DEFAULT_PREFERENCES, quality: /** @type {const} */ ('low'), debug: true };
     expect(savePreferences(storage, prefs)).toBe(true);
     expect(data.has(STORAGE_KEY)).toBe(true);
     expect(loadPreferences(storage, ['fr'])).toEqual(prefs);
@@ -85,6 +92,7 @@ describe('bindingsWith and keyConflict', () => {
     const bindings = bindingsWith({});
     expect(keyConflict(bindings, 'accelerate', 'Space')).toBe('doors');
     expect(keyConflict(bindings, 'accelerate', 'Escape')).toBe('menu');
+    expect(keyConflict(bindings, 'accelerate', 'F9')).toBe('debug');
     expect(keyConflict(bindings, 'accelerate', 'KeyW')).toBeNull();
     expect(keyConflict(bindings, 'accelerate', 'KeyF')).toBeNull(); // debug keys are not checked
   });

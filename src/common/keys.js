@@ -20,6 +20,8 @@ export const BINDINGS = Object.freeze({
   replace: ['KeyR'],
   pause: ['KeyP'],
   menu: ['Escape'],
+  // switches the debug mode on and off, in any mode (#67); no browser shortcut on F9
+  debug: ['F9'],
   // debug mode only
   turbo: ['ShiftLeft', 'ShiftRight'],
   nextStop: ['KeyN'],
