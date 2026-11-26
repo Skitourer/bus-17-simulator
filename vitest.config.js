@@ -25,6 +25,7 @@ export default defineConfig({
         'src/hd2d/orbit.js',
         'src/hd2d/shore.js',
         'src/hd2d/kerb.js',
+        'src/hd2d/guidance.js',
         'src/hd2d/budget.js',
         'src/hd2d/fleet.js',
         'src/hd2d/tiling.js',
