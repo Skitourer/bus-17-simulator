@@ -20,6 +20,7 @@ describe('parsePreferences', () => {
         quality: 'high',
         viewDistance: 'huge',
         difficulty: 'hard',
+        traffic: 'jam',
         keys: { accelerate: 'KeyI', turbo: 'KeyT', doors: '<script>', brake: 5 },
       },
       ['fr'],
@@ -29,6 +30,7 @@ describe('parsePreferences', () => {
       quality: 'high',
       viewDistance: 'far',
       difficulty: 'hard',
+      traffic: 'medium',
       keys: { accelerate: 'KeyI' },
       debug: false,
     });
@@ -126,6 +128,11 @@ describe('applyPreferences', () => {
     expect(high.render.viewDistance).toBe(SETTINGS.presets.viewDistance.medium.viewDistance);
     expect(high.gameplay.onTimeTolerance).toBe(SETTINGS.presets.difficulty.hard.onTimeTolerance);
     expect(SETTINGS.render.internalLines).not.toBe(low.render.internalLines);
+    for (const traffic of /** @type {const} */ (['none', 'low', 'high']))
+      expect(applyPreferences(SETTINGS, { ...DEFAULT_PREFERENCES, traffic }).traffic.vehicles).toBe(
+        SETTINGS.presets.traffic[traffic].vehicles,
+      );
+    expect(applyPreferences(SETTINGS, DEFAULT_PREFERENCES).traffic).toEqual(SETTINGS.traffic);
   });
 
   it('orders the presets around the game.json values', () => {
@@ -137,5 +144,8 @@ describe('applyPreferences', () => {
     expect(presets.viewDistance.near.fogFar).toBeLessThan(presets.viewDistance.near.viewDistance);
     expect(presets.difficulty.easy.stopDistance).toBeGreaterThan(gameplay.stopDistance);
     expect(presets.difficulty.hard.stopDistance).toBeLessThan(gameplay.stopDistance);
+    expect(presets.traffic.none.vehicles).toBe(0);
+    expect(presets.traffic.low.vehicles).toBeLessThan(SETTINGS.traffic.vehicles);
+    expect(presets.traffic.high.vehicles).toBeGreaterThan(SETTINGS.traffic.vehicles);
   });
 });

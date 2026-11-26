@@ -1805,6 +1805,267 @@
       "doc": "The player's bus is looked for along each route within this distance of where it was last found."
     }
   },
+  "traffic": {
+    "vehicles": {
+      "value": 70,
+      "unit": "count",
+      "min": 0,
+      "max": 300,
+      "integer": true,
+      "doc": "Cars and bikes driving around the bus. Middle choice of the player (default); presets.traffic holds the others."
+    },
+    "bikeShare": {
+      "value": 0.2,
+      "unit": "ratio",
+      "min": 0,
+      "max": 1,
+      "doc": "Share of bikes among the vehicles."
+    },
+    "speeds": {
+      "primary": {
+        "value": 50,
+        "unit": "km/h",
+        "min": 10,
+        "max": 110,
+        "doc": "Speed limit of the main roads (urban limit in France)."
+      },
+      "secondary": {
+        "value": 50,
+        "unit": "km/h",
+        "min": 10,
+        "max": 110,
+        "doc": "Speed limit of the secondary roads."
+      },
+      "minor": {
+        "value": 30,
+        "unit": "km/h",
+        "min": 10,
+        "max": 90,
+        "source": "Ville de Grenoble, Métropole apaisée, 2016",
+        "doc": "Speed limit of the minor streets (Grenoble: 30 km/h city since 2016)."
+      }
+    },
+    "speedSpread": {
+      "value": 0.2,
+      "unit": "ratio",
+      "min": 0,
+      "max": 1,
+      "doc": "Drivers want between 1 - spread/2 and 1 + spread/2 times the speed limit."
+    },
+    "bikeSpeed": {
+      "value": 16,
+      "unit": "km/h",
+      "min": 5,
+      "max": 35,
+      "doc": "Cruising speed of the bikes."
+    },
+    "acceleration": {
+      "value": 1.5,
+      "unit": "m/s²",
+      "min": 0.3,
+      "max": 5,
+      "source": "Treiber, Hennecke, Helbing 2000 (city traffic values)",
+      "doc": "Intelligent Driver Model: comfortable acceleration."
+    },
+    "braking": {
+      "value": 2,
+      "unit": "m/s²",
+      "min": 0.5,
+      "max": 6,
+      "doc": "Intelligent Driver Model: comfortable braking."
+    },
+    "maxBraking": {
+      "value": 8,
+      "unit": "m/s²",
+      "min": 2,
+      "max": 12,
+      "doc": "Hardest braking of a vehicle (emergency stop on dry road)."
+    },
+    "minGap": {
+      "value": 2,
+      "unit": "m",
+      "min": 0.5,
+      "max": 10,
+      "doc": "Intelligent Driver Model: distance kept to the vehicle ahead when stopped."
+    },
+    "headway": {
+      "value": 1.2,
+      "unit": "s",
+      "min": 0.5,
+      "max": 3,
+      "doc": "Intelligent Driver Model: time gap kept to the vehicle ahead."
+    },
+    "carLength": {
+      "value": 4.3,
+      "unit": "m",
+      "min": 3,
+      "max": 6,
+      "doc": "Length of a car."
+    },
+    "carWidth": {
+      "value": 1.8,
+      "unit": "m",
+      "min": 1.4,
+      "max": 2.2,
+      "doc": "Width of a car."
+    },
+    "bikeLength": {
+      "value": 1.8,
+      "unit": "m",
+      "min": 1,
+      "max": 2.5,
+      "doc": "Length of a bike."
+    },
+    "bikeWidth": {
+      "value": 0.7,
+      "unit": "m",
+      "min": 0.4,
+      "max": 1.2,
+      "doc": "Width of a bike with its rider."
+    },
+    "bikeEdge": {
+      "value": 0.9,
+      "unit": "m",
+      "min": 0.3,
+      "max": 3,
+      "doc": "Distance of the bikes from the right edge of the road."
+    },
+    "passWidth": {
+      "value": 3,
+      "unit": "m",
+      "min": 2,
+      "max": 6,
+      "doc": "Cars pass the bikes where their half of the road is at least this wide; else they follow them."
+    },
+    "lookahead": {
+      "value": 30,
+      "unit": "m",
+      "min": 10,
+      "max": 100,
+      "doc": "Distance ahead a vehicle looks for the vehicle it follows and for obstacles."
+    },
+    "probeStep": {
+      "value": 2.5,
+      "unit": "m",
+      "min": 0.5,
+      "max": 10,
+      "doc": "Spacing of the points of the path ahead checked for obstacles."
+    },
+    "junctionApproach": {
+      "value": 12,
+      "unit": "m",
+      "min": 3,
+      "max": 50,
+      "doc": "Distance before a junction where a vehicle asks for its turn to cross."
+    },
+    "junctionClear": {
+      "value": 3,
+      "unit": "m",
+      "min": 0,
+      "max": 20,
+      "doc": "The junction is free once the vehicle is this far past it."
+    },
+    "stopBack": {
+      "value": 1.5,
+      "unit": "m",
+      "min": 0,
+      "max": 10,
+      "doc": "A vehicle waiting for its turn stops this far before the junction."
+    },
+    "reservationTimeout": {
+      "value": 6,
+      "unit": "s",
+      "min": 1,
+      "max": 60,
+      "doc": "A junction held longer than this by a blocked vehicle is given to the next one."
+    },
+    "wheelbaseShare": {
+      "value": 0.6,
+      "unit": "ratio",
+      "min": 0.3,
+      "max": 0.9,
+      "doc": "Distance between the axles as a share of the vehicle length; both axles stay on the path, so the rear follows the road in the bends."
+    },
+    "spawnRadius": {
+      "value": 300,
+      "unit": "m",
+      "min": 100,
+      "max": 2000,
+      "doc": "Vehicles appear up to this distance from the bus."
+    },
+    "despawnRadius": {
+      "value": 380,
+      "unit": "m",
+      "min": 150,
+      "max": 2500,
+      "doc": "Vehicles farther than this from the bus disappear."
+    },
+    "spawnMinDistance": {
+      "value": 120,
+      "unit": "m",
+      "min": 0,
+      "max": 1000,
+      "doc": "Vehicles appear at least this far from the bus, out of sight."
+    },
+    "startMinDistance": {
+      "value": 25,
+      "unit": "m",
+      "min": 0,
+      "max": 500,
+      "doc": "At the start of a game the streets fill from this distance from the bus."
+    },
+    "spawnClearance": {
+      "value": 12,
+      "unit": "m",
+      "min": 2,
+      "max": 50,
+      "doc": "A vehicle appears only where no other one is this close on its lane."
+    },
+    "spawnAttempts": {
+      "value": 20,
+      "unit": "count",
+      "min": 1,
+      "max": 200,
+      "integer": true,
+      "doc": "Places tried per simulation step to add the missing vehicles."
+    },
+    "looks": {
+      "value": 8,
+      "unit": "count",
+      "min": 1,
+      "max": 12,
+      "integer": true,
+      "doc": "Car colours."
+    },
+    "drawDistance": {
+      "value": 350,
+      "unit": "m",
+      "min": 50,
+      "max": 2000,
+      "doc": "Vehicles are drawn up to this distance from the camera."
+    },
+    "beamLength": {
+      "value": 14,
+      "unit": "m",
+      "min": 2,
+      "max": 40,
+      "doc": "Length of the pool of light the headlights of a car throw on the road at night."
+    },
+    "beamWidth": {
+      "value": 6,
+      "unit": "m",
+      "min": 1,
+      "max": 15,
+      "doc": "Width of the pool of light of the headlights."
+    },
+    "beamGlow": {
+      "value": 0.55,
+      "unit": "ratio",
+      "min": 0,
+      "max": 2,
+      "doc": "Brightness of the pool of light of the headlights at night."
+    }
+  },
   "tiles": {
     "loadRadius": {
       "value": 2000,
@@ -2034,6 +2295,38 @@
           "min": 5,
           "max": 100,
           "doc": "Hard: distance from the route beyond which the bus is off route."
+        }
+      }
+    },
+    "traffic": {
+      "none": {
+        "vehicles": {
+          "value": 0,
+          "unit": "count",
+          "min": 0,
+          "max": 300,
+          "integer": true,
+          "doc": "Traffic off: no cars nor bikes."
+        }
+      },
+      "low": {
+        "vehicles": {
+          "value": 30,
+          "unit": "count",
+          "min": 0,
+          "max": 300,
+          "integer": true,
+          "doc": "Light traffic."
+        }
+      },
+      "high": {
+        "vehicles": {
+          "value": 140,
+          "unit": "count",
+          "min": 0,
+          "max": 300,
+          "integer": true,
+          "doc": "Dense traffic (heavier on the processor)."
         }
       }
     }
