@@ -139,6 +139,7 @@
     "nextStop": "Prochain arrêt : {stop}",
     "endOfService": "Terminus ! Fin du service.",
     "bump": "Accrochage !",
+    "redLight": "Feu rouge grillé !",
     "servedOnTime": "{stop} · à l'heure !",
     "servedDelta": "{stop} · {delta}",
     "missedStop": "Arrêt manqué : {stop}",

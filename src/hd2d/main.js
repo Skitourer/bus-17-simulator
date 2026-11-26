@@ -38,6 +38,8 @@ import { Fleet } from './fleet.js';
 import { OtherBuses } from './otherBuses.js';
 import { RoadNetwork, Traffic } from './traffic.js';
 import { TrafficLook } from './traffic3d.js';
+import { RedLightWatch, SignalMap } from './signals.js';
+import { SignalLook } from './signals3d.js';
 import { Pedestrians, Walkways, crossingCentres } from './pedestrians.js';
 import { peopleAtlas } from './crowd.js';
 import { BillboardPool } from './instances.js';
@@ -193,6 +195,8 @@ let gameDate = P.date;
 let lightShift = 0;
 /** sun elevation of the last daylight update (°), for the debug panel */
 let sunElevation = 0;
+/** red lights run by the player (#77) */
+let redLightsRun = 0;
 let bumps = 0,
   progress = 0,
   offT = 0,
@@ -225,6 +229,12 @@ let otherBuses;
 let traffic;
 /** @type {TrafficLook} */
 let trafficLook;
+/** @type {SignalMap} */
+let signals;
+/** @type {SignalLook} */
+let signalLook;
+/** @type {RedLightWatch} */
+let redLights;
 /** people walking in the streets (#50) @type {Pedestrians} */
 let walkers;
 /** @type {BillboardPool} */
@@ -359,7 +369,10 @@ async function load() {
   const season = seasonLook(dayOfYear(gameDate), S.seasons);
   world = buildWorld(scene, hf, { map, tiles, stops: places, guide }, track, S, season);
   otherBuses = new OtherBuses(scene, busGeometry(S, 'std'), S.budget);
-  traffic = new Traffic(new RoadNetwork(roads, S.traffic.speeds), S.traffic, Math.random);
+  const network = new RoadNetwork(roads, S.traffic.speeds);
+  signals = new SignalMap(roads, network, S.signals);
+  redLights = new RedLightWatch(signals, S.signals.redMinSpeed);
+  traffic = new Traffic(network, S.traffic, Math.random, signals);
   const walkways = new Walkways(roads, S.traffic.speeds);
   walkways.addCrossings(
     crossingCentres(tiles, tileIndex, S.pedestrians.crossingGather),
@@ -369,6 +382,7 @@ async function load() {
   walkerSprites = new BillboardPool(peopleAtlas(S.passengers.looks), S.passengers.looks, S.budget.capacity);
   scene.add(walkerSprites.mesh);
   trafficLook = new TrafficLook(scene, S.traffic, S.budget.capacity);
+  signalLook = new SignalLook(scene, signals, (x, y) => hf.h(x, y), S.signals);
   solid = { hit: (x, y) => world.index.hit(x, y) || fleet.hit(x, y) || traffic.hit(x, y) };
   bus = makeBus(B, S.lights);
   scene.add(bus.group);
@@ -433,6 +447,8 @@ async function load() {
     service.next +
     ' / bumps ' +
     bumps +
+    ' / red ' +
+    redLightsRun +
     ' / lat ' +
     nearest(drive.center.x, drive.center.y, progress, 60).d.toFixed(1);
   $('loading').hidden = true;
@@ -538,6 +554,7 @@ function update(dt) {
   const centre = drive.center;
   fleet.update(clock.t, dt, { x: centre.x, y: centre.y, h: drive.h, length: playerLength });
   const busDiscs = trafficObstacles(centre);
+  signals.advance(dt);
   traffic.update(dt, centre, [...busDiscs, ...walkers.obstacles()]);
   walkers.update(dt, centre, {
     vehicleComing: (x, y, impatient) =>
@@ -549,6 +566,10 @@ function update(dt) {
     blocked: (x, y) => busDiscs.some((o) => Math.hypot(o.x - x, o.y - y) < o.r),
   });
   if (ev) toast(t('toast.' + ev), 'bad');
+  if (redLights.step(centre.x, centre.y, drive.h, drive.v) >= 0) {
+    redLightsRun++;
+    toast(t('toast.redLight'), 'bad');
+  }
 
   // suivi du parcours
   const c = drive.center;
@@ -681,6 +702,7 @@ function render(dt) {
   world.tiles.update(c.x, c.y, S.tiles.buildBudget);
   otherBuses.draw(fleet.buses, camera.position.x, -camera.position.z);
   drawWalkers(camera.position.x, -camera.position.z);
+  signalLook.update();
   trafficLook.draw(traffic.vehicles, camera.position.x, -camera.position.z, (x, y) =>
     hf.surface(x, y, hf.h(x, y)),
   );

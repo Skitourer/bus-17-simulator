@@ -33,6 +33,7 @@ export default defineConfig({
         'src/hd2d/lamps.js',
         'src/hd2d/season.js',
         'src/hd2d/traffic.js',
+        'src/hd2d/signals.js',
         'src/hd2d/pedestrians.js',
         'src/hd2d/debug.js',
         'src/hd2d/stops.js',

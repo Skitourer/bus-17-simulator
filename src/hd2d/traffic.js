@@ -8,6 +8,8 @@
  * disappear out of sight around the bus. Pure logic, world metres (x east, y north), headings in radians.
  */
 
+import { mustStop } from './signals.js';
+
 /** @typedef {import('../settings/settings.js').Settings['traffic']} TrafficSettings */
 /** @typedef {import('../common/types.js').RoadsData} RoadsData */
 
@@ -218,11 +220,13 @@ export class Traffic {
   /**
    * @param {RoadNetwork} network @param {TrafficSettings} settings
    * @param {() => number} random 0..1, seeded in the tests
+   * @param {import('./signals.js').SignalMap | null} [signals] traffic lights the vehicles obey
    */
-  constructor(network, settings, random) {
+  constructor(network, settings, random, signals = null) {
     this.network = network;
     this.p = settings;
     this.random = random;
+    this.signals = signals;
     /** @type {Vehicle[]} */
     this.vehicles = [];
     /** @type {Map<number, {owner: number, since: number}>} junction node -> vehicle crossing it */
@@ -299,6 +303,21 @@ export class Traffic {
           keep(toEnd + other.s - (other.length + v.length) / 2, other.v);
           break;
         }
+    }
+    // at a red light the vehicle waits at the stop line without holding the junction
+    const signal = this.signals?.approaches.get(v.lane);
+    if (signal) {
+      const toLine = toEnd - signal.stopLine - v.length / 2;
+      const light = /** @type {import('./signals.js').SignalMap} */ (this.signals).light(
+        signal.group,
+        signal.phase,
+      );
+      if (mustStop(light, toLine, v.v, this.p.braking, this.p.maxBraking)) {
+        this.release(v);
+        keep(toLine, 0);
+        this.probe(v, obstacles, keep);
+        return { gap, speed };
+      }
     }
     // a junction is crossed only with its reservation: else stop before it
     if (this.network.junctions.has(lane.to) && toEnd < this.p.junctionApproach) {
