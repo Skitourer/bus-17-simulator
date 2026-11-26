@@ -282,6 +282,12 @@ function renderSettings() {
     quality: { low: 'settings.low', medium: 'settings.medium', high: 'settings.high' },
     viewDistance: { near: 'settings.near', medium: 'settings.mediumDistance', far: 'settings.far' },
     difficulty: { easy: 'settings.easy', normal: 'settings.normal', hard: 'settings.hard' },
+    traffic: {
+      none: 'settings.trafficNone',
+      low: 'settings.trafficLow',
+      medium: 'settings.trafficMedium',
+      high: 'settings.trafficHigh',
+    },
   };
   chips(
     $('qualityChips'),
@@ -300,6 +306,12 @@ function renderSettings() {
     CHOICES.difficulty.map((value) => ({ value, label: t(labels.difficulty[value]) })),
     preferences.difficulty,
     (difficulty) => changePreferences({ difficulty }),
+  );
+  chips(
+    $('trafficChips'),
+    CHOICES.traffic.map((value) => ({ value, label: t(labels.traffic[value]) })),
+    preferences.traffic,
+    (traffic) => changePreferences({ traffic }),
   );
   chips(
     $('debugChips'),

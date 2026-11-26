@@ -17,12 +17,12 @@ Fait
     Mode debug activable dans les réglages et avec F9 (#67)
     Date et heure du jeu, soleil et lune réels, cycle jour/nuit, lampadaires, fenêtres et phares (#55)
     Choix de la saison ou d'une date : couleurs du paysage, arbres, neige sur les montagnes (#70)
+    Voitures et vélos sur la chaussée, densité dans les réglages (#49)
 
 À faire
     Optimisation : ne pas afficher ni simuler tous les objets mobiles de la carte (#47, #12, #19)
     Bus des autres horaires, dans le même sens et en sens inverse (#48)
-    Véhicules lambda et vélos sur la chaussée (#49)
-    Personnes qui se promènent dans la rue (#50)
+    Personnes qui se promènent dans la rue (#50), et les voitures qui s'arrêtent aux passages piétons
     Hauteurs réelles des bâtiments (IGN BD TOPO) et styles variés (#56, #16)
     Mode deux joueurs en coopération, écran partagé verticalement ou horizontalement (#51)
     Volume sonore dans les réglages, quand le jeu aura du son

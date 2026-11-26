@@ -36,6 +36,8 @@ import { Crowd } from './crowd.js';
 import { StressTest } from './stress.js';
 import { Fleet } from './fleet.js';
 import { OtherBuses } from './otherBuses.js';
+import { RoadNetwork, Traffic } from './traffic.js';
+import { TrafficLook } from './traffic3d.js';
 import { SegmentGrid, kerbSegments, laneOffsets, offsetAt, placeStops } from './kerb.js';
 import { Mirrors } from './mirrors.js';
 import { eyePosition, lookTarget, steeringWheelAngle } from './views.js';
@@ -215,6 +217,10 @@ let stress = null;
 let fleet;
 /** @type {OtherBuses} */
 let otherBuses;
+/** cars and bikes around the bus (#49) @type {Traffic} */
+let traffic;
+/** @type {TrafficLook} */
+let trafficLook;
 /** what stops the player's bus besides the water: buildings and the other buses @type {{hit: (x: number, y: number) => boolean}} */
 let solid;
 // debug mode: free flight, collisions off (ghost), turbo
@@ -278,11 +284,12 @@ async function load() {
       if (!r.ok) throw new Error(f);
       return r.json();
     });
-  const [l, map, terrain, tileIndex] = await Promise.all([
+  const [l, map, terrain, tileIndex, roads] = await Promise.all([
     get('17.json'),
     get('map.json').catch(() => null),
     get('terrain.json'),
     get('tiles/index.json'),
+    get('roads.json'),
   ]);
   /** @type {Map<string, import('./ground.js').TileData>} */
   const tiles = new Map();
@@ -337,7 +344,9 @@ async function load() {
   const season = seasonLook(dayOfYear(gameDate), S.seasons);
   world = buildWorld(scene, hf, { map, tiles, stops: places, lane }, track, S, season);
   otherBuses = new OtherBuses(scene, busGeometry(S, 'std'), S.budget);
-  solid = { hit: (x, y) => world.index.hit(x, y) || fleet.hit(x, y) };
+  traffic = new Traffic(new RoadNetwork(roads, S.traffic.speeds), S.traffic, Math.random);
+  trafficLook = new TrafficLook(scene, S.traffic, S.budget.capacity);
+  solid = { hit: (x, y) => world.index.hit(x, y) || fleet.hit(x, y) || traffic.hit(x, y) };
   bus = makeBus(B, S.lights);
   scene.add(bus.group);
   // headlights at the front corners of the bus, aimed at the road ahead
@@ -422,6 +431,37 @@ function buildSynoptic() {
 }
 
 // ------------------------------------------------------------------ simulation
+/**
+ * What the cars and bikes stop before: the player's bus and the other buses near it, as discs along each bus.
+ * @param {{x: number, y: number}} centre @returns {import('./traffic.js').Obstacle[]}
+ */
+function trafficObstacles(centre) {
+  const r = B.bodyWidth / 2 + 0.3;
+  /** @type {import('./traffic.js').Obstacle[]} */
+  const out = [];
+  /** @param {number} x @param {number} y @param {number} h @param {number} length @param {number} v centre */
+  const discs = (x, y, h, length, v) => {
+    const count = Math.max(2, Math.ceil(length / r));
+    for (let k = 0; k < count; k++) {
+      const along = -length / 2 + r / 2 + ((length - r) * k) / (count - 1);
+      out.push({ x: x + Math.cos(h) * along, y: y + Math.sin(h) * along, r, v, h });
+    }
+  };
+  // the player's bus: from its front back over its whole length, rear body included (taken straight)
+  const middle = B.bodyLength / 2 - playerLength / 2;
+  discs(
+    centre.x + Math.cos(drive.h) * middle,
+    centre.y + Math.sin(drive.h) * middle,
+    drive.h,
+    playerLength,
+    Math.max(0, drive.v),
+  );
+  for (const b of fleet.buses)
+    if (Math.hypot(b.x - centre.x, b.y - centre.y) < S.traffic.despawnRadius)
+      discs(b.x, b.y, b.h, S.bus.bodyLength, 0);
+  return out;
+}
+
 /** @param {number} dt */
 function update(dt) {
   const G = S.gameplay;
@@ -443,6 +483,7 @@ function update(dt) {
   if (drive.bump === 0) bumps++;
   const centre = drive.center;
   fleet.update(clock.t, dt, { x: centre.x, y: centre.y, h: drive.h, length: playerLength });
+  traffic.update(dt, centre, trafficObstacles(centre));
   if (ev) toast(t('toast.' + ev), 'bad');
 
   // suivi du parcours
@@ -575,6 +616,9 @@ function render(dt) {
   crowd.draw(camera.position.x, -camera.position.z);
   world.tiles.update(c.x, c.y, S.tiles.buildBudget);
   otherBuses.draw(fleet.buses, camera.position.x, -camera.position.z);
+  trafficLook.draw(traffic.vehicles, camera.position.x, -camera.position.z, (x, y) =>
+    hf.surface(x, y, hf.h(x, y)),
+  );
   if (stress) {
     stress.update(dt, { x: c.x, y: c.y, h: drive.h });
     stress.draw(camera.position.x, -camera.position.z);
@@ -900,6 +944,7 @@ function debugPanel() {
     buses: fleet.buses.length,
     tiles: world.tiles.count,
     sun: sunElevation.toFixed(1),
+    traffic: traffic.vehicles.length,
     sprites: (stress?.shown.sprites ?? 0) + crowd.pool.geometry.instanceCount,
   });
 }

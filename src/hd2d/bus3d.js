@@ -175,6 +175,14 @@ function lightedFace(map, emissiveMap) {
 }
 
 /**
+ * Light that glows at night with the buses' lights (the cars of the traffic, #49).
+ * @param {THREE.MeshLambertMaterial} material
+ */
+export function glowAtNight(material) {
+  glowing.add(material);
+}
+
+/**
  * Head, tail and sign lights of all the buses, 0 (off) and up.
  * @param {number} level
  */

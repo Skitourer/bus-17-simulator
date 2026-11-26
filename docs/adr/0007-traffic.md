@@ -1,0 +1,36 @@
+# ADR 0007: Ambient traffic model
+
+_[Français](0007-traffic.fr.md)_ · Status: accepted · Date: 2026-11-26
+
+## Context
+
+The streets were empty (#49). Cars and bikes must drive on the real road graph (ADR 0002),
+keep their distance, cross junctions without driving through each other and stop for the
+player's bus, for a few dozen vehicles at 60 steps per second in the browser.
+
+## Decision
+
+- `src/hd2d/traffic.js` (pure): each direction of a street of `roads.json` is a lane, driven
+  on the right; bus ways, service roads and tunnels are left out.
+- Car following with the **Intelligent Driver Model** (Treiber, Hennecke and Helbing, 2000):
+  one formula for free driving, following and stopping, with documented parameters in
+  `game.json`.
+- Junctions: **one vehicle at a time** (a reservation per node, first come; vehicles already
+  on a roundabout go first; released once the junction is cleared, or after a timeout).
+- Obstacles (the buses) are discs; a vehicle checks points of its path ahead.
+- Vehicles appear and disappear out of sight around the bus; their count is a player
+  preference (none, light, normal, dense).
+
+## Consequences
+
+- No physics engine and no lane changes: queues form behind a stopped bus, cars pass bikes
+  only on wide roads.
+- Junction capacity is lower than in reality; enough for the density of the game.
+- Pedestrians at zebra crossings wait for the pedestrians of #50.
+
+## Rejected alternatives
+
+- **Traffic lights from OSM**: few are tagged, and timing them is guesswork.
+- **A traffic library (SUMO and the like)**: native, far too heavy for a browser game.
+- **Gipps or Krauss models**: no simpler, and the IDM is the usual reference with
+  published parameters.

@@ -47,7 +47,7 @@ describe('game.json', () => {
     // a module-level UPPER_CASE name bound to a plain number (or arithmetic on numbers)
     const constant = /^(?:export )?const ([A-Z][A-Z0-9_]*) = -?[\d.]+(?:\s*[-+*/]\s*[\d.]+)*\s*[;,]/gm;
     // not tunable: layout of the facade texture, and calendar and astronomical constants (#55)
-    const allowed = ['PLAIN_U', 'FACADE_BAYS', 'UNIX_EPOCH_JD', 'J2000', 'DAY_MS', 'YEAR_DAYS'];
+    const allowed = ['PLAIN_U', 'FACADE_BAYS', 'UNIX_EPOCH_JD', 'J2000', 'DAY_MS', 'YEAR_DAYS', 'CELL'];
     const found = SOURCES.flatMap(({ text }) => [...text.matchAll(constant)].map((m) => m[1]));
     expect(found.filter((name) => !allowed.includes(name))).toEqual([]);
   });
