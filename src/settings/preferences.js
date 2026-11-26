@@ -1,6 +1,7 @@
 // @ts-check
 /**
- * Player preferences (#46): language, graphics quality, view distance, difficulty and key bindings, chosen
+ * Player preferences (#46): language, graphics quality, view distance, difficulty, key bindings and the
+ * debug mode (#67), chosen
  * in the settings screen and kept in the browser. They are applied on top of the game.json values: a
  * preset replaces some parameters, the middle choice of each keeps game.json as is.
  */
@@ -15,7 +16,7 @@ export const CHOICES = Object.freeze(
   }),
 );
 
-/** Actions the player may bind to another key; the debug keys and Escape (menu) stay fixed. */
+/** Actions the player may bind to another key; the debug keys, the debug switch and Escape (menu) stay fixed. */
 export const REMAPPABLE = Object.freeze(
   /** @type {import('../common/keys.js').Action[]} */ ([
     'accelerate',
@@ -39,6 +40,7 @@ export const REMAPPABLE = Object.freeze(
  * @property {'near' | 'medium' | 'far'} viewDistance
  * @property {'easy' | 'normal' | 'hard'} difficulty
  * @property {Partial<Record<import('../common/keys.js').Action, string>>} keys main key of an action, when changed
+ * @property {boolean} debug debug mode, for development (#67)
  */
 
 /** @type {Readonly<Preferences>} */
@@ -48,6 +50,7 @@ export const DEFAULT_PREFERENCES = Object.freeze({
   viewDistance: 'far',
   difficulty: 'normal',
   keys: {},
+  debug: false,
 });
 
 /** Storage key in the browser. */
@@ -79,6 +82,7 @@ export function parsePreferences(raw, languages) {
     viewDistance: pick(CHOICES.viewDistance, data.viewDistance, DEFAULT_PREFERENCES.viewDistance),
     difficulty: pick(CHOICES.difficulty, data.difficulty, DEFAULT_PREFERENCES.difficulty),
     keys,
+    debug: data.debug === true,
   };
 }
 
@@ -131,7 +135,7 @@ export function bindingsWith(keys) {
  * @param {string} code @returns {import('../common/keys.js').Action | null}
  */
 export function keyConflict(bindings, action, code) {
-  const fixed = /** @type {import('../common/keys.js').Action[]} */ (['menu']);
+  const fixed = /** @type {import('../common/keys.js').Action[]} */ (['menu', 'debug']);
   for (const other of [...REMAPPABLE, ...fixed])
     if (other !== action && bindings[other].includes(code)) return other;
   return null;

@@ -234,6 +234,15 @@ function renderSettings() {
     preferences.difficulty,
     (difficulty) => changePreferences({ difficulty }),
   );
+  chips(
+    $('debugChips'),
+    [
+      { value: false, label: t('settings.off') },
+      { value: true, label: t('settings.on') },
+    ],
+    preferences.debug,
+    (debug) => changePreferences({ debug }),
+  );
   renderKeys();
 }
 
