@@ -42,6 +42,7 @@ import { Pedestrians, Walkways, crossingCentres } from './pedestrians.js';
 import { peopleAtlas } from './crowd.js';
 import { BillboardPool } from './instances.js';
 import { SegmentGrid, kerbSegments, laneOffsets, offsetAt, placeStops } from './kerb.js';
+import { guidanceLanes, guidanceLine, offRoadStretches } from './guidance.js';
 import { Mirrors } from './mirrors.js';
 import { eyePosition, lookTarget, steeringWheelAngle } from './views.js';
 /** @typedef {import('./stops.js').StopEvent} StopEvent */
@@ -318,6 +319,13 @@ async function load() {
     kerbMargin: S.gameplay.kerbMargin,
   };
   lane = laneOffsets(track, kerbs, laneParams);
+  const guide = guidanceLine(track, guidanceLanes(roads), lane, {
+    ...S.guidance,
+    bodyWidth: B.bodyWidth,
+    kerbMargin: S.gameplay.kerbMargin,
+  });
+  if (debug)
+    console.info('guidance off the roads (m along the route):', offRoadStretches(guide.onRoad, track.step));
   // the other services of the day, in both directions (the player's direction shares its route and lane)
   const fleetDirections = line.directions.map((direction, i) => {
     const route = i === P.dir ? track : new Track(direction, line.step);
@@ -349,7 +357,7 @@ async function load() {
     ? alignDate(P.date, line.calendar[P.day]?.days)
     : serviceDate(P.day, line.calendar, new Date());
   const season = seasonLook(dayOfYear(gameDate), S.seasons);
-  world = buildWorld(scene, hf, { map, tiles, stops: places, lane }, track, S, season);
+  world = buildWorld(scene, hf, { map, tiles, stops: places, guide }, track, S, season);
   otherBuses = new OtherBuses(scene, busGeometry(S, 'std'), S.budget);
   traffic = new Traffic(new RoadNetwork(roads, S.traffic.speeds), S.traffic, Math.random);
   const walkways = new Walkways(roads, S.traffic.speeds);

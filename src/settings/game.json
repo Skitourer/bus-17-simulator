@@ -1516,6 +1516,51 @@
       "doc": "Share of white on a snowy forest (the trees stay partly dark)."
     }
   },
+  "guidance": {
+    "laneWidth": {
+      "value": 3.25,
+      "unit": "m",
+      "min": 2.5,
+      "max": 4,
+      "source": "CEREMA urban street design guides: lanes of 3.0 to 3.5 m (same value as tools/roads.py)",
+      "doc": "Width of a traffic lane: the guidance strip is drawn in the middle of the right-most lane of each road."
+    },
+    "snapReach": {
+      "value": 12,
+      "unit": "m",
+      "min": 2,
+      "max": 40,
+      "doc": "Farthest road centre line a route point is matched to; beyond it the strip keeps the bus lane of the route."
+    },
+    "snapAngle": {
+      "value": 60,
+      "unit": "°",
+      "min": 10,
+      "max": 90,
+      "doc": "Largest angle between the route and a road for the route to be matched to it: keeps the strip off cross streets and off the opposite lane."
+    },
+    "snapSpread": {
+      "value": 3,
+      "unit": "m",
+      "min": 0.5,
+      "max": 10,
+      "doc": "Usual distance between the GTFS route and the road centre line it runs on: a road this far costs as much as a road at the largest angle."
+    },
+    "jumpCost": {
+      "value": 25,
+      "unit": "cost",
+      "min": 1,
+      "max": 1000,
+      "doc": "Cost of the match leaving a road for one it is not connected to (or for no road), in squared snapSpread units: about 15 m of distance with the default spread, so the match does not flicker between parallel roads."
+    },
+    "smoothing": {
+      "value": 2,
+      "unit": "m",
+      "min": 0,
+      "max": 30,
+      "doc": "Half-length of the moving average of the strip: rounds the corners of the junctions."
+    }
+  },
   "world": {
     "roadLift": {
       "value": 0.05,
