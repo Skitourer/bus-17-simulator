@@ -2066,6 +2066,151 @@
       "doc": "Brightness of the pool of light of the headlights at night."
     }
   },
+  "pedestrians": {
+    "count": {
+      "value": 60,
+      "unit": "people",
+      "min": 0,
+      "max": 400,
+      "integer": true,
+      "doc": "People walking around the bus. Middle choice of the player (default); presets.pedestrians holds the others."
+    },
+    "speed": {
+      "value": 1.3,
+      "unit": "m/s",
+      "min": 0.5,
+      "max": 2.5,
+      "source": "Typical urban walking speed, 1.2 to 1.4 m/s",
+      "doc": "Walking speed (about 4.7 km/h)."
+    },
+    "speedSpread": {
+      "value": 0.3,
+      "unit": "ratio",
+      "min": 0,
+      "max": 1,
+      "doc": "People walk between 1 - spread/2 and 1 + spread/2 times the walking speed."
+    },
+    "sidewalkOffset": {
+      "value": 1.6,
+      "unit": "m",
+      "min": 0.3,
+      "max": 5,
+      "doc": "People walk this far from the edge of the carriageway."
+    },
+    "lookAhead": {
+      "value": 1,
+      "unit": "m",
+      "min": 0.2,
+      "max": 5,
+      "doc": "A person stops when an obstacle (a bus) is this close ahead."
+    },
+    "crossChance": {
+      "value": 0.5,
+      "unit": "ratio",
+      "min": 0,
+      "max": 1,
+      "doc": "Chance that a person crosses the street at a zebra crossing on the way."
+    },
+    "crossingGather": {
+      "value": 6,
+      "unit": "m",
+      "min": 1,
+      "max": 20,
+      "doc": "Zebra stripes closer than this form one crossing."
+    },
+    "crossingReach": {
+      "value": 8,
+      "unit": "m",
+      "min": 1,
+      "max": 30,
+      "doc": "A crossing belongs to the nearest street within this distance."
+    },
+    "clearRadius": {
+      "value": 30,
+      "unit": "m",
+      "min": 5,
+      "max": 100,
+      "doc": "A person waits at the kerb while a vehicle comes towards the crossing from closer than this."
+    },
+    "clearNear": {
+      "value": 6,
+      "unit": "m",
+      "min": 1,
+      "max": 20,
+      "doc": "A person also waits while any vehicle is this close to the crossing."
+    },
+    "patience": {
+      "value": 8,
+      "unit": "s",
+      "min": 0,
+      "max": 120,
+      "doc": "After waiting this long at a crossing, a person steps on it unless a vehicle is very close; the vehicles must then stop (French highway code: priority to pedestrians engaging on a crossing)."
+    },
+    "crossingGroup": {
+      "value": 3,
+      "unit": "s",
+      "min": 0,
+      "max": 20,
+      "doc": "People reaching a crossing within this time of the first one cross with it."
+    },
+    "crossingRest": {
+      "value": 10,
+      "unit": "s",
+      "min": 1,
+      "max": 60,
+      "doc": "After a group has crossed, the next people let the waiting vehicles go for this long."
+    },
+    "obstacleRadius": {
+      "value": 0.6,
+      "unit": "m",
+      "min": 0.2,
+      "max": 2,
+      "doc": "Size of a person on a crossing for the vehicles that stop before it."
+    },
+    "spawnRadius": {
+      "value": 220,
+      "unit": "m",
+      "min": 50,
+      "max": 1000,
+      "doc": "People appear up to this distance from the bus."
+    },
+    "despawnRadius": {
+      "value": 280,
+      "unit": "m",
+      "min": 80,
+      "max": 1200,
+      "doc": "People farther than this from the bus disappear."
+    },
+    "spawnMinDistance": {
+      "value": 90,
+      "unit": "m",
+      "min": 0,
+      "max": 500,
+      "doc": "People appear at least this far from the bus, out of sight."
+    },
+    "startMinDistance": {
+      "value": 8,
+      "unit": "m",
+      "min": 0,
+      "max": 200,
+      "doc": "At the start of a game the sidewalks fill from this distance from the bus."
+    },
+    "spawnAttempts": {
+      "value": 20,
+      "unit": "count",
+      "min": 1,
+      "max": 200,
+      "integer": true,
+      "doc": "Places tried per simulation step to add the missing people."
+    },
+    "drawDistance": {
+      "value": 220,
+      "unit": "m",
+      "min": 30,
+      "max": 1000,
+      "doc": "People are drawn up to this distance from the camera."
+    }
+  },
   "tiles": {
     "loadRadius": {
       "value": 2000,
@@ -2327,6 +2472,38 @@
           "max": 300,
           "integer": true,
           "doc": "Dense traffic (heavier on the processor)."
+        }
+      }
+    },
+    "pedestrians": {
+      "none": {
+        "count": {
+          "value": 0,
+          "unit": "people",
+          "min": 0,
+          "max": 400,
+          "integer": true,
+          "doc": "Nobody walking in the streets."
+        }
+      },
+      "low": {
+        "count": {
+          "value": 25,
+          "unit": "people",
+          "min": 0,
+          "max": 400,
+          "integer": true,
+          "doc": "Few people in the streets."
+        }
+      },
+      "high": {
+        "count": {
+          "value": 130,
+          "unit": "people",
+          "min": 0,
+          "max": 400,
+          "integer": true,
+          "doc": "Busy streets (heavier on the processor)."
         }
       }
     }

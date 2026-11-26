@@ -288,6 +288,12 @@ function renderSettings() {
       medium: 'settings.trafficMedium',
       high: 'settings.trafficHigh',
     },
+    pedestrians: {
+      none: 'settings.pedestriansNone',
+      low: 'settings.pedestriansLow',
+      medium: 'settings.pedestriansMedium',
+      high: 'settings.pedestriansHigh',
+    },
   };
   chips(
     $('qualityChips'),
@@ -312,6 +318,12 @@ function renderSettings() {
     CHOICES.traffic.map((value) => ({ value, label: t(labels.traffic[value]) })),
     preferences.traffic,
     (traffic) => changePreferences({ traffic }),
+  );
+  chips(
+    $('pedestrianChips'),
+    CHOICES.pedestrians.map((value) => ({ value, label: t(labels.pedestrians[value]) })),
+    preferences.pedestrians,
+    (pedestrians) => changePreferences({ pedestrians }),
   );
   chips(
     $('debugChips'),

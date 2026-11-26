@@ -16,7 +16,8 @@ player's bus, for a few dozen vehicles at 60 steps per second in the browser.
   one formula for free driving, following and stopping, with documented parameters in
   `game.json`.
 - Junctions: **one vehicle at a time** (a reservation per node, first come; vehicles already
-  on a roundabout go first; released once the junction is cleared, or after a timeout).
+  on a roundabout go first; only the first vehicle of a lane may ask; released once the junction
+  is cleared, or after a timeout).
 - Obstacles (the buses) are discs; a vehicle checks points of its path ahead.
 - Vehicles appear and disappear out of sight around the bus; their count is a player
   preference (none, light, normal, dense).
@@ -26,7 +27,10 @@ player's bus, for a few dozen vehicles at 60 steps per second in the browser.
 - No physics engine and no lane changes: queues form behind a stopped bus, cars pass bikes
   only on wide roads.
 - Junction capacity is lower than in reality; enough for the density of the game.
-- Pedestrians at zebra crossings wait for the pedestrians of #50.
+- Pedestrians (#50) walk on both sides of the same streets and cross at the zebra crossings
+  of the street data: they wait for the moving vehicles, then step on (after a while, unless a
+  vehicle is very close); a person on a crossing is an obstacle the vehicles stop for, and
+  people let the waiting vehicles go between groups.
 
 ## Rejected alternatives
 

@@ -66,6 +66,11 @@
     "trafficLow": "Fluide",
     "trafficMedium": "Normale",
     "trafficHigh": "Dense",
+    "pedestrians": "Piétons",
+    "pedestriansNone": "Personne",
+    "pedestriansLow": "Peu",
+    "pedestriansMedium": "Normal",
+    "pedestriansHigh": "Beaucoup",
     "keys": "Touches",
     "keysHelp": "Clique sur une action puis appuie sur sa nouvelle touche. Les flèches restent toujours actives ; Échap ouvre toujours le menu.",
     "pressKey": "Appuie sur une touche… (Échap : annuler)",
@@ -152,7 +157,7 @@
     "passenger": "Passager"
   },
   "debug": {
-    "panel": "x {x} · y {y} · s {s} m · sol {ground} m · eau {water} · {fps} i/s · {calls} appels · {triangles} k triangles · {models} modèles · {sprites} sprites · {buses} autres bus en service · {tiles} tuiles détaillées · soleil {sun}° · {traffic} véhicules",
+    "panel": "x {x} · y {y} · s {s} m · sol {ground} m · eau {water} · {fps} i/s · {calls} appels · {triangles} k triangles · {models} modèles · {sprites} sprites · {buses} autres bus en service · {tiles} tuiles détaillées · soleil {sun}° · {traffic} véhicules · {walkers} piétons",
     "noWater": "—",
     "keys": "<b>DEBUG</b> · <b>{keyTurbo}</b> turbo · <b>{keyNextStop} / {keyPreviousStop}</b> arrêt suivant/précédent · <b>clic carte</b> téléporter n'importe où · <b>&stress=200</b> dans l'adresse : 200 véhicules de test · <b>{keyGhost}</b> collisions · <b>{keyFly}</b> vol libre (<b>{keyMove}</b>, <b>{keyFlyUp} / {keyFlyDown}</b> monter/descendre, <b>souris</b> regarder, <b>{keyLand}</b> poser le bus) · <b>{keyEarlierLight} / {keyLaterLight}</b> lumière plus tôt / plus tard · <b>{keyDebug}</b> quitter le debug",
     "on": "Mode debug",
