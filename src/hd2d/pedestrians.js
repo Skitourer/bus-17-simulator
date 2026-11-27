@@ -36,10 +36,12 @@ const CELL = 200;
 export class Walkways {
   /**
    * @param {RoadsData} roads @param {import('../settings/settings.js').Settings['traffic']['speeds']} speeds the
-   * streets with a speed limit for the traffic have sidewalks
+   * streets with a speed limit for the traffic, in built-up areas when the data tells them (#94), have sidewalks
    */
   constructor(roads, speeds) {
     const tunnel = roads.flags.indexOf('tunnel');
+    // people walk in towns, villages and hamlets only (#94)
+    const builtUp = roads.flags.indexOf('built_up');
     /** @type {Walkway[]} */
     this.edges = [];
     /** @type {Map<number, number[]>} walkways at each node */
@@ -49,6 +51,7 @@ export class Walkways {
     for (const edge of roads.edges) {
       const [a, b, cls, widthDm, , mask] = edge;
       if (!classSpeed(roads.classes[cls], speeds) || (tunnel >= 0 && mask & (1 << tunnel))) continue;
+      if (builtUp >= 0 && !(mask & (1 << builtUp))) continue;
       const pts = Float64Array.from(edge.slice(6), (v) => v / 10);
       const cum = cumulative(pts);
       const id = this.edges.length;
@@ -191,6 +194,8 @@ export class Pedestrians {
     this.people = [];
     this.nextId = 1;
     this.started = false;
+    /** @type {{key: string, count: number} | null} people wanted around the cell of the bus */
+    this.wantedCache = null;
     this.time = 0;
     /** @type {Map<string, number>} time each crossing was last stepped on, by "walkway:distance" */
     this.lastUse = new Map();
@@ -312,14 +317,31 @@ export class Pedestrians {
   }
 
   /**
+   * People wanted around the bus: `density` per km of the streets with sidewalks near it (none in the
+   * countryside, #94), at most `count`; computed again when the bus enters another cell.
+   * @param {{x: number, y: number}} centre
+   */
+  wanted(centre) {
+    const key = cellKey(centre.x, centre.y);
+    if (this.wantedCache?.key !== key) {
+      let km = 0;
+      for (const id of this.walkways.near(centre.x, centre.y, this.p.spawnRadius))
+        km += this.walkways.edges[id].length / 1000;
+      this.wantedCache = { key, count: Math.min(this.p.count, Math.round(this.p.density * km)) };
+    }
+    return this.wantedCache.count;
+  }
+
+  /**
    * Add people up to the wanted count on sidewalks between `minDistance` and spawnRadius from the bus.
    * @param {{x: number, y: number}} centre @param {number} minDistance
    */
   spawn(centre, minDistance) {
-    if (this.people.length >= this.p.count) return;
+    const wanted = this.wanted(centre);
+    if (this.people.length >= wanted) return;
     const near = this.walkways.near(centre.x, centre.y, this.p.spawnRadius);
     if (!near.length) return;
-    for (let attempt = 0; attempt < this.p.spawnAttempts && this.people.length < this.p.count; attempt++) {
+    for (let attempt = 0; attempt < this.p.spawnAttempts && this.people.length < wanted; attempt++) {
       const edge = near[Math.floor(this.random() * near.length)];
       const s = this.random() * this.walkways.edges[edge].length;
       /** @type {Pedestrian} */

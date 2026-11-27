@@ -1956,7 +1956,22 @@
       "min": 0,
       "max": 300,
       "integer": true,
-      "doc": "Cars and bikes driving around the bus. Middle choice of the player (default); presets.traffic holds the others."
+      "doc": "Most cars and bikes driving around the bus (processor budget). Middle choice of the player (default); presets.traffic holds the others."
+    },
+    "density": {
+      "value": 1.5,
+      "unit": "vehicles/km",
+      "min": 0,
+      "max": 20,
+      "doc": "Cars and bikes per km of lane in built-up areas around the bus, up to `vehicles` (#94). Middle choice of the player; presets.traffic holds the others. Far below real town traffic (HCM 2010, level of service A: up to 7 vehicles/km/lane) so that the bus is not held up all the time.",
+      "source": "Highway Capacity Manual 2010, exhibit 11-5 (order of magnitude only)"
+    },
+    "ruralShare": {
+      "value": 0.3,
+      "unit": "ratio",
+      "min": 0,
+      "max": 1,
+      "doc": "Density of the cars outside built-up areas, as a share of the town density (#94); no bikes there."
     },
     "bikeShare": {
       "value": 0.2,
@@ -2302,7 +2317,14 @@
       "min": 0,
       "max": 400,
       "integer": true,
-      "doc": "People walking around the bus. Middle choice of the player (default); presets.pedestrians holds the others."
+      "doc": "Most people walking around the bus (processor budget). Middle choice of the player (default); presets.pedestrians holds the others."
+    },
+    "density": {
+      "value": 8,
+      "unit": "people/km",
+      "min": 0,
+      "max": 100,
+      "doc": "People per km of street with sidewalks (built-up areas only, #94) around the bus, up to `count`. Middle choice of the player; presets.pedestrians holds the others."
     },
     "speed": {
       "value": 1.3,
@@ -2698,6 +2720,13 @@
           "max": 300,
           "integer": true,
           "doc": "Light traffic."
+        },
+        "density": {
+          "value": 0.7,
+          "unit": "vehicles/km",
+          "min": 0,
+          "max": 20,
+          "doc": "Light traffic: vehicles per km of lane in built-up areas."
         }
       },
       "high": {
@@ -2708,6 +2737,13 @@
           "max": 300,
           "integer": true,
           "doc": "Dense traffic (heavier on the processor)."
+        },
+        "density": {
+          "value": 3,
+          "unit": "vehicles/km",
+          "min": 0,
+          "max": 20,
+          "doc": "Dense traffic: vehicles per km of lane in built-up areas."
         }
       }
     },
@@ -2730,6 +2766,13 @@
           "max": 400,
           "integer": true,
           "doc": "Few people in the streets."
+        },
+        "density": {
+          "value": 3.5,
+          "unit": "people/km",
+          "min": 0,
+          "max": 100,
+          "doc": "Few people: people per km of street with sidewalks."
         }
       },
       "high": {
@@ -2740,6 +2783,13 @@
           "max": 400,
           "integer": true,
           "doc": "Busy streets (heavier on the processor)."
+        },
+        "density": {
+          "value": 17,
+          "unit": "people/km",
+          "min": 0,
+          "max": 100,
+          "doc": "Busy streets: people per km of street with sidewalks."
         }
       }
     }

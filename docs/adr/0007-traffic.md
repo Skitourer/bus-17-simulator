@@ -26,6 +26,10 @@ player's bus, for a few dozen vehicles at 60 steps per second in the browser.
   when it has no room or is stuck again: no deadlock lasts more than a few seconds.
 - Vehicles appear and disappear out of sight around the bus; their count is a player
   preference (none, light, normal, dense).
+- Since #94 (2026-11-28) the count follows the roads near the bus: a **density per km of
+  lane**, lower outside **built-up areas** (`built_up` flag of `roads.json`: enough buildings
+  or built ground near the road, from the BD TOPO footprints), with the preference as a
+  ceiling. Bikes and pedestrians stay in built-up areas.
 
 ## Consequences
 
