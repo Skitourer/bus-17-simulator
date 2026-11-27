@@ -1095,11 +1095,19 @@
   },
   "lights": {
     "lampSpacing": {
-      "value": 32,
+      "value": 64,
       "unit": "m",
       "min": 10,
       "max": 200,
-      "doc": "Distance between two street lights along a kerb (Grenoble streets: about 25 to 40 m)."
+      "doc": "Distance between two street lights along one kerb; the two kerbs of a street start at different places, so the lights are staggered about 32 m apart along the street (#89).",
+      "source": "Urban street lighting practice (CEREMA guides): poles 8 to 10 m high, staggered or on one side, about 25 to 40 m apart (order of magnitude)"
+    },
+    "lampReach": {
+      "value": 6,
+      "unit": "m",
+      "min": 0,
+      "max": 30,
+      "doc": "Street lights stand within this distance of the carriageway of a street of a built-up area (#89, #94); none in the countryside."
     },
     "lampHeight": {
       "value": 7,
@@ -1108,12 +1116,26 @@
       "max": 15,
       "doc": "Height of the street lights."
     },
-    "lampGlowSize": {
-      "value": 3,
+    "lampPoolRadius": {
+      "value": 6,
       "unit": "m",
-      "min": 0.5,
-      "max": 10,
-      "doc": "Size of the glowing halo of a street light at night."
+      "min": 1,
+      "max": 20,
+      "doc": "Radius of the pool of light under a street light at night, where its cone of light meets the ground (#89)."
+    },
+    "lampConeGlow": {
+      "value": 0.07,
+      "unit": "ratio",
+      "min": 0,
+      "max": 1,
+      "doc": "Brightness of the cone of light under a street light at night, as seen in the air (#89)."
+    },
+    "lampPoolGlow": {
+      "value": 0.45,
+      "unit": "ratio",
+      "min": 0,
+      "max": 1,
+      "doc": "Brightness of the pool of light on the ground under a street light at night (#89)."
     },
     "lampColor": {
       "value": "#ffcf8a",

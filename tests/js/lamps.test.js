@@ -1,6 +1,6 @@
 // @ts-check
 import { describe, expect, it } from 'vitest';
-import { PlaceGrid, placesAlong } from '../../src/hd2d/lamps.js';
+import { BuiltUpStreets, PlaceGrid, placesAlong } from '../../src/hd2d/lamps.js';
 
 describe('placesAlong', () => {
   it('places points every spacing from half a spacing, across the line points', () => {
@@ -29,5 +29,34 @@ describe('PlaceGrid', () => {
     ]);
     expect(grid.nearest(12, 1, 10)).toHaveLength(3);
     expect(grid.nearest(-500, 0, 3)).toEqual([]);
+  });
+});
+
+describe('BuiltUpStreets', () => {
+  /**
+   * A village street from (0, 0) to (100, 0), 6 m wide, then a country road on to (500, 0); decimetres.
+   * @param {string[]} flags @returns {import('../../src/common/types.js').RoadsData}
+   */
+  const roads = (flags) => ({
+    attribution: '',
+    classes: ['minor'],
+    flags,
+    nodes: [0, 0, 1000, 0, 5000, 0],
+    edges: [
+      [0, 1, 0, 60, 0, 1, 0, 0, 1000, 0],
+      [1, 2, 0, 60, 0, 0, 1000, 0, 5000, 0],
+    ],
+  });
+
+  it('keeps the street lights along the built-up streets only', () => {
+    const streets = new BuiltUpStreets(roads(['built_up']), 4);
+    // on the kerbs of the village street, beside it but too far, on the country road
+    expect(streets.keep([50, 4, 50, -4, 50, 9, 300, 4])).toEqual([50, 4, 50, -4]);
+    expect(streets.has(103, 3)).toBe(true);
+    expect(streets.has(120, 3)).toBe(false);
+  });
+
+  it('keeps every place without built-up areas in the data', () => {
+    expect(new BuiltUpStreets(roads(['oneway']), 4).keep([300, 4])).toEqual([300, 4]);
   });
 });
