@@ -4,8 +4,11 @@
  * Each direction of a road edge is a lane, driven on the right. Vehicles follow the one ahead with the
  * Intelligent Driver Model (Treiber, Hennecke and Helbing, Phys. Rev. E 62, 2000), take a random way at each
  * junction, cross a junction one at a time (first come, the vehicles already on a roundabout first) and stop
- * before any obstacle on their path (the player's bus, the other buses of the line). They appear and
- * disappear out of sight around the bus. Pure logic, world metres (x east, y north), headings in radians.
+ * before any obstacle on their path (the player's bus, the other buses of the line). The player's bus is a
+ * priority vehicle (#95): they keep a larger gap from it and leave it the junctions it drives to; one that
+ * stays stuck against it, or waits for it across its way, backs off or is removed, so that no deadlock lasts.
+ * They appear and disappear out of sight around the bus. Pure logic, world metres (x east, y north), headings
+ * in radians.
  */
 
 import { mustStop } from './signals.js';
@@ -29,10 +32,23 @@ import { mustStop } from './signals.js';
  * @property {number} variant look (colour) @property {number} x @property {number} y @property {number} h
  * @property {number} reserved junction node it may cross, -1 when none
  * @property {number} previous lane driven before this one, -1 when none
- * @property {boolean} [gone] reached the end of a road that leaves the map
+ * @property {boolean} [gone] reached the end of a road that leaves the map, or removed to unstick the bus
+ * @property {number} [stuck] time stopped against the player's bus or waiting for it (s)
+ * @property {number} [backing] distance still to back off (m)
+ * @property {number} [backOffs] times it backed off
+ * @property {number} [pushed] time the player's bus has been pushing against it (s)
  */
 
-/** @typedef {{x: number, y: number, r: number, v: number, h: number}} Obstacle a disc, its speed and heading */
+/**
+ * @typedef {{x: number, y: number, r: number, v: number, h: number, priority?: boolean}} Obstacle a disc, its speed
+ * and heading; `priority` for the player's bus
+ */
+
+/**
+ * @typedef {object} BusWait the player's bus is what a vehicle waits for
+ * @property {number} gap free distance to it (m) @property {boolean} follows it drives the same way, ahead
+ * @property {number} speed of the bus (m/s)
+ */
 
 /** @param {number} kmh */
 const ms = (kmh) => kmh / 3.6;
@@ -234,6 +250,8 @@ export class Traffic {
     this.time = 0;
     this.nextId = 1;
     this.started = false;
+    /** @type {Obstacle[]} obstacles of the last step */
+    this.lastObstacles = [];
   }
 
   /** Offset of a vehicle right of its lane centre line. @param {Vehicle} v @param {Lane} lane */
@@ -249,6 +267,7 @@ export class Traffic {
    */
   update(dt, centre, obstacles) {
     this.time += dt;
+    this.lastObstacles = obstacles;
     const byLane = this.sortByLane();
     for (const v of this.vehicles) this.drive(v, dt, byLane, obstacles);
     this.despawn(centre);
@@ -277,11 +296,14 @@ export class Traffic {
     const lane = this.network.lanes[v.lane];
     let gap = Infinity,
       speed = 0;
-    /** @param {number} g @param {number} s */
-    const keep = (g, s) => {
+    /** @type {BusWait | null} */
+    let bus = null;
+    /** @param {number} g @param {number} s @param {BusWait | null} [why] */
+    const keep = (g, s, why = null) => {
       if (g < gap) {
         gap = g;
         speed = s;
+        bus = why;
       }
     };
     // cars pass bikes where the half road is wide enough
@@ -316,22 +338,44 @@ export class Traffic {
         this.release(v);
         keep(toLine, 0);
         this.probe(v, obstacles, keep);
-        return { gap, speed };
+        return { gap, speed, bus };
       }
     }
     // a junction is crossed only with its reservation: else stop before it
     if (this.network.junctions.has(lane.to) && toEnd < this.p.junctionApproach) {
-      if (!first) this.release(v);
-      if (!first || !this.reserve(v, lane)) keep(toEnd - this.p.stopBack - v.length / 2, 0);
+      const toLine = toEnd - this.p.stopBack - v.length / 2;
+      // it leaves the junction to the bus while it can still stop before it
+      const yields = toLine > (v.v * v.v) / (2 * this.p.maxBraking) && this.busAtJunction(lane, obstacles);
+      if (!first || yields) this.release(v);
+      if (!first || yields || !this.reserve(v, lane)) keep(toLine, 0);
     }
     if (v.next < 0) keep(toEnd - v.length / 2, 0);
     this.probe(v, obstacles, keep);
-    return { gap, speed };
+    return { gap, speed, bus };
+  }
+
+  /**
+   * Whether the moving player's bus drives to the junction at the end of a lane, or is in it.
+   * @param {Lane} lane @param {Obstacle[]} obstacles
+   */
+  busAtJunction(lane, obstacles) {
+    const x = lane.pts[lane.pts.length - 2],
+      y = lane.pts[lane.pts.length - 1];
+    for (const o of obstacles) {
+      if (!o.priority || o.v < this.p.yieldSpeed) continue;
+      const dx = x - o.x,
+        dy = y - o.y;
+      const d = Math.hypot(dx, dy);
+      if (d > this.p.yieldRadius) continue;
+      if (d < o.r + this.p.junctionClear || dx * Math.cos(o.h) + dy * Math.sin(o.h) > 0) return true;
+    }
+    return false;
   }
 
   /**
    * Obstacles on the path ahead of a vehicle, looked at every probeStep metres up to lookahead.
-   * @param {Vehicle} v @param {Obstacle[]} obstacles @param {(gap: number, speed: number) => void} keep
+   * @param {Vehicle} v @param {Obstacle[]} obstacles
+   * @param {(gap: number, speed: number, bus?: BusWait | null) => void} keep
    */
   probe(v, obstacles, keep) {
     if (!obstacles.length) return;
@@ -348,7 +392,15 @@ export class Traffic {
       for (const o of obstacles)
         if (Math.hypot(o.x - at.x, o.y - at.y) < o.r + v.width / 2) {
           // the obstacle moves away along our way as fast as its speed points that way
-          keep(ahead - v.length / 2, Math.max(0, o.v * Math.cos(o.h - at.h)));
+          const along = Math.cos(o.h - at.h);
+          const free = ahead - v.length / 2;
+          if (!o.priority) keep(free, Math.max(0, o.v * along));
+          else
+            keep(free - this.p.busGap, Math.max(0, o.v * along), {
+              gap: free,
+              follows: along > Math.cos((this.p.followAngle * Math.PI) / 180),
+              speed: o.v,
+            });
           return;
         }
     }
@@ -391,9 +443,18 @@ export class Traffic {
    * @param {Vehicle} v @param {number} dt @param {Map<number, Vehicle[]>} byLane @param {Obstacle[]} obstacles
    */
   drive(v, dt, byLane, obstacles) {
-    const { gap, speed } = this.leader(v, byLane, obstacles);
+    if (v.backing) {
+      this.reverse(v, dt);
+      return;
+    }
+    const { gap, speed, bus } = this.leader(v, byLane, obstacles);
     const acceleration = Math.max(-this.p.maxBraking, idmAcceleration(v.v, v.desired, gap, speed, this.p));
     v.v = Math.max(0, v.v + acceleration * dt);
+    v.stuck = this.waitsForBus(v, bus) ? (v.stuck ?? 0) + dt : 0;
+    if (v.stuck > this.p.stuckDelay) {
+      this.backOff(v, byLane, obstacles);
+      return;
+    }
     v.s += v.v * dt;
     let lane = this.network.lanes[v.lane];
     if (v.s >= lane.length && v.next >= 0) {
@@ -410,6 +471,112 @@ export class Traffic {
     // the junction is free once the whole vehicle has crossed it
     if (v.reserved >= 0 && v.reserved !== lane.to && v.s > v.length + this.p.junctionClear) this.release(v);
     this.place(v);
+  }
+
+  /**
+   * Whether a stopped vehicle is stuck by the player's bus: against it, or waiting for it while the bus stands
+   * across its way (a vehicle behind the bus waits as long as the bus does).
+   * @param {Vehicle} v @param {BusWait | null} bus
+   */
+  waitsForBus(v, bus) {
+    if (!bus || v.v >= this.p.stuckSpeed) return false;
+    return bus.gap < this.p.stuckContact || (!bus.follows && bus.speed < this.p.stuckSpeed);
+  }
+
+  /**
+   * Unstick a vehicle from the player's bus: it backs off where there is room behind it, else (or after
+   * backOffs times) it is removed and another one appears out of sight.
+   * @param {Vehicle} v @param {Map<number, Vehicle[]>} byLane @param {Obstacle[]} obstacles
+   */
+  backOff(v, byLane, obstacles) {
+    v.stuck = 0;
+    v.v = 0;
+    this.release(v);
+    v.backOffs = (v.backOffs ?? 0) + 1;
+    const room = this.roomBehind(v, byLane, obstacles);
+    if (v.backOffs > this.p.backOffs || room < this.p.backOffMin) v.gone = true;
+    else v.backing = Math.min(this.p.backOffDistance, room);
+  }
+
+  /**
+   * Free distance behind a vehicle on its path, up to backOffDistance: to the start of its road (or of the
+   * road it came from), the vehicle behind it and the obstacles.
+   * @param {Vehicle} v @param {Map<number, Vehicle[]>} byLane @param {Obstacle[]} obstacles
+   */
+  roomBehind(v, byLane, obstacles) {
+    const lanes = this.network.lanes;
+    let room = Math.min(
+      this.p.backOffDistance,
+      v.s - v.length / 2 + (v.previous >= 0 ? lanes[v.previous].length : 0),
+    );
+    for (const other of byLane.get(v.lane) ?? [])
+      if (other !== v && other.s < v.s)
+        room = Math.min(room, v.s - other.s - (v.length + other.length) / 2 - this.p.minGap / 2);
+    for (let back = this.p.probeStep; back <= room; back += this.p.probeStep) {
+      const at = this.pathPoint(v, v.s - v.length / 2 - back);
+      if (obstacles.some((o) => Math.hypot(o.x - at.x, o.y - at.y) < o.r + v.width / 2))
+        return back - this.p.probeStep;
+    }
+    return Math.max(0, room);
+  }
+
+  /** One step backwards along the path, on to the road it came from. @param {Vehicle} v @param {number} dt */
+  reverse(v, dt) {
+    const step = Math.min(this.p.backOffSpeed * dt, v.backing ?? 0);
+    v.backing = (v.backing ?? 0) - step;
+    v.s -= step;
+    if (v.s < 0 && v.previous >= 0) {
+      v.next = v.lane;
+      v.lane = v.previous;
+      v.previous = -1;
+      v.s += this.network.lanes[v.lane].length;
+    }
+    if (v.s <= 0) {
+      v.s = 0;
+      v.backing = 0;
+    }
+    this.place(v);
+  }
+
+  /**
+   * Vehicles the player's bus pushes against while its driver wants to move (or just before its nose while it
+   * waits for them): one pushed for stuckDelay backs
+   * off or is removed, unless the bus pushes it from behind (it goes on when its own way is free).
+   * @param {{x: number, y: number}[]} outline points of the outline and the middle line of the bus
+   * @param {number} heading of the bus
+   * @param {number} dt
+   */
+  pushedBy(outline, heading, dt) {
+    const byLane = this.sortByLane();
+    const follow = Math.cos((this.p.followAngle * Math.PI) / 180);
+    for (const v of this.vehicles) {
+      const touching = outline.filter((p) => this.touches(v, p.x, p.y, this.p.contactMargin));
+      // behind the car (not alongside it): the bus drives into its back
+      const rear = (/** @type {{x: number, y: number}} */ p) => {
+        const dx = p.x - v.x,
+          dy = p.y - v.y;
+        const along = dx * Math.cos(v.h) + dy * Math.sin(v.h),
+          across = -dx * Math.sin(v.h) + dy * Math.cos(v.h);
+        return along < 0 && Math.abs(across) < v.width / 2;
+      };
+      const behind = touching.every(rear) && Math.cos(heading - v.h) > follow;
+      if (!touching.length || behind || v.backing) {
+        v.pushed = 0;
+        continue;
+      }
+      v.pushed = (v.pushed ?? 0) + dt;
+      if (v.pushed > this.p.stuckDelay) {
+        v.pushed = 0;
+        this.backOff(v, byLane, this.lastObstacles);
+      }
+    }
+    this.despawnGone();
+  }
+
+  /** Remove the vehicles removed to unstick the bus. */
+  despawnGone() {
+    for (const v of this.vehicles) if (v.gone) this.release(v);
+    this.vehicles = this.vehicles.filter((v) => !v.gone);
   }
 
   /** Position and heading of a vehicle; the heading looks a little ahead to round the corners. @param {Vehicle} v */
@@ -537,14 +704,19 @@ export class Traffic {
    * @param {number} x @param {number} y
    */
   hit(x, y) {
-    for (const v of this.vehicles) {
-      const dx = x - v.x,
-        dy = y - v.y;
-      if (Math.abs(dx) > v.length || Math.abs(dy) > v.length) continue;
-      const along = dx * Math.cos(v.h) + dy * Math.sin(v.h),
-        across = -dx * Math.sin(v.h) + dy * Math.cos(v.h);
-      if (Math.abs(along) <= v.length / 2 && Math.abs(across) <= v.width / 2) return true;
-    }
-    return false;
+    return this.vehicles.some((v) => this.touches(v, x, y, 0));
+  }
+
+  /**
+   * Whether a point is inside a vehicle grown by `margin` on every side.
+   * @param {Vehicle} v @param {number} x @param {number} y @param {number} margin
+   */
+  touches(v, x, y, margin) {
+    const dx = x - v.x,
+      dy = y - v.y;
+    if (Math.abs(dx) > v.length + margin || Math.abs(dy) > v.length + margin) return false;
+    const along = dx * Math.cos(v.h) + dy * Math.sin(v.h),
+      across = -dx * Math.sin(v.h) + dy * Math.cos(v.h);
+    return Math.abs(along) <= v.length / 2 + margin && Math.abs(across) <= v.width / 2 + margin;
   }
 }

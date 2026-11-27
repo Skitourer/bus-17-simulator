@@ -19,6 +19,11 @@ player's bus, for a few dozen vehicles at 60 steps per second in the browser.
   on a roundabout go first; only the first vehicle of a lane may ask; released once the junction
   is cleared, or after a timeout).
 - Obstacles (the buses) are discs; a vehicle checks points of its path ahead.
+- The player's bus is a **priority vehicle** (#95, 2026-11-28): the vehicles keep a larger
+  gap from it (and from the room just before its nose) and leave it the junctions it drives
+  to. A vehicle stuck against it, waiting for it across its way, or that the driver keeps
+  pushing, **backs off** a few metres, or **is removed** (another one appears out of sight)
+  when it has no room or is stuck again: no deadlock lasts more than a few seconds.
 - Vehicles appear and disappear out of sight around the bus; their count is a player
   preference (none, light, normal, dense).
 

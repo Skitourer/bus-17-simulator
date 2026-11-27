@@ -21,6 +21,12 @@ dans le navigateur.
   demande ; libérée une fois le carrefour franchi, ou après un délai).
 - Les obstacles (les bus) sont des disques ; un véhicule teste des points de son chemin
   devant lui.
+- Le bus du joueur est un **véhicule prioritaire** (#95, 28/11/2026) : les véhicules gardent
+  plus de distance avec lui (et avec l'espace juste devant son nez) et lui laissent les
+  carrefours vers lesquels il roule. Un véhicule coincé contre lui, qui l'attend en travers de
+  son chemin, ou que le conducteur pousse, **recule** de quelques mètres, ou **est retiré** (un
+  autre apparaît hors de vue) s'il n'a pas la place ou se retrouve coincé à nouveau : aucun
+  blocage ne dure plus de quelques secondes.
 - Les véhicules apparaissent et disparaissent hors de vue autour du bus ; leur nombre est
   une préférence du joueur (aucune, fluide, normale, dense).
 
