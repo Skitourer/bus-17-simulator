@@ -2,13 +2,22 @@
 /**
  * The other buses of the line (#48): every service of the chosen day running at the game time, in both
  * directions, placed from the GTFS timetable. A bus dwells at each stop, slows down before it, and waits
- * behind the player's bus (or the bus ahead of it) instead of running into it, then catches up with its
- * timetable. Pure logic, no Three.js. Local frame: x east, y north, heading = math angle.
+ * behind the player's bus (or the bus ahead of it) instead of running into it, and at the red lights (#85),
+ * then catches up with its timetable. Pure logic, no Three.js. Local frame: x east, y north, heading = math angle.
  */
+
+import { approachSpeed, stopLineAhead } from './signals.js';
 
 /** @typedef {import('../settings/settings.js').Settings['fleet']} FleetSettings */
 /** @typedef {import('../world/track.js').Track} Track */
 /** @typedef {{s: number, t: number}} TimedStop distance along the route (m) and time from the departure (s) */
+/** @typedef {import('./signals.js').RouteStopLine} RouteStopLine */
+/**
+ * @typedef {object} FleetSignals traffic lights the buses obey
+ * @property {(group: number, phase: 0 | 1) => import('./signals.js').Light} light
+ * @property {number} braking @property {number} maxBraking decelerations (m/s²)
+ * @property {number} atLine reach of a stop line (m)
+ */
 
 /**
  * Where a service is `elapsed` s after its departure: dwelling at a stop, or between two stops with a
@@ -33,7 +42,8 @@ export function scheduledPosition(stops, elapsed, params) {
 }
 
 /**
- * Nearest point of the route to (x, y), searched within `window` m of `hint` (whole route when 0).
+ * Nearest point of the route to (x, y), between its points, searched within `window` m of `hint` (whole
+ * route when 0).
  * @param {Track} track @param {number} x @param {number} y @param {number} hint @param {number} window
  */
 export function projectOnTrack(track, x, y, hint, window) {
@@ -48,7 +58,24 @@ export function projectOnTrack(track, x, y, hint, window) {
       bi = i;
     }
   }
-  return { s: bi * track.step, d: Math.sqrt(best), h: track.h[bi] };
+  // between the points: the nearest of the two segments around the nearest point
+  let s = bi * track.step,
+    d = Math.sqrt(best);
+  for (const i of [bi - 1, bi]) {
+    if (i < i0 || i + 1 > i1) continue;
+    const dx = track.x[i + 1] - track.x[i],
+      dy = track.y[i + 1] - track.y[i];
+    const t = Math.max(
+      0,
+      Math.min(1, ((x - track.x[i]) * dx + (y - track.y[i]) * dy) / (dx * dx + dy * dy || 1)),
+    );
+    const dist = Math.hypot(track.x[i] + dx * t - x, track.y[i] + dy * t - y);
+    if (dist < d) {
+      d = dist;
+      s = (i + t) * track.step;
+    }
+  }
+  return { s, d, h: track.h[bi] };
 }
 
 /** @param {number} a */
@@ -59,7 +86,8 @@ function wrapAngle(a) {
 /**
  * @typedef {object} FleetBus
  * @property {number} dir direction index @property {number} dep departure (s since midnight)
- * @property {number} s front door position along its route (m) @property {boolean} dwelling
+ * @property {number} s front door position along its route (m) @property {number} v speed (m/s)
+ * @property {boolean} dwelling
  * @property {number} x @property {number} y @property {number} z @property {number} h centre of the bus (z: route
  *   altitude, on the deck over a bridge) and heading
  */
@@ -68,6 +96,7 @@ function wrapAngle(a) {
  * @typedef {object} FleetDirection
  * @property {Track} track @property {number[]} departures departure times (s since midnight)
  * @property {(s: number) => number} lane offset of the bus lane at `s` (m to the right)
+ * @property {RouteStopLine[]} [lines] stop lines of the traffic lights along the route
  */
 
 export class Fleet {
@@ -76,9 +105,11 @@ export class Fleet {
    * @param {FleetSettings} params
    * @param {{bodyLength: number, bodyWidth: number, frontDoorSetback: number}} bus shape of the other buses
    * @param {{dir: number, dep: number}} own the player's service, never drawn twice
+   * @param {FleetSignals | null} [signals] traffic lights the buses stop at
    */
-  constructor(directions, params, bus, own) {
+  constructor(directions, params, bus, own, signals = null) {
     this.directions = directions;
+    this.signals = signals;
     this.p = params;
     this.bus = bus;
     this.own = own;
@@ -128,6 +159,13 @@ export class Fleet {
           ? previous.s + Math.max(0, Math.min(target.s - previous.s, this.p.catchUpSpeed * dt))
           : target.s;
         const wasFront = (previous ? previous.s : s) + setback;
+        const signals = this.signals;
+        if (previous && signals && direction.lines) {
+          const gap = stopLineAhead(direction.lines, wasFront, signals.light, previous.v, signals);
+          // a comfortable stop at the line: never faster than what still stops there
+          if (gap !== null)
+            s = Math.min(s, previous.s + Math.min(gap, approachSpeed(gap, signals.braking) * dt));
+        }
         for (const back of blockers)
           // only what is ahead blocks: a bus already alongside or past keeps going
           if (wasFront <= back && s + setback > back - this.p.gap) s = back - this.p.gap - setback;
@@ -138,7 +176,8 @@ export class Fleet {
         const room = (this.bus.bodyLength + player.length) / 2 + this.p.gap;
         if (!previous && Math.hypot(pos.x - player.x, pos.y - player.y) < room) continue;
         const dwelling = target.dwelling && Math.abs(target.s - s) < 1;
-        next.set(key, { dir, dep, s, dwelling, x: pos.x, y: pos.y, z: pos.z, h: pos.h });
+        const v = previous && dt > 0 ? (s - previous.s) / dt : 0;
+        next.set(key, { dir, dep, s, v, dwelling, x: pos.x, y: pos.y, z: pos.z, h: pos.h });
         blockers.push(s + setback - this.bus.bodyLength);
       }
     });

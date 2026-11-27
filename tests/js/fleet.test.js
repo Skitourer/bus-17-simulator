@@ -38,19 +38,24 @@ describe('projectOnTrack', () => {
   const track = straightTrack(400);
 
   it('finds the nearest point, in a window or on the whole route', () => {
-    expect(projectOnTrack(track, 101, 3, 0, 0)).toMatchObject({ s: 100, d: Math.hypot(1, 3) });
+    expect(projectOnTrack(track, 101, 3, 0, 0)).toMatchObject({ s: 101, d: 3 });
     expect(projectOnTrack(track, 300, 0, 100, 50).s).toBe(150); // outside the window: its edge
   });
 });
 
-/** Fleet on a straight route heading east: one direction only. @param {number[]} departures */
-function fleetOf(departures, own = { dir: 0, dep: -1 }) {
+/**
+ * Fleet on a straight route heading east: one direction only.
+ * @param {number[]} departures @param {{dir: number, dep: number}} [own]
+ * @param {import('../../src/hd2d/fleet.js').FleetSignals | null} [signals] lights of a stop line 600 m along
+ */
+function fleetOf(departures, own = { dir: 0, dep: -1 }, signals = null) {
   const track = straightTrack(2000);
   track.stops = [
     { name: 'A', commune: 'V', s: 0, off: 0, x: 0, y: 0, t: 0 },
     { name: 'B', commune: 'V', s: 1800, off: 0, x: 1800, y: 0, t: 300 },
   ];
-  return new Fleet([{ track, departures, lane: () => 0 }], params, bus, own);
+  const lines = [{ s: 600, group: 0, phase: /** @type {0 | 1} */ (0) }];
+  return new Fleet([{ track, departures, lane: () => 0, lines }], params, bus, own, signals);
 }
 
 const far = { x: 0, y: 5000, h: 0, length: 12 };
@@ -101,5 +106,18 @@ describe('Fleet', () => {
     expect(fleet.hit(b.x + 5.9, b.y + 1.2)).toBe(true);
     expect(fleet.hit(b.x + 6.1, b.y)).toBe(false);
     expect(fleet.hit(b.x, b.y + 1.3)).toBe(false);
+  });
+
+  it('waits at the stop line of a red light, then goes on when it turns green', () => {
+    /** @type {import('../../src/hd2d/signals.js').Light} */
+    let light = 'red';
+    const fleet = fleetOf([0], undefined, { light: () => light, braking: 1.5, maxBraking: 4, atLine: 0.5 });
+    for (let t = 30; t < 200; t += 0.1) fleet.update(t, 0.1, far);
+    const waiting = fleet.buses[0];
+    expect(waiting.s + bus.frontDoorSetback).toBeCloseTo(600, 0);
+    expect(waiting.v).toBeCloseTo(0);
+    light = 'green';
+    fleet.update(200.1, 0.1, far);
+    expect(fleet.buses[0].s).toBeGreaterThan(waiting.s);
   });
 });

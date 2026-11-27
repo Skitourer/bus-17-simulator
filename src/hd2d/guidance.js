@@ -24,6 +24,8 @@ import { cumulative, polylinePoint } from './traffic.js';
  * @typedef {object} GuidanceLine
  * @property {Float64Array} x @property {Float64Array} y one point per route point (m)
  * @property {Uint8Array} onRoad 1 where the point was matched to a road, 0 where it kept the route lane
+ * @property {Int32Array} lane matched lane of each point (index in the lanes), -1 off the roads
+ * @property {Float64Array} along distance along the matched lane (m)
  */
 
 /** Side of the cells that index the lane segments (m): a few cells cover the search reach. */
@@ -278,7 +280,22 @@ export function guidanceLine(track, lanes, fallback, params) {
     }
   }
   const half = Math.max(0, Math.round(params.smoothing / track.step));
-  return { x: movingAverage(rawX, half), y: movingAverage(rawY, half), onRoad };
+  return { x: movingAverage(rawX, half), y: movingAverage(rawY, half), onRoad, lane, along };
+}
+
+/**
+ * The route the buses drive (#85): the points of the guidance line with the route altitudes, so that the
+ * distances `s` along it, its stops and its timetable stay those of the route.
+ * @param {import('../common/types.js').Route} route @param {GuidanceLine} guide
+ * @returns {import('../common/types.js').Route}
+ */
+export function drivingRoute(route, guide) {
+  const pts = route.pts.slice();
+  for (let i = 0; i < guide.x.length; i++) {
+    pts[i * 3] = guide.x[i];
+    pts[i * 3 + 1] = guide.y[i];
+  }
+  return { ...route, pts };
 }
 
 /** @param {Float64Array} values @param {number} half points on each side @returns {Float64Array} */

@@ -38,17 +38,17 @@ import { FreeFly, findStop, stepStop, turboDrive } from './debug.js';
 import { Doors, StopService, drawService, serviceSeed } from './stops.js';
 import { Crowd } from './crowd.js';
 import { StressTest } from './stress.js';
-import { Fleet } from './fleet.js';
+import { Fleet, projectOnTrack } from './fleet.js';
 import { OtherBuses } from './otherBuses.js';
 import { RoadNetwork, Traffic } from './traffic.js';
 import { TrafficLook } from './traffic3d.js';
-import { RedLightWatch, SignalMap } from './signals.js';
+import { RedLightWatch, SignalMap, approachSpeed, routeStopLines, stopLineAhead } from './signals.js';
 import { SignalLook } from './signals3d.js';
 import { Pedestrians, Walkways, crossingCentres } from './pedestrians.js';
 import { peopleAtlas } from './crowd.js';
 import { BillboardPool } from './instances.js';
 import { SegmentGrid, kerbSegments, laneOffsets, offsetAt, placeStops } from './kerb.js';
-import { guidanceLanes, guidanceLine, offRoadStretches } from './guidance.js';
+import { drivingRoute, guidanceLanes, guidanceLine, offRoadStretches } from './guidance.js';
 import { Mirrors } from './mirrors.js';
 import { eyePosition, lookTarget, steeringWheelAngle } from './views.js';
 /** @typedef {import('./stops.js').StopEvent} StopEvent */
@@ -185,6 +185,14 @@ let minimap;
 let line;
 /** @type {import('../common/types.js').LineIndex} */
 let lineIndex;
+/** the route along the right-most lane of the roads, where the buses drive (#85), set by load() @type {Track} */
+let driveTrack;
+/** stop lines of the traffic lights along the player's route, set by load() @type {import('./signals.js').RouteStopLine[]} */
+let ownStopLines = [];
+/** the traffic light rule of the buses: the decelerations of the traffic (#85) */
+const lightRule = { braking: S.traffic.braking, maxBraking: S.traffic.maxBraking, atLine: S.signals.atLine };
+/** whether the test pilot is stopping at a traffic light */
+let autopilotHolds = false;
 const drive = new Drive(S.drive, B);
 /** overall length of the player's bus, both bodies of an articulated bus (m) */
 const playerLength = B.trailer
@@ -289,9 +297,9 @@ function laneAt(s) {
   return offsetAt(lane, track.step, s);
 }
 
-/** @param {number} s */
+/** Place the bus on the line the buses drive (#85), at `s` m along the route. @param {number} s */
 function placeOnRoute(s) {
-  const p = track.pos(s, laneAt(s));
+  const p = driveTrack.pos(s);
   drive.place(p.x, p.y, p.h);
   busZ = p.z; // route altitude: picks the deck when the route is on a bridge
   progress = s + B.rearOverhang;
@@ -345,11 +353,17 @@ async function load() {
     kerbMargin: S.gameplay.kerbMargin,
   };
   lane = laneOffsets(track, kerbs, laneParams);
-  const guide = guidanceLine(track, guidanceLanes(roads), lane, {
-    ...S.guidance,
-    bodyWidth: B.bodyWidth,
-    kerbMargin: S.gameplay.kerbMargin,
-  });
+  const roadLanes = guidanceLanes(roads);
+  const guideParams = { ...S.guidance, bodyWidth: B.bodyWidth, kerbMargin: S.gameplay.kerbMargin };
+  const guide = guidanceLine(track, roadLanes, lane, guideParams);
+  // the buses drive the guidance line and stop at the traffic lights on their way (#85)
+  const network = new RoadNetwork(roads, S.traffic.speeds);
+  signals = new SignalMap(roads, network, S.signals);
+  /** @param {import('./guidance.js').GuidanceLine} g */
+  const stopLinesOf = (g) =>
+    routeStopLines(g, roadLanes, (from, to) => signals.approachOf(from, to), line.step);
+  driveTrack = new Track(drivingRoute(line.routes[P.route], guide), line.step);
+  ownStopLines = stopLinesOf(guide);
   if (debug)
     console.info('guidance off the roads (m along the route):', offRoadStretches(guide.onRoad, track.step));
   // the service date of the timetable; without one, the first day type of the line
@@ -363,13 +377,24 @@ async function load() {
     }))
     .filter((r) => r.i === P.route || r.departures.length);
   const fleetDirections = fleetRoutes.map(({ route, i, departures }) => {
-    const profile = i === P.route ? lane : laneOffsets(route, kerbs, laneParams);
-    return { track: route, departures, lane: (/** @type {number} */ s) => offsetAt(profile, route.step, s) };
+    const g =
+      i === P.route
+        ? guide
+        : guidanceLine(route, roadLanes, laneOffsets(route, kerbs, laneParams), guideParams);
+    return {
+      track: i === P.route ? driveTrack : new Track(drivingRoute(line.routes[i], g), line.step),
+      departures,
+      lane: () => 0,
+      lines: i === P.route ? ownStopLines : stopLinesOf(g),
+    };
   });
-  fleet = new Fleet(fleetDirections, S.fleet, S.bus, {
-    dir: fleetRoutes.findIndex((r) => r.i === P.route),
-    dep: toSec(P.dep),
-  });
+  fleet = new Fleet(
+    fleetDirections,
+    S.fleet,
+    S.bus,
+    { dir: fleetRoutes.findIndex((r) => r.i === P.route), dep: toSec(P.dep) },
+    { light: (group, phase) => signals.light(group, phase), ...lightRule },
+  );
   const places = placeStops(track, kerbs, {
     kerbSearch: S.world.kerbSearch,
     shelterSetback: S.world.shelterSetback,
@@ -390,9 +415,7 @@ async function load() {
   const season = seasonLook(dayOfYear(gameDate), S.seasons);
   world = buildWorld(scene, hf, { map, tiles, stops: places, guide, line }, track, S, season);
   otherBuses = new OtherBuses(scene, busGeometry(S, 'std'), S.budget);
-  const network = new RoadNetwork(roads, S.traffic.speeds);
-  signals = new SignalMap(roads, network, S.signals);
-  redLights = new RedLightWatch(signals, S.signals.redMinSpeed);
+  redLights = new RedLightWatch(signals, S.signals.redMinSpeed, S.signals.redLineMargin);
   traffic = new Traffic(network, S.traffic, Math.random, signals);
   const walkways = new Walkways(roads, S.traffic.speeds);
   walkways.addCrossings(
@@ -587,7 +610,8 @@ function update(dt) {
     blocked: (x, y) => busDiscs.some((o) => Math.hypot(o.x - x, o.y - y) < o.r),
   });
   if (ev) toast(t('toast.' + ev), 'bad');
-  if (redLights.step(centre.x, centre.y, drive.h, drive.v) >= 0) {
+  const nose = drive.point(B.bodyLength - B.rearOverhang, 0);
+  if (redLights.step(nose.x, nose.y, drive.h, drive.v) >= 0) {
     redLightsRun++;
     toast(t('toast.redLight'), 'bad');
   }
@@ -620,16 +644,42 @@ function update(dt) {
   if (event) stopToast(event);
 }
 
-/** pilote de test (?auto) : suit le trace dans la voie de droite */
+/** Test pilot (?auto): drives the line the buses drive (#85) and stops at the red lights. */
 function autopilot() {
   // 8 m ahead: a longer look cuts the corners onto the bridges, over the quays (water collision)
-  const look = track.pos(progress + 8, laneAt(progress + 8));
+  const look = driveTrack.pos(progress + 8);
   const c = drive.point(B.wheelbase, 0);
   const want = Math.atan2(look.y - c.y, look.x - c.x);
   let err = want - drive.h;
   while (err > Math.PI) err -= 2 * Math.PI;
   while (err < -Math.PI) err += 2 * Math.PI;
-  return { up: drive.v < 8, down: false, left: err > 0.03, right: err < -0.03 };
+  const nose = drive.point(B.bodyLength - B.rearOverhang, 0);
+  const front = projectOnTrack(driveTrack, nose.x, nose.y, progress + B.bodyLength / 2, 20).s;
+  // once it brakes for a line, it waits there until green (its speed no longer decides)
+  const gap = stopLineAhead(
+    ownStopLines,
+    front,
+    (group, phase) => signals.light(group, phase),
+    autopilotHolds ? 0 : drive.v,
+    lightRule,
+  );
+  autopilotHolds = gap !== null;
+  // and it keeps its distance from the vehicles ahead on its line (the cars do the same with it)
+  let clear = Infinity;
+  for (let d = 1; d <= 15 && clear === Infinity; d += 1.5) {
+    const p = driveTrack.pos(front + d);
+    if (traffic.hit(p.x, p.y) || fleet.hit(p.x, p.y)) clear = d - S.fleet.gap;
+  }
+  // aim a metre before the line: the bus brakes progressively
+  const room = Math.min(gap === null ? Infinity : gap - 1, clear);
+  const speed = Math.min(S.simulation.autopilotSpeed, approachSpeed(room, S.traffic.braking));
+  // never the brake at a standstill: it would reverse
+  return {
+    up: drive.v < speed,
+    down: drive.v > speed + 0.5 && drive.v > 0.3,
+    left: err > 0.03,
+    right: err < -0.03,
+  };
 }
 
 /** Toast for a stop that was served, missed or passed without request. @param {StopEvent} event */

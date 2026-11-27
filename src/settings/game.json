@@ -248,6 +248,13 @@
       "max": 240,
       "integer": true,
       "doc": "Fixed rate of the driving and service simulation, independent of the display rate."
+    },
+    "autopilotSpeed": {
+      "value": 8,
+      "unit": "m/s",
+      "min": 1,
+      "max": 20,
+      "doc": "Cruising speed of the test pilot (?auto in the address), below the 50 km/h of the town streets."
     }
   },
   "gameplay": {
@@ -1897,6 +1904,13 @@
       "max": 15,
       "doc": "Distance between the edge of the widest crossing road and the stop line: room for the zebra crossing."
     },
+    "atLine": {
+      "value": 0.5,
+      "unit": "m",
+      "min": 0,
+      "max": 3,
+      "doc": "A bus whose front is this close to a stop line (or this little past it) waits there until green: it no longer decides from its speed (#85)."
+    },
     "poleSetback": {
       "value": 0.5,
       "unit": "m",
@@ -1904,12 +1918,12 @@
       "max": 3,
       "doc": "Distance of the light poles beyond the right edge of the road, on the sidewalk."
     },
-    "junctionReach": {
-      "value": 6,
+    "redLineMargin": {
+      "value": 1,
       "unit": "m",
-      "min": 1,
-      "max": 30,
-      "doc": "Reach of a signalised junction beyond its farthest node: the bus entering it on red is told."
+      "min": 0,
+      "max": 5,
+      "doc": "A stop line counts this far beyond its ends: the bus crossing it on red, even a little off its lane, is told (#85)."
     },
     "poleHeight": {
       "value": 2.4,
@@ -1932,7 +1946,7 @@
       "unit": "m/s",
       "min": 0,
       "max": 5,
-      "doc": "Slower than this when entering a junction on red, the bus is not counted as crossing on red (it is being placed)."
+      "doc": "Slower than this when its front crosses a stop line on red, the bus is not counted as crossing on red (it is being placed)."
     }
   },
   "traffic": {
