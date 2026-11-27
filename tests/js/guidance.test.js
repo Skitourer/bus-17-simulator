@@ -1,6 +1,7 @@
 // @ts-check
 import { describe, expect, it } from 'vitest';
 import {
+  drivingRoute,
   guidanceLanes,
   guidanceLine,
   laneCentre,
@@ -189,6 +190,33 @@ describe('guidanceLine', () => {
     const guide = guidanceLine(track, [], new Float64Array(track.n).fill(1.8), params);
     expect(guide.y[20]).toBeCloseTo(-1.8);
     expect(offRoadStretches(guide.onRoad, track.step)).toEqual([[0, 100]]);
+  });
+});
+
+describe('drivingRoute', () => {
+  it('drives the guidance line with the route altitudes, stops and timetable', () => {
+    const lanes = guidanceLanes(roads([[0, 1, 6.5, 0, -20, 2, 300, 2]]));
+    const track = straightTrack(200, 0.05);
+    const guide = guidanceLine(track, lanes, new Float64Array(track.n).fill(1.8), params);
+    expect(guide.lane.every((v) => v === 0)).toBe(true); // west to east: the first lane of the edge
+    expect(guide.along[50]).toBeCloseTo(120);
+    const route = {
+      direction: 0,
+      headsign: 'Test',
+      trips: 1,
+      length: 200,
+      pts: Array.from({ length: track.n * 3 }, (_, k) =>
+        k % 3 === 0 ? track.x[k / 3] : k % 3 === 1 ? track.y[(k - 1) / 3] : track.z[(k - 2) / 3],
+      ),
+      stops: track.stops,
+      services: { svc: ['08:00'] },
+    };
+    const driven = drivingRoute(route, guide);
+    expect(driven.pts[50 * 3]).toBeCloseTo(guide.x[50]);
+    expect(driven.pts[50 * 3 + 1]).toBeCloseTo(2 - 1.625);
+    expect(driven.pts[50 * 3 + 2]).toBe(route.pts[50 * 3 + 2]);
+    expect(driven.stops).toBe(route.stops);
+    expect(route.pts[50 * 3 + 1]).toBe(0); // the route itself is left as it was
   });
 });
 

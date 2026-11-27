@@ -1,6 +1,16 @@
 // @ts-check
 import { describe, expect, it } from 'vitest';
-import { RedLightWatch, SignalMap, lightAt, mainAxis, mustStop, phaseOf } from '../../src/hd2d/signals.js';
+import {
+  RedLightWatch,
+  SignalMap,
+  approachSpeed,
+  lightAt,
+  mainAxis,
+  mustStop,
+  phaseOf,
+  routeStopLines,
+  stopLineAhead,
+} from '../../src/hd2d/signals.js';
 import { RoadNetwork, Traffic } from '../../src/hd2d/traffic.js';
 import { SETTINGS } from './fixtures.js';
 
@@ -110,10 +120,8 @@ describe('SignalMap', () => {
     expect(fromWest?.y).toBeCloseTo(-(3 + P.poleSetback));
   });
 
-  it('finds the junction around a point and follows the clock', () => {
+  it('follows the clock', () => {
     const { map } = lights();
-    expect(map.groupAt(2, 2)).toBe(0);
-    expect(map.groupAt(50, 0)).toBe(-1);
     const before = map.light(0, 0);
     map.advance(HALF);
     expect(map.light(0, 0)).not.toBe(before === 'green' ? 'green' : 'none');
@@ -129,27 +137,41 @@ describe('SignalMap', () => {
 });
 
 describe('RedLightWatch', () => {
-  it('tells once when the bus enters the junction on red, not on green nor when slow', () => {
+  // the stop line from the west stands 3 + stopLineGap m before the junction, across y in [-3, 0]
+  const line = -(3 + P.stopLineGap);
+
+  it('tells once when the front of the bus crosses a stop line on red, not on green nor when slow', () => {
     const { map } = lights();
-    const watch = new RedLightWatch(map, 1);
-    const offset = map.groups[0].offset;
+    const watch = new RedLightWatch(map, 1, 1);
     // phase of the east-west street red: well into the green of the other phase
-    map.time = HALF + 1 - offset;
-    expect(watch.step(-40, -2, 0, 10)).toBe(-1);
-    expect(watch.step(-2, -2, 0, 10)).toBe(0);
-    expect(watch.step(0, -2, 0, 10)).toBe(-1);
-    expect(watch.step(40, -2, 0, 10)).toBe(-1);
-    // green for the north-south street at that time
-    expect(watch.step(2, 3, -Math.PI / 2, 10)).toBe(-1);
-    watch.step(0, 40, 0, 0);
-    expect(watch.step(-2, -2, 0, 0.5)).toBe(-1);
+    map.time = HALF + 1 - map.groups[0].offset;
+    expect(watch.step(line - 5, -1.5, 0, 10)).toBe(-1);
+    expect(watch.step(line - 0.5, -1.5, 0, 10)).toBe(-1); // stopped right at the line
+    expect(watch.step(line + 0.5, -1.5, 0, 10)).toBe(0);
+    expect(watch.step(0, -1.5, 0, 10)).toBe(-1);
+    // slow: being placed, not crossing
+    watch.step(line - 1, -1.5, 0, 0.5);
+    expect(watch.step(line + 1, -1.5, 0, 0.5)).toBe(-1);
+  });
+
+  it('ignores the lines of the other side and of the other directions', () => {
+    const { map } = lights();
+    const watch = new RedLightWatch(map, 1, 1);
+    map.time = HALF + 1 - map.groups[0].offset;
+    // left of the centre line, driving west: the line from the east is on the other side
+    watch.step(line - 1, 2, 0, 10);
+    expect(watch.step(line + 1, 2, 0, 10)).toBe(-1);
+    // backwards over the line
+    watch.step(line + 1, -1.5, Math.PI, 10);
+    expect(watch.step(line - 1, -1.5, Math.PI, 10)).toBe(-1);
   });
 
   it('tells nothing on green', () => {
     const { map } = lights();
-    const watch = new RedLightWatch(map, 1);
+    const watch = new RedLightWatch(map, 1, 1);
     map.time = 1 - map.groups[0].offset;
-    expect(watch.step(-2, -2, 0, 10)).toBe(-1);
+    watch.step(line - 1, -1.5, 0, 10);
+    expect(watch.step(line + 1, -1.5, 0, 10)).toBe(-1);
   });
 });
 
@@ -202,5 +224,77 @@ describe('Traffic at the lights', () => {
     for (let i = 0; i < 6 * 60; i++) traffic.drive(car, 1 / 60, traffic.sortByLane(), []);
     expect(car.s).toBeGreaterThan(0);
     expect(car.lane).toBe(laneOf(lights().network, 0, 2));
+  });
+});
+
+describe('routeStopLines', () => {
+  const approach = { group: 3, phase: /** @type {0 | 1} */ (1), stopLine: 9 };
+  const lanes = [
+    { from: 1, to: 0, length: 100 },
+    { from: 0, to: 2, length: 100 },
+  ];
+  /** @param {number} from @param {number} to */
+  const approachOf = (from, to) => (from === 1 && to === 0 ? approach : undefined);
+  /** Route of 2 m steps from 100 m west of the junction to 100 m east of it. */
+  const match = {
+    lane: Int32Array.from({ length: 101 }, (_, i) => (i <= 50 ? 0 : 1)),
+    along: Float64Array.from({ length: 101 }, (_, i) => (i <= 50 ? i * 2 : (i - 50) * 2)),
+  };
+
+  it('puts a stop line where the route goes through a signalised junction', () => {
+    expect(routeStopLines(match, lanes, approachOf, 2)).toEqual([{ s: 91, group: 3, phase: 1 }]);
+  });
+
+  it('skips the approaches the route never leaves, and the roads without lights', () => {
+    const ends = { lane: match.lane.slice(0, 40), along: match.along.slice(0, 40) };
+    expect(routeStopLines(ends, lanes, approachOf, 2)).toEqual([]);
+    expect(routeStopLines(match, lanes, () => undefined, 2)).toEqual([]);
+    const off = { lane: Int32Array.from(match.lane, (v) => (v === 1 ? -1 : v)), along: match.along };
+    expect(routeStopLines(off, lanes, approachOf, 2)).toEqual([]);
+  });
+});
+
+describe('stopLineAhead', () => {
+  const RULE = { braking: 1.5, maxBraking: 4, atLine: 0.5 };
+  const lines = [
+    { s: 100, group: 0, phase: /** @type {0 | 1} */ (0) },
+    { s: 300, group: 1, phase: /** @type {0 | 1} */ (0) },
+  ];
+  /** @param {Record<number, import('../../src/hd2d/signals.js').Light>} lights */
+  const by = (lights) => (/** @type {number} */ group) => lights[group];
+
+  it('stops at the first line ahead on red, goes on through a green one', () => {
+    expect(stopLineAhead(lines, 40, by({ 0: 'red', 1: 'red' }), 8, RULE)).toBe(60);
+    expect(stopLineAhead(lines, 40, by({ 0: 'green', 1: 'red' }), 8, RULE)).toBe(260);
+    expect(stopLineAhead(lines, 120, by({ 0: 'red', 1: 'green' }), 8, RULE)).toBeNull();
+    expect(stopLineAhead([], 0, by({}), 8, RULE)).toBeNull();
+  });
+
+  it('runs an amber light it cannot stop at comfortably', () => {
+    // 8 m/s needs 21 m at 1.5 m/s², 8 m at 4 m/s²
+    expect(stopLineAhead(lines, 70, by({ 0: 'amber' }), 8, RULE)).toBe(30);
+    expect(stopLineAhead(lines, 85, by({ 0: 'amber', 1: 'green' }), 8, RULE)).toBeNull();
+    expect(stopLineAhead(lines, 85, by({ 0: 'red' }), 8, RULE)).toBe(15);
+  });
+
+  it('keeps a bus at the line until green, whatever its speed', () => {
+    expect(stopLineAhead(lines, 99.8, by({ 0: 'amber' }), 3, RULE)).toBeCloseTo(0.2);
+    expect(stopLineAhead(lines, 100.4, by({ 0: 'red' }), 3, RULE)).toBe(0);
+    expect(stopLineAhead(lines, 100.4, by({ 0: 'green', 1: 'green' }), 3, RULE)).toBeNull();
+    expect(stopLineAhead(lines, 101, by({ 0: 'red', 1: 'green' }), 0, RULE)).toBeNull();
+  });
+
+  it('gives the speed from which a vehicle still stops before the line', () => {
+    expect(approachSpeed(32, 1)).toBe(8);
+    expect(approachSpeed(-3, 1)).toBe(0);
+  });
+});
+
+describe('SignalMap.approachOf', () => {
+  it('finds the approaches of a junction by their nodes', () => {
+    const roads = crossroads();
+    const map = new SignalMap(roads, new RoadNetwork(roads, SETTINGS.traffic.speeds), P);
+    expect(map.approachOf(1, 0)).toMatchObject({ group: 0 });
+    expect(map.approachOf(0, 1)).toBeUndefined();
   });
 });
