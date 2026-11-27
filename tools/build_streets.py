@@ -39,7 +39,8 @@ from typing import Any
 import numpy as np
 from geo import Point
 from lines import corridor, read_lines, routes_xy, tiles_in
-from shapely import LineString, MultiPolygon, Polygon, box
+from shapely import LineString, MultiPolygon, Polygon, box, union_all
+from shapely import Point as ShapelyPoint
 from shapely.geometry.base import BaseGeometry
 from shapes import clip, coordinates, interpolate
 from sources import CACHE, ROOT, read_json, write_json
@@ -57,12 +58,14 @@ from streets import (
     clear_trees,
     clip_building,
     crossings,
+    flat_vertices,
     junction_radii,
     keep_out_zone,
     kerb_lines,
     lintels,
     load_edges,
     passage_zone,
+    road_cross_slopes,
     road_pieces,
     road_profiles,
     sample_positions,
@@ -78,6 +81,10 @@ OUT = os.path.join(DATA, 'tiles')
 TILE = 500  # m (keeps every tile file under the 1 MB pre-commit limit)
 STEP = 10  # m between ground heights
 TREE_SEED = 5
+# m/m: the cross slope reported by the build check; French roads have a 2.5 % cross fall, up to 7 % of
+# superelevation in bends (SETRA, ARP 1994), so a steeper triangle under a road is a defect (#76)
+CROSS_SLOPE_MAX = 0.07
+JUNCTION_MARGIN = 10.0  # m around a junction where the slope of a side street is no cross slope
 
 
 def dm(v: float) -> int:
@@ -174,6 +181,14 @@ def buildings_and_trees(
     return buildings, over, by_tile
 
 
+def report_cross_slopes(slopes: list[tuple[float, float, float]]) -> None:
+    """Build check (#76): the road triangles steeper across the road than CROSS_SLOPE_MAX."""
+    steep = sorted((s for s in slopes if s[2] > CROSS_SLOPE_MAX), key=lambda s: -s[2])
+    print(f'devers : {len(steep)} triangles de chaussee sur {len(slopes)} au-dela de {CROSS_SLOPE_MAX:.0%}')
+    for x, y, slope in steep[:10]:
+        print(f'    ({x:7.0f}, {y:7.0f}) {slope:.0%}')
+
+
 def main() -> None:
     terrain_data = read_json(os.path.join(DATA, 'terrain.json'))['fine']
     terrain = TerrainGrid(**terrain_data)
@@ -189,6 +204,9 @@ def main() -> None:
     print('trottoirs et marquage...')
     sidewalks = sidewalk_zone(edges, surface)
     radii = junction_radii(edges)
+    ends = {e.a: e.coords[0] for e in edges} | {e.b: e.coords[-1] for e in edges}
+    junctions = union_all([ShapelyPoint(ends[k]).buffer(r + JUNCTION_MARGIN) for k, r in radii.items()])
+    slopes: list[tuple[float, float, float]] = []
     marks = group_by_tile([(line, False) for line in centre_lines(edges, radii)], bx0, by0)
     zebras = group_by_tile([(poly, True) for poly in crossings(edges, radii)], bx0, by0)
     kerbs = group_by_tile([(line, False) for line in kerb_lines(surface, sidewalks)], bx0, by0)
@@ -223,7 +241,9 @@ def main() -> None:
         xs, ys = gx.ravel().astype(np.float64), gy.ravel().astype(np.float64)
         local = clip(surface, box(ox - 30, oy - 30, ox + TILE + 30, oy + TILE + 30))
         if isinstance(local, Polygon | MultiPolygon) and not local.is_empty:
-            ground = shaped_ground(xs, ys, terrain.heights(xs, ys), local, heights)
+            flat = flat_vertices(local, ox, oy, n, STEP)
+            ground = shaped_ground(xs, ys, terrain.heights(xs, ys), local, heights, flat)
+            slopes += road_cross_slopes(ground, ox, oy, n, STEP, local, heights, junctions)
         else:
             ground = terrain.heights(xs, ys)
         road = local if isinstance(local, Polygon | MultiPolygon) else Polygon()
@@ -272,6 +292,7 @@ def main() -> None:
                 'banks': [flat_dm(line, ox, oy) for line in shore_lines(water, ox, oy, TILE)] if wet else [],
             },
         )
+    report_cross_slopes(slopes)
     write_json(
         os.path.join(OUT, 'index.json'),
         {

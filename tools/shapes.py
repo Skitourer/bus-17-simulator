@@ -14,6 +14,7 @@ from shapely.geometry.base import BaseGeometry
 
 type FloatArray = npt.NDArray[np.float64]
 type GeometryArray = npt.NDArray[np.object_]
+type BoolArray = npt.NDArray[np.bool_]
 
 
 def points(xs: FloatArray, ys: FloatArray) -> GeometryArray:
@@ -28,8 +29,8 @@ def coordinates(pts: GeometryArray) -> tuple[FloatArray, FloatArray]:
     return np.asarray(xs, dtype=np.float64), np.asarray(ys, dtype=np.float64)
 
 
-def interpolate(line: LineString, distances: FloatArray) -> GeometryArray:
-    """Points at the given distances along a line."""
+def interpolate(line: LineString | GeometryArray, distances: FloatArray) -> GeometryArray:
+    """Points at the given distances along a line (or along each line of an array)."""
     pts = shapely.line_interpolate_point(line, distances)  # pyright: ignore[reportUnknownMemberType]
     return cast(GeometryArray, np.asarray(pts, dtype=object))
 

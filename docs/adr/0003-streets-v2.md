@@ -17,7 +17,10 @@ each read a terrain that did not match what was drawn.
     mouth is drawn where they meet an open road; building passages are streets, the building
     part above them drawn from 4.5 m, #14);
   - a 10 m ground grid set to the road height on the carriageway and 2.5 m beside it,
-    then blended back to the natural terrain over 8 m (banks);
+    then blended back to the natural terrain over 8 m (banks); every corner of a triangle
+    touching the carriageway is at the road height, so the road is flat across (#76), and the
+    build lists the road triangles still steeper than 7 % across (roads closer than the grid
+    at different heights, such as tight hairpins);
   - the carriageway: union of all road pieces at their real width (junctions and
     roundabouts come out clean), cut along the ground triangles so every piece is
     coplanar with the ground;
