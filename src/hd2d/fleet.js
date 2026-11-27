@@ -1,6 +1,6 @@
 // @ts-check
 /**
- * The other buses of line 17 (#48): every service of the chosen day running at the game time, in both
+ * The other buses of the line (#48): every service of the chosen day running at the game time, in both
  * directions, placed from the GTFS timetable. A bus dwells at each stop, slows down before it, and waits
  * behind the player's bus (or the bus ahead of it) instead of running into it, then catches up with its
  * timetable. Pure logic, no Three.js. Local frame: x east, y north, heading = math angle.

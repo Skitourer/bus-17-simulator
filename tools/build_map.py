@@ -1,9 +1,9 @@
 """Construit data/grenoble/map.json (fond de la mini-carte) depuis OpenStreetMap via Overpass.
 
-Usage :  python tools/build_map.py      (a lancer apres build_line.py, qui fixe l'origine et l'emprise)
+Usage :  uv run python tools/build_map.py      (after build_line.py, which writes the lines and their extent)
 Donnees (c) contributeurs OpenStreetMap, licence ODbL : l'attribution est affichee sur la mini-carte.
 
-Sortie : coordonnees locales en metres (memes axes que 17.json), arrondies au metre,
+Sortie : coordonnees locales en metres (memes axes que lines/*.json), arrondies au metre,
   { "polys": { "water": [[x,y,x,y,...], ...], "park": [...], "forest": [...] },
     "lines": { "river": [...], "primary": [...], "secondary": [...], "minor": [...], "tram": [...],
                "rail": [...] } }
@@ -13,11 +13,12 @@ import os
 from typing import Any
 
 from geo import Point, Projection, douglas_peucker, dp_ring, join_rings, make_proj
+from lines import CORRIDOR, LINES_DIR
 from sources import ROOT, overpass, read_json, write_json
 
-LINE = os.path.join(ROOT, 'data', 'grenoble', '17.json')
+LINE_INDEX = os.path.join(LINES_DIR, 'index.json')
 OUT = os.path.join(ROOT, 'data', 'grenoble', 'map.json')
-MARGIN = 1500  # m autour de la ligne
+MARGIN = CORRIDOR  # m around the lines
 
 ROAD_CLASS = {
     'motorway': 'primary',
@@ -127,7 +128,7 @@ def classify(
 
 
 def main() -> None:
-    line = read_json(LINE)
+    line = read_json(LINE_INDEX)
     lat0, lon0 = line['origin']
     to_xy, to_ll = make_proj(lat0, lon0)
     x0, y0, x1, y1 = line['bbox']

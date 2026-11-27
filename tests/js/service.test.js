@@ -11,9 +11,12 @@ import {
   readParams,
   serviceDate,
   serviceDayType,
-  serviceLabel,
-  sortedServices,
-  todayService,
+  activeServices,
+  dayLabel,
+  dayTypeDates,
+  dayTypeOn,
+  runsOn,
+  weekdaysOn,
   toSec,
 } from '../../src/common/service.js';
 import { setMessages } from '../../src/i18n/i18n.js';
@@ -29,19 +32,14 @@ const CAL = {
   'X-LVIfi-Semaine': { days: '1111100', start: '20270101', end: '20270131' },
   'X-LVHfi-Semaine': { days: '1111100', start: '20260901', end: '20261231' },
 };
-const SERVICES = Object.fromEntries(Object.keys(CAL).map((k) => [k, ['08:00']]));
 
-describe('serviceLabel', () => {
-  it('names the M réso day types', () => {
-    expect(serviceLabel('X-LVHfi-Semaine', CAL)).toBe('Semaine (école)');
-    expect(serviceLabel('X-LVIfi-Semaine', CAL)).toBe('Semaine (vacances)');
-    expect(serviceLabel('X-SAHfi-Samedi', CAL)).toBe('Samedi');
-    expect(serviceLabel('X-DFHfi-Dimanche', CAL)).toBe('Dimanche / férié');
-  });
-
-  it('falls back to the calendar period, then to the raw id', () => {
-    expect(serviceLabel('X-other', CAL)).toBe('Service 05/01 → 20/03');
-    expect(serviceLabel('unknown', CAL)).toBe('unknown');
+describe('dayLabel', () => {
+  it('names the M réso day types, nothing without one', () => {
+    expect(dayLabel('school')).toBe('Semaine (école)');
+    expect(dayLabel('holidays')).toBe('Semaine (vacances)');
+    expect(dayLabel('saturday')).toBe('Samedi');
+    expect(dayLabel('sunday')).toBe('Dimanche / férié');
+    expect(dayLabel(null)).toBe('');
   });
 });
 
@@ -55,27 +53,42 @@ describe('serviceDayType', () => {
   });
 });
 
-describe('sortedServices', () => {
-  it('orders school week, holidays, Saturday, Sunday, then the others', () => {
-    expect(sortedServices(SERVICES)).toEqual([
-      'X-LVHfi-Semaine',
-      'X-LVIfi-Semaine',
-      'X-SAHfi-Samedi',
-      'X-DFHfi-Dimanche',
-      'X-other',
-    ]);
+describe('runsOn and activeServices', () => {
+  it('needs the date in the period and on a running weekday', () => {
+    expect(runsOn(CAL['X-LVHfi-Semaine'], '20261124')).toBe(true); // a Tuesday
+    expect(runsOn(CAL['X-LVHfi-Semaine'], '20261128')).toBe(false); // a Saturday
+    expect(runsOn(CAL['X-LVHfi-Semaine'], '20270104')).toBe(false); // after the period
+    expect(activeServices(CAL, '20261128')).toEqual(['X-SAHfi-Samedi']);
+    expect(activeServices(CAL, '20300101')).toEqual([]);
   });
 });
 
-describe('todayService', () => {
-  it('picks the service whose period and weekday match', () => {
-    expect(todayService(SERVICES, CAL, new Date(2026, 10, 24))).toBe('X-LVHfi-Semaine'); // a Tuesday
-    expect(todayService(SERVICES, CAL, new Date(2026, 10, 28))).toBe('X-SAHfi-Samedi');
-    expect(todayService(SERVICES, CAL, new Date(2026, 10, 29))).toBe('X-DFHfi-Dimanche');
+describe('dayTypeDates', () => {
+  it('gives each day type the earliest date of its services, in menu order', () => {
+    expect(dayTypeDates(CAL, new Date(2026, 10, 27))).toEqual([
+      { type: 'school', date: '20261127' },
+      { type: 'holidays', date: '20270101' },
+      { type: 'saturday', date: '20261128' },
+      { type: 'sunday', date: '20261129' },
+    ]);
   });
 
-  it('returns null outside every period', () => {
-    expect(todayService(SERVICES, CAL, new Date(2030, 0, 1))).toBeNull();
+  it('prefers the service of a split day type that runs first', () => {
+    /** @type {import('../../src/common/types.js').Calendar} */
+    const cal = {
+      'P-DFfi-Dimanche-010': { days: '0000001', start: '20261213', end: '20261227' },
+      'P-DFPfi-Dimanche-011': { days: '0000001', start: '20261129', end: '20261206' },
+    };
+    expect(dayTypeDates(cal, new Date(2026, 10, 27))).toEqual([{ type: 'sunday', date: '20261129' }]);
+  });
+});
+
+describe('dayTypeOn and weekdaysOn', () => {
+  it('reads the day type and the weekdays of the services of a date', () => {
+    expect(dayTypeOn(CAL, '20261124')).toBe('school');
+    expect(dayTypeOn(CAL, '20260106')).toBeNull(); // only X-other runs
+    expect(weekdaysOn(CAL, '20261124')).toBe('1111100');
+    expect(weekdaysOn(CAL, '20300101')).toBe('0000000');
   });
 });
 
@@ -113,13 +126,14 @@ describe('readParams', () => {
   it('reads the game parameters from the URL', () => {
     vi.stubGlobal('location', {
       search:
-        '?dir=1&date=20261224&dep=09:15&day=svc&bus=art&s=150&auto&map=2&debug&stop=saint-laurent&stress=200',
+        '?line=N62&route=3&date=20261224&dep=09:15&day=20261223&bus=art&s=150&auto&map=2&debug&stop=saint-laurent&stress=200',
     });
     expect(readParams()).toEqual({
-      dir: 1,
+      line: 'N62',
+      route: 3,
       date: '20261224',
       dep: '09:15',
-      day: 'svc',
+      day: '20261223',
       bus: 'art',
       s: 150,
       auto: true,
@@ -134,7 +148,8 @@ describe('readParams', () => {
   it('uses defaults when the URL is empty', () => {
     vi.stubGlobal('location', { search: '' });
     expect(readParams()).toMatchObject({
-      dir: 0,
+      line: '17',
+      route: 0,
       date: '',
       dep: '07:32',
       day: '',

@@ -190,7 +190,29 @@ button {
   width: 120px;
   height: 120px;
   border-radius: 26px;
-  font-size: 64px;
+  font-size: 56px;
+}
+.title-badges {
+  display: flex;
+  gap: 16px;
+  justify-content: center;
+  flex-wrap: wrap;
+}
+/* line number inside a chip of the line choice */
+.badge.line:not(.big) {
+  width: auto;
+  min-width: 44px;
+  height: 32px;
+  padding: 0 8px;
+  border-radius: 8px;
+  font-size: 18px;
+  box-shadow: 0 0 0 2px #fff4;
+}
+.dep small {
+  display: block;
+  font-size: 11px;
+  font-weight: 400;
+  opacity: 0.85;
 }
 .game-name {
   margin: 8px 0 0;

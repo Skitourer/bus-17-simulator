@@ -1,24 +1,23 @@
-"""Construit data/grenoble/17.json a partir du GTFS M reso et des altitudes IGN.
+"""Builds data/grenoble/lines/<line>.json and lines/index.json from the M reso GTFS and IGN elevations.
 
-Usage :  python tools/build_line.py [chemin_gtfs.zip]
-  - sans argument, telecharge le GTFS depuis data.mobilites-m.fr (licence ODbL).
-  - altitudes : API altimetrique IGN Geoplateforme (RGE ALTI), mises en cache dans tools/cache/.
+Usage:  uv run python tools/build_line.py [gtfs.zip]
+  - without argument, downloads the GTFS from data.mobilites-m.fr (ODbL licence), cached in tools/cache/;
+  - elevations: IGN Geoplateforme elevation API (RGE ALTI), cached in tools/cache/.
+Lines: tools/lines.py (LINES); every trip pattern of a line is a route of its own (ADR 0010).
 
-Sortie (coordonnees locales en metres, x = est, y = nord, origine = ORIGIN) :
-  {
-    "origin": [lat, lon], "color": "#33A457", "step": 2,
-    "directions": [ { "id": 0, "headsign": ..., "length": m,
-                      "pts": [x0, y0, z0, x1, y1, z1, ...],      # un point tous les `step` metres
-                      "stops": [ {"name":..., "s": m}, ... ],
-                      "services": { service_id: ["06:32", ...] } }, ... ],
-    "calendar": { service_id: {"days": "1111100", "start": "20261117", "end": "20261218"} },
-    "horizon": { "step": deg, "far": [rad, ...], "z": m, "views": [...] }  # ligne de crete reelle
-  }
+Output (local metres, x = east, y = north, origin = lines.ORIGIN shared by every data file):
+  lines/<line>.json { "id": "17", "name": ..., "color": "#33A457", "text_color": "#FFFFFF", "step": 2,
+      "routes": [ { "direction": 0, "headsign": ..., "length": m, "trips": n,
+                    "pts": [x0, y0, z0, x1, y1, z1, ...],      # one point every `step` m, 10 cm precision
+                    "stops": [ {"name": ..., "s": m, ...}, ... ],
+                    "services": { service_id: ["06:32", ...] } }, ... ],
+      "calendar": { service_id: {"days": "1111100", "start": "20261117", "end": "20261218"} } }
+  lines/index.json { "origin": [lat, lon], "bbox": [x0, y0, x1, y1] (all routes),
+      "lines": [ { "id", "name", "color", "text_color", "termini": [first stop, last stop] }, ... ] }
 """
 
 import csv
 import io
-import math
 import os
 import sys
 import zipfile
@@ -27,7 +26,6 @@ from collections.abc import Callable
 from typing import Any
 
 from geo import (
-    R_EARTH,
     Point,
     Projection,
     clock_hm,
@@ -40,11 +38,10 @@ from geo import (
     project_on,
     resample,
 )
-from sources import CACHE, ROOT, elevations, fetch, write_json
+from lines import LINES, LINES_DIR, ORIGIN, Pattern, bounds_of, departures_by_service, trip_patterns
+from sources import CACHE, elevations, fetch, write_json
 
-OUT = os.path.join(ROOT, 'data', 'grenoble', '17.json')
 GTFS_URL = 'https://data.mobilites-m.fr/api/gtfs/SEM'
-ROUTE_ID = '17'
 STEP = 2.0  # pas de reechantillonnage (m)
 SMOOTH_M = 12.0  # demi-fenetre du lissage gaussien du trace (arrondit les angles droits)
 ELEV_EVERY = 10.0  # un echantillon d'altitude tous les 10 m
@@ -54,7 +51,6 @@ WEEKDAYS = ('monday', 'tuesday', 'wednesday', 'thursday', 'friday', 'saturday', 
 
 type Row = dict[str, str]
 type Table = Callable[[str], list[Row]]
-type TrackPoints = tuple[list[float], list[float], list[float]]
 
 
 def load_gtfs(path: str | None) -> Table:
@@ -126,168 +122,137 @@ def route_stops(
     return out
 
 
-def main() -> None:
-    table = load_gtfs(sys.argv[1] if len(sys.argv) > 1 else None)
-    routes = {r['route_id']: r for r in table('routes.txt')}
-    route = routes[ROUTE_ID]
-    trips = [t for t in table('trips.txt') if t['route_id'] == ROUTE_ID]
-    trip_ids = {t['trip_id'] for t in trips}
-    print(f'{len(trips)} trajets ligne {ROUTE_ID}')
+type Shapes = dict[str, list[Point]]
 
-    st: defaultdict[str, list[Row]] = defaultdict(list)
-    for r in table('stop_times.txt'):
-        if r['trip_id'] in trip_ids:
-            st[r['trip_id']].append(r)
-    for v in st.values():
-        v.sort(key=lambda r: int(r['stop_sequence']))
-    stops = {s['stop_id']: s for s in table('stops.txt')}
 
-    # trajet de reference par sens = celui qui a le plus d'arrets (parcours complet)
-    ref: dict[int, Row] = {}
-    for t in trips:
-        d = int(t['direction_id'])
-        if d not in ref or len(st[t['trip_id']]) > len(st[ref[d]['trip_id']]):
-            ref[d] = t
-    shape_ids = {t['shape_id'] for t in ref.values()}
-    shapes: defaultdict[str, list[tuple[int, float, float]]] = defaultdict(list)
+def route_path(raw: list[Point]) -> list[Point]:
+    """GTFS shape resampled every STEP m and smoothed (rounds the right angles of the shape)."""
+    pts = resample(raw, STEP)
+    sig = SMOOTH_M / STEP
+    xs = gauss_smooth([p[0] for p in pts], sig)
+    ys = gauss_smooth([p[1] for p in pts], sig)
+    return resample(list(zip(xs, ys, strict=True)), STEP)
+
+
+def decimetre(value: float) -> float | int:
+    """Value rounded to 10 cm, written without ".0" when whole (a smaller file)."""
+    rounded = round(value, 1)
+    return int(rounded) if rounded.is_integer() else rounded
+
+
+def build_route(
+    pattern: Pattern,
+    shapes: Shapes,
+    times: dict[str, list[Row]],
+    stops: dict[str, Row],
+    to_xy: Projection,
+    to_ll: Projection,
+) -> dict[str, Any]:
+    """One route of a line: smoothed path with altitudes, stops and departures of its trips."""
+    ref = pattern.reference
+    pts = route_path(shapes[ref['shape_id']])
+    length = cumlen(pts)[-1]
+    zs = route_altitudes(pts, to_ll)
+    route_stop_list = route_stops(times[ref['trip_id']], stops, pts, to_xy)
+    first = {t['trip_id']: clock_hm(times[t['trip_id']][0]['departure_time']) for t in pattern.trips}
+    kmax = max_turn_curvature(pts, STEP)
+    rmin = 1 / kmax if kmax > 0 else 1e9
+    slope = max((abs(zs[i + 25] - zs[i]) / 50 for i in range(len(zs) - 25)), default=0.0)
+    print(
+        f'  sens {pattern.direction} -> {ref["trip_headsign"]} : {length:.0f} m, '
+        f'{len(route_stop_list)} arrets, '
+        f'{len(pattern.trips)} courses, alt {min(zs):.0f}-{max(zs):.0f} m, pente max {slope * 100:.1f} %, '
+        f'rayon min {rmin:.1f} m'
+    )
+    return {
+        'direction': pattern.direction,
+        'headsign': ref['trip_headsign'],
+        'length': round(length, 1),
+        'trips': len(pattern.trips),
+        # 10 cm: far below a lane width, and it keeps the longest line file under the 1 MB file limit
+        'pts': [decimetre(v) for (x, y), z in zip(pts, zs, strict=True) for v in (x, y, z)],
+        'stops': route_stop_list,
+        'services': departures_by_service(pattern.trips, first),
+    }
+
+
+def line_calendar(table: Table, routes: list[dict[str, Any]]) -> dict[str, dict[str, str]]:
+    """Calendar of the services that run at least one trip of the line."""
+    used = {sid for r in routes for sid in r['services']}
+    return {
+        c['service_id']: {
+            'days': ''.join(c[k] for k in WEEKDAYS),
+            'start': c['start_date'],
+            'end': c['end_date'],
+        }
+        for c in table('calendar.txt')
+        if c['service_id'] in used
+    }
+
+
+def read_shapes(table: Table, shape_ids: set[str], to_xy: Projection) -> Shapes:
+    """Shapes in the local frame, points in sequence order."""
+    raw: defaultdict[str, list[tuple[int, float, float]]] = defaultdict(list)
     for r in table('shapes.txt'):
         if r['shape_id'] in shape_ids:
-            shapes[r['shape_id']].append(
+            raw[r['shape_id']].append(
                 (int(r['shape_pt_sequence']), float(r['shape_pt_lat']), float(r['shape_pt_lon']))
             )
+    return {sid: [to_xy(la, lo) for _, la, lo in sorted(pts)] for sid, pts in raw.items()}
 
-    first = sorted(shapes[ref[0]['shape_id']])[0]
-    origin = (first[1], first[2])
-    to_xy, to_ll = make_proj(*origin)
 
-    directions: list[dict[str, Any]] = []
-    allx: list[float] = []
-    ally: list[float] = []
-    first_track: TrackPoints = ([], [], [])
+def main() -> None:
+    table = load_gtfs(sys.argv[1] if len(sys.argv) > 1 else None)
+    routes_by_name = {r['route_short_name']: r for r in table('routes.txt')}
+    missing = [name for name in LINES if name not in routes_by_name]
+    if missing:
+        raise SystemExit(f'lignes absentes du GTFS : {missing}')
+    route_ids = {routes_by_name[name]['route_id']: name for name in LINES}
+    trips = [t for t in table('trips.txt') if t['route_id'] in route_ids]
+    trip_ids = {t['trip_id'] for t in trips}
+    times: defaultdict[str, list[Row]] = defaultdict(list)
+    for r in table('stop_times.txt'):
+        if r['trip_id'] in trip_ids:
+            times[r['trip_id']].append(r)
+    for v in times.values():
+        v.sort(key=lambda r: int(r['stop_sequence']))
+    stops = {s['stop_id']: s for s in table('stops.txt')}
+    to_xy, to_ll = make_proj(*ORIGIN)
+    shapes = read_shapes(table, {t['shape_id'] for t in trips}, to_xy)
 
-    for d in sorted(ref):
-        t = ref[d]
-        raw = [to_xy(la, lo) for _, la, lo in sorted(shapes[t['shape_id']])]
-        # nettoyage des doublons puis reechantillonnage fin + lissage gaussien (arrondi des angles)
-        pts = resample(raw, STEP)
-        sig = SMOOTH_M / STEP
-        xs = gauss_smooth([p[0] for p in pts], sig)
-        ys = gauss_smooth([p[1] for p in pts], sig)
-        pts = resample(list(zip(xs, ys, strict=True)), STEP)
-        length = cumlen(pts)[-1]
-        zs = route_altitudes(pts, to_ll)
-        sl = route_stops(st[t['trip_id']], stops, pts, to_xy)
-
-        services: defaultdict[str, list[str]] = defaultdict(list)
-        for tt in trips:
-            if int(tt['direction_id']) == d and st[tt['trip_id']]:
-                services[tt['service_id']].append(clock_hm(st[tt['trip_id']][0]['departure_time']))
-        for k in services:
-            services[k].sort()
-
-        kmax = max_turn_curvature(pts, STEP)
-        rmin = 1 / kmax if kmax > 0 else 1e9
-        slope = max(abs(zs[i + 25] - zs[i]) / 50 for i in range(len(zs) - 25))
-        print(
-            f'sens {d} -> {t["trip_headsign"]} : {length:.0f} m, {len(sl)} arrets, '
-            f'alt {min(zs):.0f}-{max(zs):.0f} m, pente max {slope * 100:.1f} %, rayon min {rmin:.1f} m'
-        )
-
-        if d == min(ref):
-            first_track = ([p[0] for p in pts], [p[1] for p in pts], zs)
-        flat: list[float] = []
-        for (x, y), z in zip(pts, zs, strict=True):
-            flat += [round(x, 2), round(y, 2), round(z, 2)]
-            allx.append(x)
-            ally.append(y)
-        directions.append(
+    index: list[dict[str, Any]] = []
+    every_route: list[list[Point]] = []
+    for name in LINES:
+        gtfs_route = routes_by_name[name]
+        line_trips = [t for t in trips if t['route_id'] == gtfs_route['route_id']]
+        patterns = trip_patterns(line_trips, {k: [r['stop_id'] for r in v] for k, v in times.items()})
+        print(f'ligne {name} : {len(line_trips)} courses, {len(patterns)} parcours')
+        routes = [build_route(p, shapes, times, stops, to_xy, to_ll) for p in patterns]
+        every_route += [[(r['pts'][i], r['pts'][i + 1]) for i in range(0, len(r['pts']), 3)] for r in routes]
+        line: dict[str, Any] = {
+            'id': name,
+            'name': gtfs_route['route_long_name'],
+            'color': '#' + gtfs_route['route_color'],
+            'text_color': '#' + gtfs_route['route_text_color'],
+            'step': STEP,
+            'routes': routes,
+            'calendar': line_calendar(table, routes),
+        }
+        write_json(os.path.join(LINES_DIR, f'{name}.json'), line)
+        main_route = routes[0]
+        index.append(
             {
-                'id': d,
-                'headsign': t['trip_headsign'],
-                'length': round(length, 1),
-                'pts': flat,
-                'stops': sl,
-                'services': services,
+                'id': name,
+                'name': line['name'],
+                'color': line['color'],
+                'text_color': line['text_color'],
+                'termini': [main_route['stops'][0]['name'], main_route['stops'][-1]['name']],
             }
         )
-
-    calendar: dict[str, dict[str, str]] = {}
-    for c in table('calendar.txt'):
-        sid = c['service_id']
-        if sid.startswith('PROD2627-17') or any(sid in dd['services'] for dd in directions):
-            days = ''.join(c[k] for k in WEEKDAYS)
-            calendar[sid] = {'days': days, 'start': c['start_date'], 'end': c['end_date']}
-
-    out: dict[str, Any] = {
-        'origin': list(origin),
-        'color': '#' + route['route_color'],
-        'step': STEP,
-        'name': route['route_long_name'],
-        'directions': directions,
-        'calendar': calendar,
-        'bbox': [min(allx), min(ally), max(allx), max(ally)],
-        'horizon': build_horizon(to_ll, allx, ally, first_track),
-    }
-    write_json(OUT, out)
-
-
-AZ_STEP = 3
-NEAR_D = [350, 550, 800, 1100, 1500, 2000, 2600, 3300, 4200, 5200, 6400]
-FAR_D = [7600, 9200, 11000, 13000, 15500, 18500, 22000, 26000, 31000]
-VIEW_EVERY = 400
-
-
-def ridge(to_ll: Projection, cx: float, cy: float, z0: float, dists: list[int]) -> list[float]:
-    """Highest elevation angle (rad) seen from (cx, cy, z0) for each azimuth (0 = north, clockwise)."""
-    pts: list[Point] = []
-    for a in range(0, 360, AZ_STEP):
-        az = math.radians(a)
-        for d in dists:
-            pts.append(to_ll(cx + math.sin(az) * d, cy + math.cos(az) * d))
-    el = elevations(pts)
-    out: list[float] = []
-    k = 0
-    for _ in range(0, 360, AZ_STEP):
-        best = 0.0
-        for d in dists:
-            ek = el[k]
-            e = ek if ek is not None else z0
-            h = e - z0 - d * d / (2 * R_EARTH) * 0.87  # courbure terrestre + refraction
-            best = max(best, math.atan2(h, d))
-            k += 1
-        out.append(round(best, 4))
-    return out
-
-
-def build_horizon(
-    to_ll: Projection, allx: list[float], ally: list[float], track_pts: TrackPoints
-) -> dict[str, Any]:
-    """Lignes de crete reelles (angle d'elevation max par azimut, 0 = nord, sens horaire).
-    - plan lointain (>= 7 km : Belledonne, Vercors, Chartreuse) : un seul point de vue, au centre ;
-    - plan proche (< 7 km : Bastille, Rachais, Saint-Eynard...) : un point de vue tous les VIEW_EVERY m
-      le long du trace, interpole en jeu selon la position du bus (vraie parallaxe des collines)."""
-    cx, cy = (min(allx) + max(allx)) / 2, (min(ally) + max(ally)) / 2
-    z0 = known_elevations([to_ll(cx, cy)])[0] + 3
-    print(f'ligne de crete lointaine depuis le centre (alt {z0:.0f} m)')
-    far = ridge(to_ll, cx, cy, z0, FAR_D)
-    views: list[dict[str, Any]] = []
-    xs, ys, zs = track_pts
-    n = len(xs)
-    step_n = max(1, int(VIEW_EVERY / STEP))
-    idx = list(range(0, n, step_n))
-    if idx[-1] != n - 1:
-        idx.append(n - 1)
-    for j, i in enumerate(idx):
-        print(f'  point de vue {j + 1}/{len(idx)}')
-        views.append(
-            {
-                'x': round(xs[i], 1),
-                'y': round(ys[i], 1),
-                'z': round(zs[i] + 3, 1),
-                'near': ridge(to_ll, xs[i], ys[i], zs[i] + 3, NEAR_D),
-            }
-        )
-    return {'step': AZ_STEP, 'far': far, 'z': round(z0, 1), 'views': views}
+    write_json(
+        os.path.join(LINES_DIR, 'index.json'),
+        {'origin': list(ORIGIN), 'bbox': [round(v, 1) for v in bounds_of(every_route)], 'lines': index},
+    )
 
 
 if __name__ == '__main__':

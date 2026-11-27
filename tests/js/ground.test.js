@@ -11,7 +11,7 @@ function oneTile(
   /** @type {number[][][]} */ water = [],
 ) {
   /** @type {import('../../src/hd2d/ground.js').TileIndex} */
-  const index = { x0: 0, y0: 0, size: 20, step: 10, nx: 1, ny: 1 };
+  const index = { x0: 0, y0: 0, size: 20, step: 10, nx: 1, ny: 1, tiles: ['0_0'] };
   const tiles = new Map([
     [
       '0_0',

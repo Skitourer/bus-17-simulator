@@ -110,12 +110,22 @@ function side(bus, spec) {
   });
 }
 
+/** Line number shown on the destination signs, set by setLineNumber before the buses are made. */
+let lineNumber = '17';
+
+/** @param {string} text line number of the game, e.g. "18" or "N62" */
+export function setLineNumber(text) {
+  lineNumber = text;
+}
+
 /** Destination sign of the front: line number and text. @param {CanvasRenderingContext2D} g @param {number} w */
 function frontSign(g, w) {
-  digits(g, '17', 9, 4, C.amber);
+  digits(g, lineNumber, 9, 4, C.amber);
+  // the text starts after the number (4 px per character)
+  const x = 11 + 4 * lineNumber.length;
   g.fillStyle = C.amber;
-  g.fillRect(19, 6, w - 28, 1);
-  g.fillRect(19, 8, w - 32, 1);
+  g.fillRect(x, 6, w - x - 9, 1);
+  g.fillRect(x, 8, w - x - 13, 1);
 }
 
 /** @param {CanvasRenderingContext2D} g @param {number} w @param {string} colour */
@@ -127,7 +137,7 @@ function headlights(g, w, colour) {
 
 /** Line number of the rear sign. @param {CanvasRenderingContext2D} g @param {number} w */
 function rearSign(g, w) {
-  digits(g, '17', w / 2 - 4, 4, C.amber);
+  digits(g, lineNumber, w / 2 - 2 * lineNumber.length, 4, C.amber);
 }
 
 /** @param {CanvasRenderingContext2D} g @param {number} w @param {string} colour */

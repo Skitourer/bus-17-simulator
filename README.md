@@ -2,8 +2,9 @@
 
 _[Français](README.fr.md)_
 
-A bus-driving game in the browser, on the real route of Grenoble bus line 17
-(Verdun – Préfecture ⇄ Meylan, Lycée du Grésivaudan): real streets, real elevation,
+A bus-driving game in the browser, on the real routes of Grenoble bus lines 17
+(Verdun – Préfecture ⇄ Meylan, Lycée du Grésivaudan), 18 (Poisat ⇄ Meylan) and N62
+(Grenoble ⇄ Col de Porte, in the Chartreuse mountains): real streets, real elevation,
 real stops and timetables. Made first for a 12-year-old bus fan, then for anyone.
 
 It is an early prototype in **HD-2D**: a low-resolution 3D city with a pixel-art look,
@@ -23,7 +24,7 @@ cd bus-17-simulator
 python -m http.server 8017
 ```
 
-Then open <http://localhost:8017/>, pick a direction, a day and a departure, and drive.
+Then open <http://localhost:8017/>, pick a line, a direction, a day and a departure, and drive.
 Keys: Z/↑ accelerate · S/↓ brake then reverse · Q D/← → steer · M map · P pause.
 
 ## Development
@@ -40,7 +41,7 @@ uv run poe serve     # http://localhost:8017/ without browser caching
 
 Debug mode, to test the map: switch it on in Settings, or press F9 during the game, or open
 `http://localhost:8017/hd2d.html?debug&stop=saint-laurent` (any stop name of the line;
-`dir=1` for the other direction). Shift: turbo · N / B: next / previous stop · click on the
+`line=18&route=2` for another line and route, numbered as in `data/grenoble/lines/<line>.json`). Shift: turbo · N / B: next / previous stop · click on the
 mini-map: teleport anywhere · K: collisions on/off · F: free flight (arrows or ZQSD, Space / X up and
 down, mouse to look, Enter puts the bus below the camera).
 

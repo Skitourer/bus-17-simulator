@@ -3,8 +3,9 @@
 Usage:  uv run python tools/build_streets.py      (after build_terrain.py and build_roads.py)
 Geometry: see tools/streets.py and ADR 0003. All coordinates in decimetres.
 
-  tiles/index.json  { "x0", "y0", "size": 500, "step": 10, "nx", "ny" }        tile (i, j) covers
-                    [x0 + i size, x0 + (i+1) size] x [y0 + j size, y0 + (j+1) size]
+  tiles/index.json  { "x0", "y0", "size": 500, "step": 10, "nx", "ny", "tiles": ["i_j", ...] }   tile (i, j)
+                    covers [x0 + i size, x0 + (i+1) size] x [y0 + j size, y0 + (j+1) size]; only the tiles
+                    of the corridor around the lines exist (tools/lines.py, ADR 0010)
   tiles/t_i_j.json  { "ground": [z, ...]          (n x n heights, row by row from south, n = size/step + 1),
                       "road": [[ring, hole, ...], ...]   (carriageway cut along the ground triangles;
                                                          rings [x, y, ...] relative to the tile origin),
@@ -37,10 +38,11 @@ from typing import Any
 
 import numpy as np
 from geo import Point
+from lines import corridor, read_lines, routes_xy, tiles_in
 from shapely import LineString, MultiPolygon, Polygon, box
 from shapely.geometry.base import BaseGeometry
 from shapes import clip, coordinates, interpolate
-from sources import ROOT, read_json, write_json
+from sources import CACHE, ROOT, read_json, write_json
 from streets import (
     BUILDING_CLEARANCE,
     PASSAGE_CLEARANCE,
@@ -192,7 +194,7 @@ def main() -> None:
     kerbs = group_by_tile([(line, False) for line in kerb_lines(surface, sidewalks)], bx0, by0)
     print('batiments et arbres...')
     by_tile_buildings, by_tile_lintels, by_tile_trees = buildings_and_trees(
-        read_json(os.path.join(DATA, 'buildings.json')),
+        read_json(os.path.join(CACHE, 'buildings.json')),
         map_data['polys'],
         surface,
         passage_zone(edges),
@@ -204,6 +206,9 @@ def main() -> None:
     print(f'  {sum(len(v) for v in portals.values())} entrees de tunnel')
 
     nx, ny = math.ceil((bx1 - bx0) / TILE), math.ceil((by1 - by0) / TILE)
+    area = corridor([route for line in read_lines() for route in routes_xy(line)])
+    kept = tiles_in(area, bx0, by0, nx, ny, TILE)
+    print(f'{len(kept)} tuiles sur {nx * ny} dans le couloir des lignes')
     print('eau (niveau et rives)...')
     water = water_area(map_data['polys']['water'], (bx0, by0, bx0 + nx * TILE, by0 + ny * TILE))
     cells = TILE // STEP
@@ -212,69 +217,72 @@ def main() -> None:
     for old in glob.glob(os.path.join(OUT, 't_*.json')):
         os.remove(old)
     n = TILE // STEP + 1
-    for j in range(ny):
-        for i in range(nx):
-            ox, oy = bx0 + i * TILE, by0 + j * TILE
-            gx, gy = np.meshgrid(ox + np.arange(n) * STEP, oy + np.arange(n) * STEP)
-            xs, ys = gx.ravel().astype(np.float64), gy.ravel().astype(np.float64)
-            local = clip(surface, box(ox - 30, oy - 30, ox + TILE + 30, oy + TILE + 30))
-            if isinstance(local, Polygon | MultiPolygon) and not local.is_empty:
-                ground = shaped_ground(xs, ys, terrain.heights(xs, ys), local, heights)
-            else:
-                ground = terrain.heights(xs, ys)
-            road = local if isinstance(local, Polygon | MultiPolygon) else Polygon()
-            pieces = road_pieces(road, ox, oy, n, STEP)
-            walk = clip(sidewalks, box(ox, oy, ox + TILE, oy + TILE))
-            walk_pieces = (
-                road_pieces(walk, ox, oy, n, STEP) if isinstance(walk, Polygon | MultiPolygon) else []
-            )
-            wet, wet_pieces, dry_pieces = water_cut(water, ox, oy, n, STEP)
-            tile_level = level[j * cells : j * cells + n, i * cells : i * cells + n].ravel()
-            tile_bridges = [
-                bridge_record(e, p, ox, oy)
-                for e, p in bridges
-                if ox <= LineString(e.coords).centroid.x < ox + TILE
-                and oy <= LineString(e.coords).centroid.y < oy + TILE
-            ]
-            write_json(
-                os.path.join(OUT, f't_{i}_{j}.json'),
-                {
-                    'ground': [dm(float(z)) for z in ground],
-                    'road': rings_of(MultiPolygon(pieces), ox, oy) if pieces else [],
-                    'bridges': tile_bridges,
-                    'sidewalks': rings_of(MultiPolygon(walk_pieces), ox, oy) if walk_pieces else [],
-                    'kerbs': [flat_dm(line, ox, oy) for line in kerbs.get((i, j), [])],
-                    'centre_lines': [flat_dm(line, ox, oy) for line in marks.get((i, j), [])],
-                    'crossings': [flat_dm(poly, ox, oy) for poly in zebras.get((i, j), [])],
-                    'buildings': [
-                        [*head, *(v for x, y in ring for v in (dm(x - ox), dm(y - oy)))]
-                        for head, ring in by_tile_buildings.get((i, j), [])
-                    ],
-                    'lintels': [
-                        [
-                            *head,
-                            dm(PASSAGE_CLEARANCE),
-                            *(v for x, y in ring for v in (dm(x - ox), dm(y - oy))),
-                        ]
-                        for head, ring in by_tile_lintels.get((i, j), [])
-                    ],
-                    'portals': [
-                        [dm(x - ox), dm(y - oy), round(heading * 1000), dm(width)]
-                        for x, y, heading, width in portals.get((i, j), [])
-                    ],
-                    'trees': [v for x, y in by_tile_trees.get((i, j), []) for v in (dm(x - ox), dm(y - oy))],
-                    'water': rings_of(MultiPolygon(wet_pieces), ox, oy) if wet_pieces else [],
-                    'water_level': [dm(float(z)) for z in tile_level] if wet else [],
-                    'wet': wet,
-                    'dry': rings_of(MultiPolygon(dry_pieces), ox, oy) if dry_pieces else [],
-                    'banks': [flat_dm(line, ox, oy) for line in shore_lines(water, ox, oy, TILE)]
-                    if wet
-                    else [],
-                },
-            )
+    for i, j in kept:
+        ox, oy = bx0 + i * TILE, by0 + j * TILE
+        gx, gy = np.meshgrid(ox + np.arange(n) * STEP, oy + np.arange(n) * STEP)
+        xs, ys = gx.ravel().astype(np.float64), gy.ravel().astype(np.float64)
+        local = clip(surface, box(ox - 30, oy - 30, ox + TILE + 30, oy + TILE + 30))
+        if isinstance(local, Polygon | MultiPolygon) and not local.is_empty:
+            ground = shaped_ground(xs, ys, terrain.heights(xs, ys), local, heights)
+        else:
+            ground = terrain.heights(xs, ys)
+        road = local if isinstance(local, Polygon | MultiPolygon) else Polygon()
+        pieces = road_pieces(road, ox, oy, n, STEP)
+        walk = clip(sidewalks, box(ox, oy, ox + TILE, oy + TILE))
+        walk_pieces = road_pieces(walk, ox, oy, n, STEP) if isinstance(walk, Polygon | MultiPolygon) else []
+        wet, wet_pieces, dry_pieces = water_cut(water, ox, oy, n, STEP)
+        tile_level = level[j * cells : j * cells + n, i * cells : i * cells + n].ravel()
+        tile_bridges = [
+            bridge_record(e, p, ox, oy)
+            for e, p in bridges
+            if ox <= LineString(e.coords).centroid.x < ox + TILE
+            and oy <= LineString(e.coords).centroid.y < oy + TILE
+        ]
+        write_json(
+            os.path.join(OUT, f't_{i}_{j}.json'),
+            {
+                'ground': [dm(float(z)) for z in ground],
+                'road': rings_of(MultiPolygon(pieces), ox, oy) if pieces else [],
+                'bridges': tile_bridges,
+                'sidewalks': rings_of(MultiPolygon(walk_pieces), ox, oy) if walk_pieces else [],
+                'kerbs': [flat_dm(line, ox, oy) for line in kerbs.get((i, j), [])],
+                'centre_lines': [flat_dm(line, ox, oy) for line in marks.get((i, j), [])],
+                'crossings': [flat_dm(poly, ox, oy) for poly in zebras.get((i, j), [])],
+                'buildings': [
+                    [*head, *(v for x, y in ring for v in (dm(x - ox), dm(y - oy)))]
+                    for head, ring in by_tile_buildings.get((i, j), [])
+                ],
+                'lintels': [
+                    [
+                        *head,
+                        dm(PASSAGE_CLEARANCE),
+                        *(v for x, y in ring for v in (dm(x - ox), dm(y - oy))),
+                    ]
+                    for head, ring in by_tile_lintels.get((i, j), [])
+                ],
+                'portals': [
+                    [dm(x - ox), dm(y - oy), round(heading * 1000), dm(width)]
+                    for x, y, heading, width in portals.get((i, j), [])
+                ],
+                'trees': [v for x, y in by_tile_trees.get((i, j), []) for v in (dm(x - ox), dm(y - oy))],
+                'water': rings_of(MultiPolygon(wet_pieces), ox, oy) if wet_pieces else [],
+                'water_level': [dm(float(z)) for z in tile_level] if wet else [],
+                'wet': wet,
+                'dry': rings_of(MultiPolygon(dry_pieces), ox, oy) if dry_pieces else [],
+                'banks': [flat_dm(line, ox, oy) for line in shore_lines(water, ox, oy, TILE)] if wet else [],
+            },
+        )
     write_json(
         os.path.join(OUT, 'index.json'),
-        {'x0': bx0, 'y0': by0, 'size': TILE, 'step': STEP, 'nx': nx, 'ny': ny},
+        {
+            'x0': bx0,
+            'y0': by0,
+            'size': TILE,
+            'step': STEP,
+            'nx': nx,
+            'ny': ny,
+            'tiles': [f'{i}_{j}' for i, j in kept],
+        },
     )
 
 

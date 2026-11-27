@@ -2,8 +2,8 @@
 /** Services (jours, departs) tires du GTFS, partages par la page d'accueil et le jeu. */
 import { t } from '../i18n/i18n.js';
 
-/** M réso day types, in menu order. */
-const DAY_TYPES = /** @type {const} */ (['school', 'holidays', 'saturday', 'sunday']);
+/** M réso day types, in menu order. @typedef {(typeof DAY_TYPES)[number]} DayType */
+export const DAY_TYPES = /** @type {const} */ (['school', 'holidays', 'saturday', 'sunday']);
 
 /**
  * Day type encoded in an M réso service id (LVH = school weekdays, LVI = holiday weekdays), or null.
@@ -18,49 +18,8 @@ export function serviceDayType(sid) {
   return null;
 }
 
-/**
- * Libelle lisible d'un service GTFS M reso.
- * @param {string} sid @param {import('./types.js').Calendar} cal
- */
-export function serviceLabel(sid, cal) {
-  const type = serviceDayType(sid);
-  if (type) return t('service.' + type);
-  const c = cal[sid];
-  if (c)
-    return t('service.period', {
-      start: `${c.start.slice(6)}/${c.start.slice(4, 6)}`,
-      end: `${c.end.slice(6)}/${c.end.slice(4, 6)}`,
-    });
-  return sid;
-}
-
-/**
- * services tries dans un ordre naturel (ecole, vacances, samedi, dimanche, puis les autres)
- * @param {Record<string, string[]>} services
- */
-export function sortedServices(services) {
-  /** @param {string} sid */
-  const rank = (sid) => {
-    const type = serviceDayType(sid);
-    return type ? DAY_TYPES.indexOf(type) : DAY_TYPES.length;
-  };
-  return Object.keys(services).sort((a, b) => rank(a) - rank(b) || a.localeCompare(b));
-}
-
-/**
- * service valable aujourd'hui (date dans la periode et jour de semaine coche), sinon null
- * @param {Record<string, string[]>} services @param {import('./types.js').Calendar} cal
- * @returns {string|null}
- */
-export function todayService(services, cal, now = new Date()) {
-  const ymd = now.getFullYear() * 10000 + (now.getMonth() + 1) * 100 + now.getDate();
-  const dow = (now.getDay() + 6) % 7; // lundi = 0
-  for (const sid of Object.keys(services)) {
-    const c = cal[sid];
-    if (c && c.days[dow] === '1' && +c.start <= ymd && ymd <= +c.end) return sid;
-  }
-  return null;
-}
+/** Name of a day type for the player, '' without one. @param {DayType | null} type */
+export const dayLabel = (type) => (type ? t('service.' + type) : '');
 
 /** Calendar date "YYYYMMDD" of a UTC midnight timestamp. @param {number} ms */
 const ymdOf = (ms) => new Date(ms).toISOString().slice(0, 10).replaceAll('-', '');
@@ -86,6 +45,72 @@ export function serviceDate(sid, cal, now) {
   for (let ms = Math.max(today, start); ms <= end; ms += DAY_MS) if (runs(ms)) return ymdOf(ms);
   for (let ms = end; ms >= start; ms -= DAY_MS) if (runs(ms)) return ymdOf(ms);
   return ymdOf(today);
+}
+
+/**
+ * Whether a calendar entry runs on a date (in its period and on its weekday).
+ * @param {import('./types.js').CalendarEntry} entry @param {string} ymd "YYYYMMDD"
+ */
+export function runsOn(entry, ymd) {
+  return entry.start <= ymd && ymd <= entry.end && entry.days[weekday(ymd)] === '1';
+}
+
+/** Weekday of a date, Monday = 0 as in the GTFS days string (1970-01-01 was a Thursday). @param {string} ymd */
+const weekday = (ymd) => (Math.floor(midnightOf(ymd) / DAY_MS) + 3) % 7;
+
+/**
+ * Services of a calendar that run on a date: the timetable of that day is the union of their departures.
+ * @param {import('./types.js').Calendar} cal @param {string} ymd "YYYYMMDD"
+ */
+export function activeServices(cal, ymd) {
+  return Object.keys(cal).filter((sid) => runsOn(cal[sid], ymd));
+}
+
+/**
+ * Day types of a calendar, in menu order, each with the date whose timetable it shows: the earliest of the
+ * service dates of its services (today, the next running day, or the last one of a period that is over).
+ * @param {import('./types.js').Calendar} cal @param {Date} now local date of the player
+ * @returns {{type: DayType, date: string}[]}
+ */
+export function dayTypeDates(cal, now) {
+  /** @type {Map<DayType, string>} */
+  const best = new Map();
+  for (const sid of Object.keys(cal)) {
+    const type = serviceDayType(sid);
+    if (!type) continue;
+    const date = serviceDate(sid, cal, now);
+    const known = best.get(type);
+    if (!known || date < known) best.set(type, date);
+  }
+  return DAY_TYPES.filter((type) => best.has(type)).map((type) => ({
+    type,
+    date: /** @type {string} */ (best.get(type)),
+  }));
+}
+
+/**
+ * Day type of the services running on a date, or null when none of them has one.
+ * @param {import('./types.js').Calendar} cal @param {string} ymd "YYYYMMDD"
+ * @returns {DayType | null}
+ */
+export function dayTypeOn(cal, ymd) {
+  for (const sid of activeServices(cal, ymd)) {
+    const type = serviceDayType(sid);
+    if (type) return type;
+  }
+  return null;
+}
+
+/**
+ * Weekdays on which the services of a date run (seven "0"/"1" flags, Monday first), to keep a game date
+ * on the same kind of day.
+ * @param {import('./types.js').Calendar} cal @param {string} ymd "YYYYMMDD"
+ */
+export function weekdaysOn(cal, ymd) {
+  const flags = [0, 1, 2, 3, 4, 5, 6].map((d) =>
+    activeServices(cal, ymd).some((sid) => cal[sid].days[d] === '1') ? '1' : '0',
+  );
+  return flags.join('');
 }
 
 /**
@@ -157,15 +182,21 @@ export const hm = (s) => hms(s).slice(0, 5);
 export const delta = (s) =>
   `${s >= 0 ? '+' : '−'}${Math.floor(Math.abs(s) / 60)}:${pad(Math.round(Math.abs(s)) % 60)}`;
 
+/** A date parameter "YYYYMMDD", or '' when missing or malformed. @param {string | null} value */
+const ymdParam = (value) => (/^\d{8}$/.test(value || '') ? value || '' : '');
+
 /** Parametres de partie passes dans l'URL par la page d'accueil. */
 export function readParams() {
   const q = new URLSearchParams(location.search);
   return {
-    dir: +(q.get('dir') || 0),
-    // game date "YYYYMMDD" (#55); empty: derived from the service
-    date: /^\d{8}$/.test(q.get('date') || '') ? q.get('date') || '' : '',
+    line: q.get('line') || '17',
+    // index of the route in the line file (one route per trip pattern, ADR 0010)
+    route: Math.max(0, Math.floor(+(q.get('route') || 0)) || 0),
+    // game date "YYYYMMDD" (#55); empty: the service date
+    date: ymdParam(q.get('date')),
     dep: q.get('dep') || '07:32',
-    day: q.get('day') || '',
+    // service date "YYYYMMDD": its timetable is the one of the game
+    day: ymdParam(q.get('day')),
     bus: q.get('bus') || 'std',
     s: q.has('s') ? +(q.get('s') || 0) : null,
     auto: q.has('auto'),
