@@ -4,7 +4,7 @@
  *  - relief IGN (grille fine texturee par la carte OSM peinte en pixel art + grille large pour les massifs) ;
  *  - rues OSM en rubans (chaussee, trottoirs, marquage) poses sur le relief ;
  *  - batiments OSM extrudes (facades a fenetres pixel art), arbres OSM en sprites, abris aux arrets ;
- *  - trace de la ligne 17 surligne au sol (guidage).
+ *  - trace de la ligne surligne au sol (guidage).
  * Conversion de repere : local (x est, y nord, z altitude) -> Three (X = x, Y = z, Z = -y).
  */
 import * as THREE from 'three';
@@ -74,8 +74,10 @@ const css = (c) => `rgb(${c.map((v) => Math.round(v * 255)).join(',')})`;
  * @param {SeasonLook} season colours of the ground for the date of the game
  */
 function groundTexture(map, b, season) {
-  const W = 4096,
-    H = Math.round((4096 * (b.y1 - b.y0)) / (b.x1 - b.x0));
+  // the longer side at 4096 px, the texture size every WebGL device supports well (a mountain line is long)
+  const scale = 4096 / Math.max(b.x1 - b.x0, b.y1 - b.y0);
+  const W = Math.round((b.x1 - b.x0) * scale),
+    H = Math.round((b.y1 - b.y0) * scale);
   const { c, g } = canvas(W, H);
   const sx = W / (b.x1 - b.x0),
     sy = H / (b.y1 - b.y0);
@@ -227,12 +229,11 @@ function terrainTileLight(ground, key, material, every) {
 }
 
 /**
- * @param {import('./heightfield.js').Heightfield} hf @param {SeasonLook} season
+ * @param {Ground} ground @param {SeasonLook} season
  * @param {import('../settings/settings.js').Settings['seasons']} seasons
  */
-function terrainCoarse(hf, season, seasons) {
-  const g = hf.coarse,
-    b = hf.bounds;
+function terrainCoarse(ground, season, seasons) {
+  const g = ground.natural.coarse;
   const geo = new THREE.PlaneGeometry(1, 1, g.nx - 1, g.ny - 1);
   const pos = geo.attributes.position;
   const col = new Float32Array(pos.count * 3);
@@ -244,7 +245,7 @@ function terrainCoarse(hf, season, seasons) {
         y = g.y0 + j * g.step;
       let z = g.dm[j * g.nx + i] / 10;
       // sous la zone fine, on enfonce la grille large (elle ne doit pas traverser la ville)
-      if (x > b.x0 - 150 && x < b.x1 + 150 && y > b.y0 - 150 && y < b.y1 + 150) z -= 40;
+      if (ground.nearTile(x, y, 150)) z -= 40;
       pos.setXYZ(k, x, z, -y);
       // an irregular snow line: smooth waves over a few hundred metres, the same at every visit
       const edge = 0.6 * Math.sin(x / 700) + 0.4 * Math.sin(y / 530 + x / 1300);
@@ -1232,11 +1233,12 @@ function shelterBlocked(footprints, place) {
 
 /**
  * @param {Ground} hf @param {import('./kerb.js').StopPlace[]} places @param {boolean[]} blocked
+ * @param {{id: string, color: string, text_color: string}} line
  */
-function stops(hf, places, blocked) {
+function stops(hf, places, blocked, line) {
   const grp = new THREE.Group();
   const sh = NEAREST(new THREE.CanvasTexture(shelter()));
-  const po = NEAREST(new THREE.CanvasTexture(stopPole()));
+  const po = NEAREST(new THREE.CanvasTexture(stopPole(line)));
   const shMat = new THREE.MeshLambertMaterial({
     map: sh,
     transparent: true,
@@ -1307,7 +1309,7 @@ function tileObjects(ground, tiles) {
 // ------------------------------------------------------------------ assemblage
 /**
  * @param {THREE.Scene} scene @param {Ground} hf
- * @param {{map: import('../common/types.js').MapData | null, tiles: Map<string, TileData>, stops: import('./kerb.js').StopPlace[], guide: import('./guidance.js').GuidanceLine}} data
+ * @param {{map: import('../common/types.js').MapData | null, tiles: Map<string, TileData>, stops: import('./kerb.js').StopPlace[], guide: import('./guidance.js').GuidanceLine, line: import('../common/types.js').LineData}} data
  * @param {import('../world/track.js').Track} track
  * @param {import('../settings/settings.js').Settings} settings
  * @param {SeasonLook} season landscape of the date of the game (#70)
@@ -1315,7 +1317,7 @@ function tileObjects(ground, tiles) {
 export function buildWorld(scene, hf, data, track, settings, season) {
   const street = settings.world;
   const { lights } = settings;
-  scene.add(terrainCoarse(hf.natural, season, settings.seasons));
+  scene.add(terrainCoarse(hf, season, settings.seasons));
   const groundMaterial = new THREE.MeshLambertMaterial({ map: groundTexture(data.map, hf.bounds, season) });
   const ix = hf.index;
   const keys = [...data.tiles.keys()];
@@ -1370,7 +1372,7 @@ export function buildWorld(scene, hf, data, track, settings, season) {
   // collisions need every building from the start, drawn or not: their outlines are light
   const footprints = footprintsOf(tileObjects(hf, data.tiles).buildings);
   const blocked = data.stops.map((place) => shelterBlocked(footprints, place));
-  scene.add(stops(hf, data.stops, blocked));
+  scene.add(stops(hf, data.stops, blocked, data.line));
   // every street light: halos everywhere, and the few real lights that follow the bus at night
   const lampPlaces = placesAlong(kerbLines(hf, data.tiles), lights.lampSpacing);
   scene.add(lampHalos(hf, lampPlaces, lights));

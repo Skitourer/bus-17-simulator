@@ -54,3 +54,35 @@ export function buildOrder(tiles, built, x, y, p) {
     .sort((a, b) => a.d - b.d)
     .map((t) => t.key);
 }
+
+/**
+ * Keys "i_j" of the tiles of the world within `margin` m of a route point (ADR 0010): the game loads only
+ * the part of the shared world around its line.
+ * @param {{x0: number, y0: number, size: number, tiles: string[]}} index
+ * @param {{x: ArrayLike<number>, y: ArrayLike<number>, n: number}[]} routes
+ * @param {number} margin
+ * @returns {string[]} in the order of the index
+ */
+export function tilesNear(index, routes, margin) {
+  const wanted = new Set();
+  // a point reaches the tiles of the square around it; nearby tiles are then checked exactly
+  for (const route of routes)
+    for (let k = 0; k < route.n; k++) {
+      const x = route.x[k],
+        y = route.y[k];
+      const i0 = Math.floor((x - margin - index.x0) / index.size),
+        i1 = Math.floor((x + margin - index.x0) / index.size);
+      const j0 = Math.floor((y - margin - index.y0) / index.size),
+        j1 = Math.floor((y + margin - index.y0) / index.size);
+      for (let j = j0; j <= j1; j++)
+        for (let i = i0; i <= i1; i++) {
+          const key = i + '_' + j;
+          if (wanted.has(key)) continue;
+          const x0 = index.x0 + i * index.size,
+            y0 = index.y0 + j * index.size;
+          const rect = { x0, y0, x1: x0 + index.size, y1: y0 + index.size };
+          if (rectDistance(rect, x, y) <= margin) wanted.add(key);
+        }
+    }
+  return index.tiles.filter((key) => wanted.has(key));
+}

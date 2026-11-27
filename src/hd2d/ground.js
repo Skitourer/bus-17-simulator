@@ -16,6 +16,7 @@ import { Heightfield } from './heightfield.js';
  * @property {number} step ground grid step (m)
  * @property {number} nx
  * @property {number} ny
+ * @property {string[]} tiles keys "i_j" of the tiles that exist (only those near the lines, ADR 0010)
  */
 
 /**
@@ -111,7 +112,16 @@ export class Ground {
     this.water = new Map();
     /** @type {Deck[]} */
     this.decks = [];
+    /** tile range [i0, j0, i1, j1] of the loaded tiles */
+    this.range = [Infinity, Infinity, -Infinity, -Infinity];
     for (const [key, tile] of tiles) {
+      const [ti, tj] = key.split('_').map(Number);
+      this.range = [
+        Math.min(this.range[0], ti),
+        Math.min(this.range[1], tj),
+        Math.max(this.range[2], ti),
+        Math.max(this.range[3], tj),
+      ];
       if (tile.water.length) this.water.set(key, this.piecesByTriangle(tile.water));
       this.grids.set(
         key,
@@ -204,16 +214,36 @@ export class Ground {
     return this.inWater(x, y) && !this.onDeck(x, y, zRef, this.deckMargin);
   }
 
-  /** Area covered by the tiles. */
+  /** Rectangle around the loaded tiles. */
   get bounds() {
-    const ix = this.index;
-    return { x0: ix.x0, y0: ix.y0, x1: ix.x0 + ix.nx * ix.size, y1: ix.y0 + ix.ny * ix.size };
+    const ix = this.index,
+      [i0, j0, i1, j1] = this.range;
+    return {
+      x0: ix.x0 + i0 * ix.size,
+      y0: ix.y0 + j0 * ix.size,
+      x1: ix.x0 + (i1 + 1) * ix.size,
+      y1: ix.y0 + (j1 + 1) * ix.size,
+    };
   }
 
-  /** @param {number} x @param {number} y */
+  /**
+   * Whether a loaded tile lies within `margin` m of (x, y), with margin at most one tile side.
+   * @param {number} x @param {number} y @param {number} margin
+   */
+  nearTile(x, y, margin) {
+    const ix = this.index;
+    for (const dy of [-margin, 0, margin])
+      for (const dx of [-margin, 0, margin]) {
+        const i = Math.floor((x + dx - ix.x0) / ix.size),
+          j = Math.floor((y + dy - ix.y0) / ix.size);
+        if (this.grids.has(i + '_' + j)) return true;
+      }
+    return false;
+  }
+
+  /** Whether (x, y) lies on a loaded tile. @param {number} x @param {number} y */
   inFine(x, y) {
-    const b = this.bounds;
-    return x >= b.x0 && y >= b.y0 && x < b.x1 && y < b.y1;
+    return this.nearTile(x, y, 0);
   }
 
   /**

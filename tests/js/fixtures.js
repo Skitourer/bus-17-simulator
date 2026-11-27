@@ -10,7 +10,7 @@ import gameSettings from '../../src/settings/game.json';
  */
 export function trackFromPoints(pts, step) {
   const length = (pts.length / 3 - 1) * step;
-  return new Track({ id: 9, headsign: 'Test', length, pts, stops: [], services: {} }, step);
+  return new Track({ direction: 0, headsign: 'Test', trips: 1, length, pts, stops: [], services: {} }, step);
 }
 
 /**
@@ -22,8 +22,9 @@ export function straightTrack(length, grade = 0, step = 2) {
   for (let s = 0; s <= length; s += step) pts.push(s, 0, 100 + grade * s);
   return new Track(
     {
-      id: 0,
+      direction: 0,
       headsign: 'Terminus Test, Ville',
+      trips: 1,
       length,
       pts,
       stops: [

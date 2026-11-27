@@ -250,8 +250,8 @@ approved. An approval covers the proposed action only.
 
 ## Project specifics
 
-- **What**: browser bus-driving game on the real route of Grenoble bus line 17
-  (Verdun – Préfecture ⇄ Meylan, Lycée du Grésivaudan). Rendered in HD-2D (Three.js,
+- **What**: browser bus-driving game on the real routes of Grenoble bus lines 17
+  (Verdun – Préfecture ⇄ Meylan, Lycée du Grésivaudan), 18 and N62, in one shared world (ADR 0010). Rendered in HD-2D (Three.js,
   free driving in the city); the pseudo-3D OutRun prototype was dropped on 2026-11-24.
   Requirements: `CAHIER_DES_CHARGES.md` (French); feature wishlist: `idees.txt`.
 - **Start-of-project answers (2026-11-24)**: personal project · public repo
@@ -260,7 +260,7 @@ approved. An approval covers the proposed action only.
   Linux server, no professional network · deliverable: static site on GitHub Pages · API reference: not needed yet.
 - **Architecture**: plain JavaScript ES modules served as static files, no build step.
   Three.js is vendored in `vendor/` (MIT). Python scripts in `tools/` (standard library
-  plus `geo.py`, `buildings.py`, `roads.py`, `streets.py`, `water.py`, `shapes.py`, `sources.py`; shapely) download OSM / GTFS / IGN (RGE ALTI, BD TOPO) data and write the JSON files in `data/grenoble/`.
+  plus `geo.py`, `lines.py`, `buildings.py`, `roads.py`, `streets.py`, `water.py`, `shapes.py`, `sources.py`; shapely) download OSM / GTFS / IGN (RGE ALTI, BD TOPO) data and write the JSON files in `data/grenoble/`.
 - **Layout**: `index.html` + `src/menu.js` menu · `hd2d.html` + `src/hd2d/` game · shared
   `src/common/`, `src/world/track.js`, `src/ui/minimap.js`; heights only through
   `src/hd2d/ground.js` · `tests/js/`, `tests/python/` ·

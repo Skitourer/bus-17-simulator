@@ -33,6 +33,7 @@ const DIG = {
   7: '111001010010010',
   8: '111101111101111',
   9: '111101111001111',
+  N: '101111111111101',
 };
 /** @param {CanvasRenderingContext2D} g @param {string} str @param {number} x @param {number} y @param {string} color */
 export function digits(g, str, x, y, color) {
@@ -106,15 +107,20 @@ export function shelter() {
   return c;
 }
 
-export function stopPole() {
+/**
+ * Bus stop pole with the number of the line on its colour.
+ * @param {{id: string, color: string, text_color: string}} line
+ */
+export function stopPole(line) {
   const [c, g] = cv(16, 64);
   g.fillStyle = '#6a6f78';
   g.fillRect(7, 14, 2, 50);
   g.fillStyle = '#ffffff';
-  g.fillRect(2, 2, 12, 14);
-  g.fillStyle = '#33a457';
-  g.fillRect(3, 3, 10, 6);
-  digits(g, '17', 4, 4, '#ffffff');
+  g.fillRect(1, 2, 14, 14);
+  g.fillStyle = line.color;
+  g.fillRect(2, 3, 12, 6);
+  // 4 px per character, centred on the 16 px sign
+  digits(g, line.id, 8 - 2 * line.id.length + 1, 4, line.text_color);
   g.fillStyle = '#222';
   g.fillRect(3, 11, 10, 1);
   g.fillRect(3, 13, 7, 1);

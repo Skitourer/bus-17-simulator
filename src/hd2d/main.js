@@ -1,16 +1,20 @@
 // @ts-check
 /**
  * Prototype HD-2D : Grenoble reelle (relief IGN, bati et arbres OSM) en 3D basse resolution + sprites,
- * conduite libre, suivi du parcours de la ligne 17, desserte des arrets aux horaires reels.
+ * conduite libre, suivi du parcours de la ligne choisie (17, 18, N62), desserte des arrets aux horaires reels.
  */
 import * as THREE from 'three';
 import { Track } from '../world/track.js';
+import { departuresOf } from '../common/lines.js';
+import { tilesNear } from './tiling.js';
 import { Minimap } from '../ui/minimap.js';
 import {
   readParams,
   ServiceClock,
-  serviceLabel,
-  serviceDate,
+  dayLabel,
+  dayTypeDates,
+  dayTypeOn,
+  weekdaysOn,
   alignDate,
   dateLabel,
   parisToUtc,
@@ -25,7 +29,7 @@ import { setBillboardLight } from './instances.js';
 import { dayOfYear, seasonLook } from './season.js';
 import { Ground } from './ground.js';
 import { buildWorld } from './world.js';
-import { makeBus, setBusLights } from './bus3d.js';
+import { makeBus, setBusLights, setLineNumber } from './bus3d.js';
 import { busGeometry } from './trailer.js';
 import { Drive, obstacles } from './drive.js';
 import { Post } from './post.js';
@@ -179,6 +183,8 @@ let bus;
 let minimap;
 /** @type {import('../common/types.js').LineData} */
 let line;
+/** @type {import('../common/types.js').LineIndex} */
+let lineIndex;
 const drive = new Drive(S.drive, B);
 /** overall length of the player's bus, both bodies of an articulated bus (m) */
 const playerLength = B.trailer
@@ -294,7 +300,8 @@ function placeOnRoute(s) {
 
 // ------------------------------------------------------------------ chargement
 async function load() {
-  document.title = t('game.pageTitle');
+  document.title = t('game.pageTitle', { line: P.line });
+  for (const badge of document.querySelectorAll('.badge')) badge.textContent = P.line;
   $('loadMsg').textContent = t('game.loadingCity');
   /** @param {string} f */
   const get = (f) =>
@@ -302,24 +309,33 @@ async function load() {
       if (!r.ok) throw new Error(f);
       return r.json();
     });
-  const [l, map, terrain, tileIndex, roads] = await Promise.all([
-    get('17.json'),
+  const [index, l, map, terrain, tileIndex, roads] = await Promise.all([
+    get('lines/index.json'),
+    get(`lines/${encodeURIComponent(P.line)}.json`),
     get('map.json').catch(() => null),
     get('terrain.json'),
     get('tiles/index.json'),
     get('roads.json'),
   ]);
+  lineIndex = index;
+  line = l;
+  if (!line.routes[P.route]) throw new Error(`route ${P.route} of line ${line.id}`);
+  const routes = line.routes.map((route) => new Track(route, line.step));
+  track = routes[P.route];
+  // only the part of the shared world around the line (ADR 0010)
   /** @type {Map<string, import('./ground.js').TileData>} */
   const tiles = new Map();
-  /** @type {Promise<void>[]} */
-  const loads = [];
-  for (let j = 0; j < tileIndex.ny; j++)
-    for (let i = 0; i < tileIndex.nx; i++)
-      loads.push(get(`tiles/t_${i}_${j}.json`).then((tile) => void tiles.set(`${i}_${j}`, tile)));
-  await Promise.all(loads);
-  line = l;
+  await Promise.all(
+    tilesNear(tileIndex, routes, S.tiles.lineMargin).map((key) =>
+      get(`tiles/t_${key}.json`).then((tile) => void tiles.set(key, tile)),
+    ),
+  );
   hf = new Ground(terrain, tileIndex, tiles, S.world.deckCatch, S.world.deckMargin);
-  track = new Track(line.directions[P.dir], line.step);
+  setLineNumber(line.id);
+  for (const badge of document.querySelectorAll('.badge')) {
+    /** @type {HTMLElement} */ (badge).style.background = line.color;
+    /** @type {HTMLElement} */ (badge).style.color = line.text_color;
+  }
   // 16 m cells: a ray is at most kerbSearch (12 m) long, so it looks at a few cells only
   const kerbs = new SegmentGrid(kerbSegments(tiles, tileIndex), 16);
   const laneParams = {
@@ -336,17 +352,24 @@ async function load() {
   });
   if (debug)
     console.info('guidance off the roads (m along the route):', offRoadStretches(guide.onRoad, track.step));
-  // the other services of the day, in both directions (the player's direction shares its route and lane)
-  const fleetDirections = line.directions.map((direction, i) => {
-    const route = i === P.dir ? track : new Track(direction, line.step);
-    const profile = i === P.dir ? lane : laneOffsets(route, kerbs, laneParams);
-    return {
-      track: route,
-      departures: (direction.services[P.day] ?? []).map(toSec),
-      lane: (/** @type {number} */ s) => offsetAt(profile, route.step, s),
-    };
+  // the service date of the timetable; without one, the first day type of the line
+  const serviceDay = P.day || dayTypeDates(line.calendar, new Date())[0]?.date || '';
+  // the other services of the day on every route of the line (the player's route shares its track and lane)
+  const fleetRoutes = routes
+    .map((route, i) => ({
+      route,
+      i,
+      departures: departuresOf(line, [i], serviceDay).map((d) => toSec(d.time)),
+    }))
+    .filter((r) => r.i === P.route || r.departures.length);
+  const fleetDirections = fleetRoutes.map(({ route, i, departures }) => {
+    const profile = i === P.route ? lane : laneOffsets(route, kerbs, laneParams);
+    return { track: route, departures, lane: (/** @type {number} */ s) => offsetAt(profile, route.step, s) };
   });
-  fleet = new Fleet(fleetDirections, S.fleet, S.bus, { dir: P.dir, dep: toSec(P.dep) });
+  fleet = new Fleet(fleetDirections, S.fleet, S.bus, {
+    dir: fleetRoutes.findIndex((r) => r.i === P.route),
+    dep: toSec(P.dep),
+  });
   const places = placeStops(track, kerbs, {
     kerbSearch: S.world.kerbSearch,
     shelterSetback: S.world.shelterSetback,
@@ -363,11 +386,9 @@ async function load() {
   $('loadMsg').textContent = t('game.loadingStreets');
   await new Promise((r) => setTimeout(r, 30));
   // the date only sets the light and the season; the timetable stays the one of the chosen day (#70)
-  gameDate = P.date
-    ? alignDate(P.date, line.calendar[P.day]?.days)
-    : serviceDate(P.day, line.calendar, new Date());
+  gameDate = P.date ? alignDate(P.date, weekdaysOn(line.calendar, serviceDay)) : serviceDay;
   const season = seasonLook(dayOfYear(gameDate), S.seasons);
-  world = buildWorld(scene, hf, { map, tiles, stops: places, guide }, track, S, season);
+  world = buildWorld(scene, hf, { map, tiles, stops: places, guide, line }, track, S, season);
   otherBuses = new OtherBuses(scene, busGeometry(S, 'std'), S.budget);
   const network = new RoadNetwork(roads, S.traffic.speeds);
   signals = new SignalMap(roads, network, S.signals);
@@ -400,13 +421,13 @@ async function load() {
   buildSynoptic();
   $('svc').textContent = t('game.serviceInfo', {
     date: dateLabel(gameDate, document.documentElement.lang),
-    day: serviceLabel(P.day, line.calendar),
+    day: dayLabel(dayTypeOn(line.calendar, serviceDay)),
     time: P.dep,
   });
   updateDaylight();
   placeOnRoute(P.s !== null ? P.s : Math.max(0, track.stops[0].s - 4));
   // arrets deja derriere le point de depart (mode test)
-  const plan = drawService(track.stops.length, serviceSeed(P.dep, P.dir), S.gameplay, S.passengers);
+  const plan = drawService(track.stops.length, serviceSeed(P.dep, P.route), S.gameplay, S.passengers);
   service = new StopService(track.stops, plan, S.gameplay, S.passengers);
   crowd = new Crowd(
     scene,
@@ -815,7 +836,7 @@ function flyCamera(dt) {
 
 /** Sky, fog and lights for the sun and the moon over Grenoble at the time of the game (#55). */
 function updateDaylight() {
-  const [latitude, longitude] = line.origin;
+  const [latitude, longitude] = lineIndex.origin;
   const now = skyAt(parisToUtc(gameDate, clock.t + lightShift), latitude, longitude);
   const look = skyLook(now.sun, now.moon, now.moonLit, S.daylight);
   sunElevation = now.sun.elevation;

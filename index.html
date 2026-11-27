@@ -3,12 +3,12 @@
   <head>
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
-    <title>Bus 17</title>
+    <title>Bus Grenoble</title>
     <link rel="stylesheet" href="src/menu.css" />
   </head>
   <body>
     <main class="card title-screen" id="screen-title">
-      <div class="badge big">17</div>
+      <div class="title-badges" id="titleBadges"></div>
       <h1 class="game-name" data-i18n="menu.title"></h1>
       <p class="tagline" data-i18n="menu.subtitle"></p>
       <nav class="menu-buttons">
@@ -27,6 +27,10 @@
         </div>
       </header>
 
+      <section class="group">
+        <h2 data-i18n="menu.line"></h2>
+        <div class="chips" id="lineChips"><span class="empty" data-i18n="menu.loading"></span></div>
+      </section>
       <section class="group">
         <h2 data-i18n="menu.direction"></h2>
         <div class="chips" id="dirChips"><span class="empty" data-i18n="menu.loading"></span></div>

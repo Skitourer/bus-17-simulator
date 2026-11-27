@@ -2,8 +2,9 @@
 
 _[English](README.md)_
 
-Un jeu de conduite de bus dans le navigateur, sur le vrai parcours de la ligne 17 de
-Grenoble (Verdun – Préfecture ⇄ Meylan, Lycée du Grésivaudan) : vraies rues, vrai relief,
+Un jeu de conduite de bus dans le navigateur, sur les vrais parcours des lignes de bus 17
+(Verdun – Préfecture ⇄ Meylan, Lycée du Grésivaudan), 18 (Poisat ⇄ Meylan) et N62
+(Grenoble ⇄ Col de Porte, en Chartreuse) de Grenoble : vraies rues, vrai relief,
 vrais arrêts et horaires. Pensé d'abord pour un passionné de bus de 12 ans, puis pour tous.
 
 C'est un prototype en **HD-2D** : une ville en 3D basse résolution au rendu pixel art,
@@ -23,7 +24,7 @@ cd bus-17-simulator
 python -m http.server 8017
 ```
 
-Puis ouvrir <http://localhost:8017/>, choisir un sens, un jour et un départ, et conduire.
+Puis ouvrir <http://localhost:8017/>, choisir une ligne, un sens, un jour et un départ, et conduire.
 Touches : Z/↑ accélérer · S/↓ freiner puis reculer · Q D/← → tourner · M carte · P pause.
 
 ## Développement
@@ -40,7 +41,8 @@ uv run poe serve     # http://localhost:8017/ sans cache navigateur
 
 Mode debug, pour tester la carte : l'activer dans Réglages, ou appuyer sur F9 en jeu, ou ouvrir
 `http://localhost:8017/hd2d.html?debug&stop=saint-laurent` (n'importe quel nom d'arrêt de
-la ligne ; `dir=1` pour l'autre sens). Maj : turbo · N / B : arrêt suivant / précédent ·
+la ligne ; `line=18&route=2` pour une autre ligne et un autre parcours, numérotés comme dans
+`data/grenoble/lines/<ligne>.json`). Maj : turbo · N / B : arrêt suivant / précédent ·
 clic sur la mini-carte : téléporter n'importe où · K : collisions oui/non · F : vol libre (flèches ou
 ZQSD, Espace / X pour monter et descendre, souris pour regarder, Entrée pose le bus sous la
 caméra).

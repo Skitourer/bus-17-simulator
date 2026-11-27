@@ -5,7 +5,7 @@
  * Repere local : x = est, y = nord (metres), z = altitude (metres). Cap `h` = angle math (0 = est, sens trigo).
  */
 export class Track {
-  /** @param {import('../common/types.js').Direction} dir @param {number} step */
+  /** @param {import('../common/types.js').Route} dir @param {number} step */
   constructor(dir, step) {
     const n = dir.pts.length / 3;
     this.n = n;

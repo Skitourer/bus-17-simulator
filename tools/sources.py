@@ -22,8 +22,10 @@ IGN_BATCH = 150  # points per request accepted by the API
 # IGN Geoplateforme WFS (BD TOPO), Licence Ouverte 2.0
 WFS_URL = 'https://data.geopf.fr/wfs/ows'
 WFS_PAGE = 2000  # features per request, well under the server limit of 5000
+# tried in turn: public instances, one may be down for hours
 OVERPASS_SERVERS = [
     'https://overpass-api.de/api/interpreter',
+    'https://overpass.private.coffee/api/interpreter',
     'https://overpass.kumi.systems/api/interpreter',
 ]
 

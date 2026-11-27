@@ -2391,6 +2391,13 @@
       "min": 1,
       "max": 50,
       "doc": "Time spent building the tiles that come near, per frame (at least one tile), so that driving never stutters."
+    },
+    "lineMargin": {
+      "value": 1500,
+      "unit": "m",
+      "min": 500,
+      "max": 5000,
+      "doc": "The game loads the tiles of the shared world within this distance of a route of its line (ADR 0010); the data has tiles up to 1500 m from every line (tools/lines.py)."
     }
   },
   "budget": {

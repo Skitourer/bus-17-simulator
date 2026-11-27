@@ -1,7 +1,7 @@
 // @ts-check
 /**
  * Shapes of the JSON files written by tools/*.py into data/grenoble/ (type definitions only).
- * Local frame in metres: x = east, y = north, origin = LineData.origin.
+ * Local frame in metres: x = east, y = north, origin = LineIndex.origin (shared by every file, ADR 0010).
  */
 
 /**
@@ -18,9 +18,11 @@
  */
 
 /**
- * @typedef {object} Direction
- * @property {number} id
+ * One trip pattern of a line: the trips of a direction that serve the same stops (ADR 0010).
+ * @typedef {object} Route
+ * @property {number} direction GTFS direction id
  * @property {string} headsign
+ * @property {number} trips number of trips of the pattern in the GTFS
  * @property {number} length route length (m)
  * @property {number[]} pts flat [x, y, z, x, y, z, ...], one point every LineData.step metres
  * @property {Stop[]} stops
@@ -37,31 +39,32 @@
 /** @typedef {Record<string, CalendarEntry>} Calendar */
 
 /**
- * @typedef {object} HorizonView
- * @property {number} x
- * @property {number} y
- * @property {number} z
- * @property {number[]} near
- */
-
-/**
- * @typedef {object} Horizon
- * @property {number} step
- * @property {number[]} far
- * @property {number} z
- * @property {HorizonView[]} views
- */
-
-/**
+ * A line file, data/grenoble/lines/<id>.json.
  * @typedef {object} LineData
- * @property {number[]} origin [lat, lon]
- * @property {string} color
- * @property {number} step
+ * @property {string} id M réso line number, e.g. "17" or "N62"
  * @property {string} name
- * @property {Direction[]} directions
+ * @property {string} color CSS colour of the line
+ * @property {string} text_color CSS colour of the text on the line colour
+ * @property {number} step
+ * @property {Route[]} routes by direction, the main (longest) route of each direction first
  * @property {Calendar} calendar
- * @property {number[]} bbox [x0, y0, x1, y1]
- * @property {Horizon} horizon
+ */
+
+/**
+ * @typedef {object} LineSummary
+ * @property {string} id
+ * @property {string} name
+ * @property {string} color
+ * @property {string} text_color
+ * @property {string[]} termini first and last stop of the main route of the first direction
+ */
+
+/**
+ * data/grenoble/lines/index.json.
+ * @typedef {object} LineIndex
+ * @property {number[]} origin [lat, lon] of the local frame
+ * @property {number[]} bbox [x0, y0, x1, y1] of every route
+ * @property {LineSummary[]} lines in menu order
  */
 
 /**

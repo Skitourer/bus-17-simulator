@@ -1,6 +1,7 @@
 """Builds data/grenoble/roads.json: the drivable road graph from OpenStreetMap (Overpass).
 
 Usage:  uv run python tools/build_roads.py      (after build_line.py and build_map.py)
+Only the roads of the corridor around the lines are kept (tools/lines.py, ADR 0010).
 Data (c) OpenStreetMap contributors, ODbL.
 
 Output (local frame, coordinates in decimetres, compact arrays to keep the file small):
@@ -16,6 +17,7 @@ import os
 from typing import Any
 
 from geo import douglas_peucker, make_proj
+from lines import LINES_DIR, corridor, overpass_polys, read_lines, routes_xy
 from roads import (
     HIGHWAY_REGEX,
     ROAD_CLASSES,
@@ -29,14 +31,15 @@ from roads import (
     signal_groups,
     split_ways,
 )
+from shapely import LineString
 from sources import ROOT, overpass, read_json, write_json
 
-LINE = os.path.join(ROOT, 'data', 'grenoble', '17.json')
-MAP = os.path.join(ROOT, 'data', 'grenoble', 'map.json')
+LINE_INDEX = os.path.join(LINES_DIR, 'index.json')
 OUT = os.path.join(ROOT, 'data', 'grenoble', 'roads.json')
 GAP_DIST = 8.0  # m: a route sample farther than this from every road is a coverage gap
 GAP_STEP = 5.0  # m between route samples
 SIMPLIFY_M = 0.3  # Douglas-Peucker tolerance: well below a lane width, halves the file size
+POLY_SIMPLIFY = 25.0  # m: corridor outline sent to Overpass (a shorter query)
 ROUTE_TOLERANCE = 6.0  # m: the GTFS shape drifts up to a few metres from the OSM centre line
 ROUTE_SHARE = 0.6  # share of an edge length along the route for the edge to carry the line
 # OSM signals stand on the junction node or a few metres before the stop line of each approach
@@ -88,43 +91,49 @@ def edge_record(e: Edge, index: dict[int, int], on_bus_route: bool) -> list[int]
 
 
 def main() -> None:
-    line = read_json(LINE)
-    bx0, by0, bx1, by1 = read_json(MAP)['bbox']
-    to_xy, to_ll = make_proj(*line['origin'])
-    s, w = to_ll(bx0, by0)
-    n, e = to_ll(bx1, by1)
-    bbox = f'{s:.5f},{w:.5f},{n:.5f},{e:.5f}'
-    query = f'[out:json][timeout:300];way["highway"~"{HIGHWAY_REGEX}"]({bbox});out geom qt;'
-    print('Requete Overpass (graphe routier)...')
-    elements: list[dict[str, Any]] = overpass(query)['elements']
+    lines = read_lines()
+    routes = [route for line in lines for route in routes_xy(line)]
+    area = corridor(routes)
+    to_xy, to_ll = make_proj(*read_json(LINE_INDEX)['origin'])
+    # one query per part of the corridor, smaller than the whole bounding box of the lines
+    polys = overpass_polys(area, to_ll, POLY_SIMPLIFY)
+    print(f'Requete Overpass (graphe routier, {len(polys)} zone(s))...')
+    by_id: dict[int, dict[str, Any]] = {}
+    for poly in polys:
+        query = f'[out:json][timeout:300];way["highway"~"{HIGHWAY_REGEX}"](poly:"{poly}");out geom qt;'
+        by_id.update((el['id'], el) for el in overpass(query)['elements'])
+    elements = list(by_id.values())
     ways = [
         Way(el['id'], el['nodes'], [to_xy(g['lat'], g['lon']) for g in el['geometry']], el.get('tags', {}))
         for el in elements
         if el['type'] == 'way' and 'geometry' in el and highway_base(el.get('tags', {}))
     ]
-    nodes, edges = split_ways(ways)
+    all_nodes, all_edges = split_ways(ways)
+    # only the roads of the corridor around the lines, like the tiles (ADR 0010)
+    edges = [e for e in all_edges if area.intersects(LineString(e.coords))]
+    used = {n for e in edges for n in (e.a, e.b)}
+    nodes = {nid: xy for nid, xy in all_nodes.items() if nid in used}
     index = {nid: i for i, nid in enumerate(nodes)}
-    print(f'{len(ways)} voies, {len(nodes)} noeuds, {len(edges)} troncons')
+    print(f'{len(ways)} voies, {len(nodes)} noeuds, {len(edges)} troncons ({len(all_edges)} dans l emprise)')
 
-    signal_query = f'[out:json][timeout:120];node["highway"="traffic_signals"]({bbox});out qt;'
     print('Requete Overpass (feux)...')
-    signals = [
-        to_xy(el['lat'], el['lon']) for el in overpass(signal_query)['elements'] if el['type'] == 'node'
-    ]
+    signal_nodes: dict[int, dict[str, Any]] = {}
+    for poly in polys:
+        query = f'[out:json][timeout:120];node["highway"="traffic_signals"](poly:"{poly}");out qt;'
+        signal_nodes.update((el['id'], el) for el in overpass(query)['elements'] if el['type'] == 'node')
+    signals = [to_xy(el['lat'], el['lon']) for el in signal_nodes.values()]
     groups = signal_groups(signals, nodes, edges, SIGNAL_REACH, SIGNAL_GATHER)
     print(f'{len(signals)} feux, {len(groups)} carrefours a feux')
 
-    routes = [
-        [(d['pts'][i], d['pts'][i + 1]) for i in range(0, len(d['pts']), 3)] for d in line['directions']
-    ]
     on_route = route_edges(edges, routes, ROUTE_TOLERANCE, ROUTE_SHARE)
-    print(f'{len(on_route)} troncons parcourus par la ligne')
-    for d, route in zip(line['directions'], routes, strict=True):
-        gaps = coverage_gaps(route, edges, GAP_DIST, GAP_STEP)
-        total = sum(b - a for a, b in gaps)
-        print(f'  sens {d["id"]} : {len(gaps)} trous, {total:.0f} m hors reseau')
-        for a, b in gaps:
-            print(f'    {a:6.0f} - {b:6.0f} m')
+    print(f'{len(on_route)} troncons parcourus par les lignes')
+    for line in lines:
+        for k, route in enumerate(routes_xy(line)):
+            gaps = coverage_gaps(route, edges, GAP_DIST, GAP_STEP)
+            total = sum(b - a for a, b in gaps)
+            print(f'  ligne {line["id"]} parcours {k} : {len(gaps)} trous, {total:.0f} m hors reseau')
+            for a, b in gaps:
+                print(f'    {a:6.0f} - {b:6.0f} m')
 
     write_json(
         OUT,
