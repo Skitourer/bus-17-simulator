@@ -19,7 +19,11 @@ correspondait pas à ce qui était dessiné.
     l'air libre ; les passages sous immeuble sont des rues, la partie du bâtiment au-dessus
     dessinée à partir de 4,5 m, #14) ;
   - une grille de sol de 10 m mise à la hauteur de la route sur la chaussée et 2,5 m à
-    côté, puis raccordée au relief naturel sur 8 m (talus) ;
+    côté, puis raccordée au relief naturel sur 8 m (talus) ; tous les coins d'un triangle
+    qui touche la chaussée sont à la hauteur de la route, qui est donc plate en travers (#76),
+    et la construction liste les triangles de chaussée encore inclinés de plus de 7 % en
+    travers (routes plus proches que la grille à des hauteurs différentes, comme les lacets
+    serrés) ;
   - la chaussée : union de tous les tronçons à leur vraie largeur (carrefours et
     ronds-points propres), découpée selon les triangles du sol pour que chaque morceau
     soit dans le même plan que le sol ;

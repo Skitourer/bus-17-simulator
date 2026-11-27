@@ -25,6 +25,7 @@ from shapely.geometry.base import BaseGeometry
 from shapely.geometry.polygon import orient
 from shapely.ops import substring
 from shapes import (
+    BoolArray,
     FloatArray,
     GeometryArray,
     clip,
@@ -180,11 +181,45 @@ class RoadHeights:
         s = locate(self.line_array[nearest], pts)
         return np.array([self.profiles[int(k)].at(float(si)) for k, si in zip(nearest, s, strict=True)])
 
+    def directions(self, xs: FloatArray, ys: FloatArray) -> tuple[FloatArray, FloatArray]:
+        """Unit direction (tx, ty) of the nearest ground-level edge at each point."""
+        pts = points(xs, ys)
+        nearest = np.asarray(self.tree.query_nearest(pts, all_matches=False)[1], dtype=np.int64)
+        lines = self.line_array[nearest]
+        s = locate(lines, pts)
+        ax, ay = coordinates(interpolate(lines, np.maximum(s - 1.0, 0.0)))
+        bx, by = coordinates(interpolate(lines, s + 1.0))
+        dx, dy = bx - ax, by - ay
+        norm = np.maximum(np.hypot(dx, dy), 1e-9)
+        return dx / norm, dy / norm
+
 
 def smoothstep(t: FloatArray) -> FloatArray:
     t = np.clip(t, 0.0, 1.0)
     result: FloatArray = t * t * (3 - 2 * t)
     return result
+
+
+def flat_vertices(zone: BaseGeometry, ox: float, oy: float, n: int, step: float) -> BoolArray:
+    """Vertices of an n x n ground grid (row by row from the south) that belong to a triangle touching
+    `zone`, the triangles of the cells around the grid included: set to the road height, they make every
+    triangle under the carriageway flat across the road (#76), the same on both sides of a tile edge."""
+    m = n + 2  # the grid with one more cell all around
+    tris = grid_triangles(ox - step, oy - step, m, step)
+    prepare(zone)
+    hit = intersects(zone, tris)
+    cells = (m - 1) * (m - 1)
+    flags = np.zeros((m, m), dtype=bool)
+    for k in np.flatnonzero(hit):
+        cell = int(k) % cells
+        j, i = divmod(cell, m - 1)
+        # corners (row, column): first triangle south-west, south-east, north-east; second south-west,
+        # north-east, north-west
+        corners = ((0, 0), (0, 1), (1, 1)) if k < cells else ((0, 0), (1, 1), (1, 0))
+        for dj, di in corners:
+            flags[j + dj, i + di] = True
+    inner: BoolArray = flags[1:-1, 1:-1].ravel()
+    return inner
 
 
 def shaped_ground(
@@ -193,9 +228,13 @@ def shaped_ground(
     natural: FloatArray,
     surface: Polygon | MultiPolygon,
     roads: RoadHeights,
+    flat: BoolArray | None = None,
 ) -> FloatArray:
-    """Ground heights: road height on the carriageway and SIDEWALK beside it, then a BANK back to nature."""
+    """Ground heights: road height on the carriageway and SIDEWALK beside it (and on the `flat` vertices),
+    then a BANK back to nature."""
     dist = distances(surface, points(xs, ys))
+    if flat is not None:
+        dist = np.where(flat, 0.0, dist)
     near = dist < SIDEWALK + BANK
     out = natural.copy()
     if near.any():
@@ -203,6 +242,42 @@ def shaped_ground(
         blend = smoothstep((dist[near] - SIDEWALK) / BANK)
         out[near] = road + (natural[near] - road) * blend
     return out
+
+
+def triangle_gradients(ground: FloatArray, n: int, step: float) -> tuple[FloatArray, FloatArray]:
+    """Slope (dz/dx, dz/dy) of every ground triangle of an n x n grid, in the order of grid_triangles."""
+    z = ground.reshape(n, n)
+    sw, se = z[:-1, :-1].ravel(), z[:-1, 1:].ravel()
+    nw, ne = z[1:, :-1].ravel(), z[1:, 1:].ravel()
+    # first triangle (sw, se, ne), second (sw, ne, nw)
+    gx = np.concatenate([(se - sw) / step, (ne - nw) / step])
+    gy = np.concatenate([(ne - se) / step, (nw - sw) / step])
+    return gx, gy
+
+
+def road_cross_slopes(
+    ground: FloatArray,
+    ox: float,
+    oy: float,
+    n: int,
+    step: float,
+    surface: Polygon | MultiPolygon,
+    roads: RoadHeights,
+    junctions: BaseGeometry,
+) -> list[tuple[float, float, float]]:
+    """(x, y, cross slope) of the ground triangles centred on the carriageway, away from the junctions (where
+    the slope of a side street is no cross slope): the slope across the nearest road, in m/m."""
+    centres = shapely.centroid(grid_triangles(ox, oy, n, step))
+    prepare(surface)
+    prepare(junctions)
+    hit = np.flatnonzero(contains(surface, centres) & ~contains(junctions, centres))
+    if not len(hit):
+        return []
+    gx, gy = triangle_gradients(ground, n, step)
+    cx, cy = coordinates(centres[hit])
+    tx, ty = roads.directions(cx, cy)
+    cross = np.abs(gx[hit] * -ty + gy[hit] * tx)
+    return [(float(x), float(y), float(c)) for x, y, c in zip(cx, cy, cross, strict=True)]
 
 
 def grid_triangles(ox: float, oy: float, n: int, step: float) -> GeometryArray:

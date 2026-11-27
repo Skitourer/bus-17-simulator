@@ -3,6 +3,7 @@
 import numpy as np
 import pytest
 from shapely import LineString, MultiPolygon, Point, Polygon
+from shapes import FloatArray
 from streets import (
     BANK,
     BUILDING_CLEARANCE,
@@ -20,6 +21,7 @@ from streets import (
     clear_trees,
     clip_building,
     crossings,
+    flat_vertices,
     junction_radii,
     keep_out_zone,
     kerb_lines,
@@ -28,6 +30,7 @@ from streets import (
     natural_profiles,
     node_heights,
     passage_zone,
+    road_cross_slopes,
     road_pieces,
     road_profiles,
     sample_positions,
@@ -35,6 +38,7 @@ from streets import (
     shaped_ground,
     sidewalk_zone,
     smoothstep,
+    triangle_gradients,
     trimmed,
     tunnel_portals,
 )
@@ -262,3 +266,61 @@ def test_tunnel_portals_stand_where_a_tunnel_meets_an_open_road() -> None:
     out = RoadEdge(3, 6, 6.0, frozenset(), [(0.0, 100.0), (0.0, 150.0)])
     ends = tunnel_portals([road, tunnel, out])
     assert [round(h, 3) for _, _, h, _ in ends] == [round(np.pi / 2, 3), round(-np.pi / 2, 3)]
+
+
+def test_triangle_gradients_follow_the_grid_triangles() -> None:
+    # z = 0.1 x + 0.3 y on a 3 x 3 grid with 10 m cells: every triangle has the same slope
+    xs, ys = np.meshgrid(np.arange(3) * 10.0, np.arange(3) * 10.0)
+    ground = (0.1 * xs + 0.3 * ys).ravel()
+    gx, gy = triangle_gradients(ground, 3, 10.0)
+    assert len(gx) == 8
+    assert gx == pytest.approx([0.1] * 8)
+    assert gy == pytest.approx([0.3] * 8)
+
+
+def test_flat_vertices_are_the_corners_of_the_triangles_touching_the_zone() -> None:
+    # a small square in the first triangle (south-east half) of the south-west cell of a 3 x 3 grid
+    zone = Polygon([(6, 1), (8, 1), (8, 3), (6, 3)])
+    flat = flat_vertices(zone, 0.0, 0.0, 3, 10.0).reshape(3, 3)
+    assert flat.tolist() == [[True, True, False], [False, True, False], [False, False, False]]
+    # a zone in the next tile to the west still flags the shared column of vertices
+    west = flat_vertices(Polygon([(-4, 1), (-2, 1), (-2, 3), (-4, 3)]), 0.0, 0.0, 3, 10.0).reshape(3, 3)
+    assert west[:, 0].tolist() == [True, True, False]
+    assert not west[:, 1:].any()
+
+
+def mountain_road() -> tuple[FloatArray, FloatArray, FloatArray, Polygon | MultiPolygon, RoadHeights]:
+    """A 6 m road along y = 2 across a 50 % slope, on a 100 m tile with a 10 m grid: the triangles of the
+    row between y = 0 and y = 10 have their centre on the road."""
+    terrain = tilted(0.0, 0.5)
+    road = edge(1, 2, [(-300.0, 2.0), (300.0, 2.0)])
+    heights = RoadHeights([road], road_profiles([road], terrain))
+    gx, gy = np.meshgrid(-50 + np.arange(11) * 10.0, -50 + np.arange(11) * 10.0)
+    xs: FloatArray = gx.ravel().astype(np.float64)
+    ys: FloatArray = gy.ravel().astype(np.float64)
+    return xs, ys, terrain.heights(xs, ys), carriageway([road]), heights
+
+
+def test_flat_vertices_make_the_road_triangles_flat_across_the_road() -> None:
+    xs, ys, natural, surface, heights = mountain_road()
+    nowhere = Point(1000, 1000).buffer(1)
+    tilted_ground = shaped_ground(xs, ys, natural, surface, heights)
+    before = [
+        c for _, _, c in road_cross_slopes(tilted_ground, -50, -50, 11, 10.0, surface, heights, nowhere)
+    ]
+    flat = flat_vertices(surface, -50.0, -50.0, 11, 10.0)
+    ground = shaped_ground(xs, ys, natural, surface, heights, flat)
+    after = road_cross_slopes(ground, -50, -50, 11, 10.0, surface, heights, nowhere)
+    assert max(before) > 0.07  # the vertices 5 m from the road were on their way back to the slope
+    assert len(after) == len(before) == 10  # one row of ten triangles centred on the road
+    assert max(c for _, _, c in after) == pytest.approx(0.0, abs=1e-9)
+    assert all(abs(y) < 5 for _, y, _ in after)
+
+
+def test_cross_slopes_skip_the_junctions() -> None:
+    xs, ys, natural, surface, heights = mountain_road()
+    ground = shaped_ground(xs, ys, natural, surface, heights)
+    junction = Point(0, 0).buffer(15)
+    slopes = road_cross_slopes(ground, -50, -50, 11, 10.0, surface, heights, junction)
+    assert len(slopes) < 10
+    assert all(abs(x) > 10 for x, _, _ in slopes)
