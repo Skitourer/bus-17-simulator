@@ -157,6 +157,38 @@ def route_edges(
     return out
 
 
+def built_up_edges(
+    edges: Sequence[Edge],
+    buildings: Sequence[tuple[float, float, float]],
+    radius: float,
+    min_count: int,
+    min_cover: float,
+    step: float,
+    share: float,
+) -> set[int]:
+    """Indices of the edges in a built-up area (town, village, hamlet).
+
+    At least `share` of their samples, taken every `step` m, have within `radius` m either `min_count`
+    buildings or more, or footprints covering `min_cover` of the disc or more (the large blocks of a town).
+    Buildings are (x, y, area) of their footprints.
+    """
+    tree = STRtree([ShapelyPoint(x, y) for x, y, _ in buildings])
+    disc = math.pi * radius * radius
+    out: set[int] = set()
+    for i, e in enumerate(edges):
+        line = LineString(e.coords)
+        count = max(1, math.ceil(line.length / step))
+        dense = 0
+        for k in range(count):
+            sample = line.interpolate((k + 0.5) * line.length / count)
+            near: list[int] = tree.query(sample, predicate='dwithin', distance=radius).tolist()
+            if len(near) >= min_count or sum(buildings[n][2] for n in near) >= min_cover * disc:
+                dense += 1
+        if dense >= share * count:
+            out.add(i)
+    return out
+
+
 def coverage_gaps(
     route: Sequence[Point], edges: Sequence[Edge], max_dist: float, step: float
 ) -> list[tuple[float, float]]:

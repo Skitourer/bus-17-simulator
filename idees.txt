@@ -26,6 +26,7 @@ Fait
     Lignes 18 et N62 dans le même monde, choix de la ligne dans le menu (#88)
     Pilote auto et autres bus qui suivent la route et respectent les feux (#85)
     La circulation ne bloque jamais le bus : priorité au bus, voitures qui reculent ou s'effacent (#95)
+    Pas de piétons ni de vélos à la campagne, moins de voitures, densité selon les zones bâties (#94)
 
 À faire
     Optimisation : ne pas afficher ni simuler tous les objets mobiles de la carte (#47, #12, #19)

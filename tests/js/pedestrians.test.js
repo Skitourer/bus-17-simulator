@@ -77,6 +77,16 @@ describe('Walkways', () => {
     expect(w.near(100, 0, 10)).toContain(0);
   });
 
+  it('has sidewalks in built-up areas only when the data tells them (#94)', () => {
+    const data = streets();
+    data.flags = [...data.flags, 'built_up'];
+    // the west and north streets are in a village, the east road in the countryside
+    data.edges[0][5] = 32;
+    data.edges[1][5] = 32;
+    const w = new Walkways(data, SPEEDS);
+    expect(w.edges.map((edge) => edge.b)).toEqual([1, 2]);
+  });
+
   it('puts each crossing on the nearest street', () => {
     const w = new Walkways(streets(), SPEEDS);
     w.addCrossings([120, 1, 200, 80, 900, 900], P.crossingReach);
@@ -198,11 +208,25 @@ describe('Pedestrians', () => {
 
   it('fills the sidewalks around the bus and empties them when it leaves', () => {
     const w = new Walkways(streets(), SPEEDS);
-    const crowd = new Pedestrians(w, { ...P, count: 8 }, 4, seeded(5));
+    const crowd = new Pedestrians(w, { ...P, count: 8, density: 100 }, 4, seeded(5));
     for (let k = 0; k < 5; k++) crowd.update(0.1, { x: 200, y: 0 }, free);
     expect(crowd.people.length).toBe(8);
     for (const q of crowd.people) expect(Math.hypot(q.x - 200, q.y)).toBeLessThanOrEqual(P.despawnRadius);
     crowd.update(0.1, { x: 9000, y: 9000 }, free);
     expect(crowd.people).toEqual([]);
+  });
+
+  it('wants density people per km of street with sidewalks near the bus, at most count (#94)', () => {
+    const w = new Walkways(streets(), SPEEDS);
+    // the three streets with sidewalks: 0.6 km
+    expect(new Pedestrians(w, { ...P, count: 100, density: 10 }, 4, seeded(5)).wanted({ x: 200, y: 0 })).toBe(
+      6,
+    );
+    expect(new Pedestrians(w, { ...P, count: 4, density: 10 }, 4, seeded(5)).wanted({ x: 200, y: 0 })).toBe(
+      4,
+    );
+    expect(
+      new Pedestrians(w, { ...P, count: 100, density: 10 }, 4, seeded(5)).wanted({ x: 9000, y: 0 }),
+    ).toBe(0);
   });
 });

@@ -258,7 +258,11 @@ describe('Traffic', () => {
 
   it('fills the streets around the bus and empties them when it leaves', () => {
     const n = new RoadNetwork(crossroads(), P.speeds);
-    const traffic = new Traffic(n, { ...P, vehicles: 6, spawnRadius: 300, despawnRadius: 350 }, seeded(9));
+    const traffic = new Traffic(
+      n,
+      { ...P, vehicles: 6, density: 100, spawnRadius: 300, despawnRadius: 350 },
+      seeded(9),
+    );
     traffic.update(0.05, { x: 200, y: 0 }, []);
     expect(traffic.vehicles.length).toBe(6);
     for (const v of traffic.vehicles) expect(Math.hypot(v.x - 200, v.y)).toBeLessThan(310);
@@ -371,5 +375,48 @@ describe('Traffic and the player bus (#95)', () => {
     const side = [{ x: c.x - P.carLength / 4, y: c.y + P.carWidth / 2 + 0.2 }];
     for (let k = 0; k < (P.stuckDelay + 1) * 20; k++) traffic.pushedBy(side, 0, 0.05);
     expect(c.backing).toBeGreaterThan(0);
+  });
+});
+
+describe('Traffic in built-up areas and in the countryside (#94)', () => {
+  /** The crossroads with the west road in a village; the other roads in the countryside. */
+  function village() {
+    const data = crossroads();
+    data.flags = [...data.flags, 'built_up'];
+    data.edges[0][5] = 32;
+    return new RoadNetwork(data, P.speeds);
+  }
+
+  it('tells the lanes of built-up areas, every lane without the flag in the data', () => {
+    const n = village();
+    expect(n.lanes[laneOf(n, 0, 1)].builtUp).toBe(true);
+    expect(n.lanes[laneOf(n, 1, 3)].builtUp).toBe(false);
+    const plain = new RoadNetwork(crossroads(), P.speeds);
+    expect(plain.lanes.every((lane) => lane.builtUp)).toBe(true);
+  });
+
+  it('wants density vehicles per km of lane, fewer in the countryside, at most vehicles', () => {
+    const n = village();
+    const traffic = new Traffic(n, { ...P, density: 10, ruralShare: 0.25, vehicles: 100 }, seeded(4));
+    // 0.4 km of lanes in the village and 0.8 km in the countryside
+    expect(traffic.wanted({ x: 200, y: 0 })).toBe(Math.round(10 * (0.4 + 0.25 * 0.8)));
+    const capped = new Traffic(n, { ...P, density: 10, ruralShare: 0.25, vehicles: 3 }, seeded(4));
+    expect(capped.wanted({ x: 200, y: 0 })).toBe(3);
+  });
+
+  it('puts the bikes in built-up areas only, and turns them back at their edge', () => {
+    const n = village();
+    const traffic = new Traffic(
+      n,
+      { ...P, vehicles: 40, density: 100, bikeShare: 1, ruralShare: 1, spawnRadius: 300 },
+      seeded(5),
+    );
+    traffic.update(0.05, { x: 200, y: 0 }, []);
+    const bikes = traffic.vehicles.filter((v) => v.bike);
+    expect(bikes.length).toBeGreaterThan(0);
+    for (const bike of bikes) expect(n.lanes[bike.lane].builtUp).toBe(true);
+    expect(traffic.vehicles.some((v) => !v.bike)).toBe(true);
+    // at the crossroads, the only built-up way out of the village is back
+    expect(n.nextLane(laneOf(n, 0, 1), seeded(1), true)).toBe(laneOf(n, 1, 0));
   });
 });

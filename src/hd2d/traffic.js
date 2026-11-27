@@ -22,6 +22,7 @@ import { mustStop } from './signals.js';
  * @property {Float64Array} pts flat [x, y, ...] in driving order @property {Float64Array} cum distance at each point
  * @property {number} length @property {number} width width of the road (m) @property {boolean} twoWay
  * @property {boolean} roundabout @property {number} speed speed limit (m/s)
+ * @property {boolean} builtUp in a town, village or hamlet (#94); every lane when the data has no such flag
  */
 
 /**
@@ -78,7 +79,8 @@ export class RoadNetwork {
     const oneway = flag('oneway'),
       reverse = flag('oneway_reverse'),
       roundabout = flag('roundabout'),
-      tunnel = flag('tunnel');
+      tunnel = flag('tunnel'),
+      builtUp = flag('built_up');
     /** @type {Lane[]} */
     this.lanes = [];
     /** @type {Map<number, number[]>} lanes leaving each node */
@@ -99,6 +101,7 @@ export class RoadNetwork {
         twoWay,
         roundabout: Boolean(mask & roundabout),
         speed,
+        builtUp: !builtUp || Boolean(mask & builtUp),
       };
       if (!(mask & reverse)) this.add({ ...common, from: a, to: b }, pts);
       if (!(mask & oneway)) this.add({ ...common, from: b, to: a }, reversed(pts));
@@ -167,14 +170,16 @@ export class RoadNetwork {
 
   /**
    * Lane taken after lane `id`: a random way out of its end node, not back on the same road unless it is a
-   * dead end; -1 when the road goes nowhere.
-   * @param {number} id @param {() => number} random
+   * dead end; -1 when the road goes nowhere. A bike stays in built-up areas: it turns back at their edge.
+   * @param {number} id @param {() => number} random @param {boolean} [bike]
    */
-  nextLane(id, random) {
+  nextLane(id, random, bike = false) {
     const lane = this.lanes[id];
     const out = this.outgoing.get(lane.to) ?? [];
     const ahead = out.filter((other) => this.lanes[other].edge !== lane.edge);
-    const choices = ahead.length ? ahead : out;
+    /** @param {number[]} list */
+    const town = (list) => (bike ? list.filter((other) => this.lanes[other].builtUp) : list);
+    const choices = [town(ahead), town(out), ahead, out].find((list) => list.length) ?? [];
     return choices.length ? choices[Math.floor(random() * choices.length)] : -1;
   }
 }
@@ -252,6 +257,8 @@ export class Traffic {
     this.started = false;
     /** @type {Obstacle[]} obstacles of the last step */
     this.lastObstacles = [];
+    /** @type {{key: string, count: number} | null} vehicles wanted around the cell of the bus */
+    this.wantedCache = null;
   }
 
   /** Offset of a vehicle right of its lane centre line. @param {Vehicle} v @param {Lane} lane */
@@ -462,7 +469,7 @@ export class Traffic {
       v.previous = v.lane;
       v.lane = v.next;
       lane = this.network.lanes[v.lane];
-      v.next = this.network.nextLane(v.lane, this.random);
+      v.next = this.network.nextLane(v.lane, this.random, v.bike);
       v.desired = this.desired(v.bike, lane);
     }
     v.s = Math.min(v.s, lane.length);
@@ -634,22 +641,21 @@ export class Traffic {
    * @param {{x: number, y: number}} centre @param {number} minDistance
    */
   spawn(centre, minDistance) {
-    if (this.vehicles.length >= this.p.vehicles) return;
+    if (this.vehicles.length >= this.wanted(centre)) return;
     const near = this.network.lanesNear(centre.x, centre.y, this.p.spawnRadius);
     if (!near.length) return;
-    for (
-      let attempt = 0;
-      attempt < this.p.spawnAttempts && this.vehicles.length < this.p.vehicles;
-      attempt++
-    ) {
+    const wanted = this.wanted(centre);
+    for (let attempt = 0; attempt < this.p.spawnAttempts && this.vehicles.length < wanted; attempt++) {
       const id = near[Math.floor(this.random() * near.length)];
       const lane = this.network.lanes[id];
+      // fewer cars in the countryside
+      if (!lane.builtUp && this.random() > this.p.ruralShare) continue;
       const s = this.random() * lane.length;
       const at = this.network.pointAt(id, s, 0);
       const d = Math.hypot(at.x - centre.x, at.y - centre.y);
       if (d < minDistance || d > this.p.spawnRadius) continue;
       if (this.vehicles.some((v) => v.lane === id && Math.abs(v.s - s) < this.p.spawnClearance)) continue;
-      const bike = this.random() < this.p.bikeShare;
+      const bike = lane.builtUp && this.random() < this.p.bikeShare;
       /** @type {Vehicle} */
       const v = {
         id: this.nextId++,
@@ -657,7 +663,7 @@ export class Traffic {
         lane: id,
         s,
         v: 0,
-        next: this.network.nextLane(id, this.random),
+        next: this.network.nextLane(id, this.random, bike),
         desired: this.desired(bike, lane),
         length: bike ? this.p.bikeLength : this.p.carLength,
         width: bike ? this.p.bikeWidth : this.p.carWidth,
@@ -672,6 +678,24 @@ export class Traffic {
       this.place(v);
       this.vehicles.push(v);
     }
+  }
+
+  /**
+   * Vehicles wanted around the bus: `density` per km of the lanes near it, `ruralShare` of it outside built-up
+   * areas, at most `vehicles`; computed again when the bus enters another cell.
+   * @param {{x: number, y: number}} centre
+   */
+  wanted(centre) {
+    const key = this.network.cellKey(centre.x, centre.y);
+    if (this.wantedCache?.key !== key) {
+      let km = 0;
+      for (const id of this.network.lanesNear(centre.x, centre.y, this.p.spawnRadius)) {
+        const lane = this.network.lanes[id];
+        km += (lane.length / 1000) * (lane.builtUp ? 1 : this.p.ruralShare);
+      }
+      this.wantedCache = { key, count: Math.min(this.p.vehicles, Math.round(this.p.density * km)) };
+    }
+    return this.wantedCache.count;
   }
 
   /**

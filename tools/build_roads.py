@@ -1,13 +1,14 @@
 """Builds data/grenoble/roads.json: the drivable road graph from OpenStreetMap (Overpass).
 
-Usage:  uv run python tools/build_roads.py      (after build_line.py and build_map.py)
+Usage:  uv run python tools/build_roads.py      (after build_line.py, build_map.py and build_buildings.py)
 Only the roads of the corridor around the lines are kept (tools/lines.py, ADR 0010).
 Data (c) OpenStreetMap contributors, ODbL.
 
 Output (local frame, coordinates in decimetres, compact arrays to keep the file small):
   { "attribution": ...,
     "classes": ["primary", ...],                          # class index -> name
-    "flags": ["oneway", ...],                             # bit i of the flag mask -> name
+    "flags": ["oneway", ...],                             # bit i of the flag mask -> name; "built_up":
+                                                          # in a town, village or hamlet (#94)
     "nodes": [x0, y0, x1, y1, ...],                       # graph node i at (x[2i], y[2i+1])
     "edges": [ [a, b, class, width_dm, layer, flag_mask, x, y, x, y, ...], ... ],
     "signals": [ [node, node, ...], ... ] }   # junctions with traffic lights, one cycle per group
@@ -23,6 +24,7 @@ from roads import (
     ROAD_CLASSES,
     Edge,
     Way,
+    built_up_edges,
     coverage_gaps,
     has_bus_lane,
     highway_base,
@@ -32,12 +34,22 @@ from roads import (
     split_ways,
 )
 from shapely import LineString
-from sources import ROOT, overpass, read_json, write_json
+from sources import CACHE, ROOT, overpass, read_json, write_json
 
 LINE_INDEX = os.path.join(LINES_DIR, 'index.json')
 OUT = os.path.join(ROOT, 'data', 'grenoble', 'roads.json')
 GAP_DIST = 8.0  # m: a route sample farther than this from every road is a coverage gap
 GAP_STEP = 5.0  # m between route samples
+BUILDINGS = os.path.join(CACHE, 'buildings.json')
+# Built-up areas (#94): a road sample with at least BUILT_UP_COUNT buildings, or footprints covering
+# BUILT_UP_COVER of the ground, within BUILT_UP_RADIUS m is in a town, village or hamlet. INSEE joins
+# buildings less than 200 m apart into one built-up area; this tighter rule (tuned on the hamlets along
+# the N62 in the Chartreuse) keeps isolated farms in the countryside.
+BUILT_UP_RADIUS = 50.0
+BUILT_UP_COUNT = 5
+BUILT_UP_COVER = 0.12
+BUILT_UP_STEP = 20.0  # m between road samples
+BUILT_UP_SHARE = 0.5  # share of the samples of a road piece
 SIMPLIFY_M = 0.3  # Douglas-Peucker tolerance: well below a lane width, halves the file size
 POLY_SIMPLIFY = 25.0  # m: corridor outline sent to Overpass (a shorter query)
 ROUTE_TOLERANCE = 6.0  # m: the GTFS shape drifts up to a few metres from the OSM centre line
@@ -71,14 +83,24 @@ def edge_flags(tags: dict[str, str]) -> list[str]:
 
 
 CLASSES = sorted({cls for cls, _ in ROAD_CLASSES.values()})
-FLAGS = ['oneway', 'oneway_reverse', 'roundabout', 'bridge', 'tunnel', 'bus_lane', 'link', 'passage']
+FLAGS = [
+    'oneway',
+    'oneway_reverse',
+    'roundabout',
+    'bridge',
+    'tunnel',
+    'bus_lane',
+    'link',
+    'passage',
+    'built_up',
+]
 
 
-def edge_record(e: Edge, index: dict[int, int], on_bus_route: bool) -> list[int]:
+def edge_record(e: Edge, index: dict[int, int], on_bus_route: bool, built_up: bool) -> list[int]:
     """[a, b, class, width_dm, layer, flag_mask, x, y, ...] (see the module docstring)."""
     base = highway_base(e.tags) or 'residential'
     layer = e.tags.get('layer', '0')
-    mask = sum(1 << FLAGS.index(f) for f in edge_flags(e.tags))
+    mask = sum(1 << FLAGS.index(f) for f in edge_flags(e.tags) + (['built_up'] if built_up else []))
     return [
         index[e.a],
         index[e.b],
@@ -88,6 +110,14 @@ def edge_record(e: Edge, index: dict[int, int], on_bus_route: bool) -> list[int]
         mask,
         *(round(v * 10) for xy in douglas_peucker(e.coords, SIMPLIFY_M) for v in xy),
     ]
+
+
+def footprint_summary(flat: list[int]) -> tuple[float, float, float]:
+    """Centre (mean of the corners) and area of a footprint [x0, y0, x1, y1, ...] in decimetres, in metres."""
+    xs, ys = flat[0::2], flat[1::2]
+    n = len(xs)
+    twice = sum(xs[k] * ys[(k + 1) % n] - xs[(k + 1) % n] * ys[k] for k in range(n))
+    return sum(xs) / n / 10, sum(ys) / n / 10, abs(twice) / 200
 
 
 def main() -> None:
@@ -127,6 +157,13 @@ def main() -> None:
 
     on_route = route_edges(edges, routes, ROUTE_TOLERANCE, ROUTE_SHARE)
     print(f'{len(on_route)} troncons parcourus par les lignes')
+    footprints = [footprint_summary(b[4:]) for b in read_json(BUILDINGS)['b']]
+    built_up = built_up_edges(
+        edges, footprints, BUILT_UP_RADIUS, BUILT_UP_COUNT, BUILT_UP_COVER, BUILT_UP_STEP, BUILT_UP_SHARE
+    )
+    length = sum(LineString(e.coords).length for e in edges)
+    urban = sum(LineString(edges[i].coords).length for i in built_up)
+    print(f'{len(built_up)} troncons en zone batie ({urban / length:.0%} de la longueur)')
     for line in lines:
         for k, route in enumerate(routes_xy(line)):
             gaps = coverage_gaps(route, edges, GAP_DIST, GAP_STEP)
@@ -142,7 +179,7 @@ def main() -> None:
             'classes': CLASSES,
             'flags': FLAGS,
             'nodes': [round(v * 10) for xy in nodes.values() for v in xy],
-            'edges': [edge_record(e, index, i in on_route) for i, e in enumerate(edges)],
+            'edges': [edge_record(e, index, i in on_route, i in built_up) for i, e in enumerate(edges)],
             'signals': [[index[n] for n in group] for group in groups],
         },
     )

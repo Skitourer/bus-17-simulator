@@ -29,6 +29,10 @@ dans le navigateur.
   blocage ne dure plus de quelques secondes.
 - Les véhicules apparaissent et disparaissent hors de vue autour du bus ; leur nombre est
   une préférence du joueur (aucune, fluide, normale, dense).
+- Depuis #94 (28/11/2026), le nombre suit les routes proches du bus : une **densité par km
+  de voie**, plus faible hors des **zones bâties** (drapeau `built_up` de `roads.json` : assez
+  de bâtiments ou de surface bâtie près de la route, d'après les emprises BD TOPO), la
+  préférence servant de plafond. Vélos et piétons restent dans les zones bâties.
 
 ## Conséquences
 

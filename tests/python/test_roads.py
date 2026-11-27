@@ -9,6 +9,7 @@ from roads import (
     TWO_WAY_MIN_WIDTH,
     Edge,
     Way,
+    built_up_edges,
     coverage_gaps,
     has_bus_lane,
     highway_base,
@@ -170,3 +171,24 @@ def test_signal_groups_gathers_close_junctions_in_one_cycle() -> None:
 def test_signal_groups_without_junctions() -> None:
     nodes = {1: (0.0, 0.0), 2: (10.0, 0.0)}
     assert signal_groups([(0.0, 0.0)], nodes, [Edge(1, 2, [nodes[1], nodes[2]], 1, {})], 25, 30) == []
+
+
+def test_built_up_edges_keeps_the_streets_of_a_village_not_the_country_road() -> None:
+    village = [
+        (x * 15.0, y, 100.0) for x in range(8) for y in (-12.0, 12.0)
+    ]  # two rows of houses, 0 to 105 m
+    farm = [(900.0, 15.0, 300.0), (910.0, 15.0, 300.0)]
+    street = Edge(1, 2, [(0.0, 0.0), (100.0, 0.0)], 1, {})
+    country = Edge(2, 3, [(100.0, 0.0), (1000.0, 0.0)], 2, {})
+    edge_of_village = Edge(4, 5, [(60.0, 0.0), (200.0, 0.0)], 3, {})
+    edges = [street, country, edge_of_village]
+    assert built_up_edges(edges, village + farm, 50.0, 4, 0.5, 20.0, 0.5) == {0, 2}
+    assert built_up_edges(edges, village + farm, 50.0, 4, 0.5, 20.0, 0.9) == {0}
+    assert built_up_edges(edges, [], 50.0, 1, 0.5, 20.0, 0.5) == set()
+
+
+def test_built_up_edges_counts_the_large_blocks_of_a_town() -> None:
+    blocks = [(0.0, 30.0, 2000.0), (100.0, 30.0, 2000.0)]
+    avenue = Edge(1, 2, [(0.0, 0.0), (100.0, 0.0)], 1, {})
+    assert built_up_edges([avenue], blocks, 50.0, 4, 0.1, 20.0, 0.5) == {0}
+    assert built_up_edges([avenue], blocks, 50.0, 4, 0.5, 20.0, 0.5) == set()
