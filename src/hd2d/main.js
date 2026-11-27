@@ -29,6 +29,7 @@ import { setBillboardLight } from './instances.js';
 import { dayOfYear, seasonLook } from './season.js';
 import { Ground } from './ground.js';
 import { buildWorld } from './world.js';
+import { BuiltUpStreets } from './lamps.js';
 import { makeBus, setBusLights, setLineNumber } from './bus3d.js';
 import { busGeometry } from './trailer.js';
 import { Drive, obstacles } from './drive.js';
@@ -416,7 +417,8 @@ async function load() {
   // the date only sets the light and the season; the timetable stays the one of the chosen day (#70)
   gameDate = P.date ? alignDate(P.date, weekdaysOn(line.calendar, serviceDay)) : serviceDay;
   const season = seasonLook(dayOfYear(gameDate), S.seasons);
-  world = buildWorld(scene, hf, { map, tiles, stops: places, guide, line }, track, S, season);
+  const streets = new BuiltUpStreets(roads, S.lights.lampReach);
+  world = buildWorld(scene, hf, { map, tiles, stops: places, guide, line, streets }, track, S, season);
   otherBuses = new OtherBuses(scene, busGeometry(S, 'std'), S.budget);
   redLights = new RedLightWatch(signals, S.signals.redMinSpeed, S.signals.redLineMargin);
   traffic = new Traffic(network, S.traffic, Math.random, signals);

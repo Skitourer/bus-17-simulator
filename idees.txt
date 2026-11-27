@@ -27,12 +27,12 @@ Fait
     Pilote auto et autres bus qui suivent la route et respectent les feux (#85)
     La circulation ne bloque jamais le bus : priorité au bus, voitures qui reculent ou s'effacent (#95)
     Pas de piétons ni de vélos à la campagne, moins de voitures, densité selon les zones bâties (#94)
+    Moins de lampadaires, cône de lumière vers le bas, aucun en zone rurale (#89)
 
 À faire
     Optimisation : ne pas afficher ni simuler tous les objets mobiles de la carte (#47, #12, #19)
     Bus des autres horaires, dans le même sens et en sens inverse (#48)
     Bâtiments plus riches et monuments dessinés à la main (#16)
-    Moins de lampadaires, cône de lumière vers le bas, aucun en zone rurale (#89)
     Mode deux joueurs en coopération, écran partagé verticalement ou horizontalement (#51)
     Volume sonore dans les réglages, quand le jeu aura du son
     Annonces sonores avec le nom du prochain arrêt

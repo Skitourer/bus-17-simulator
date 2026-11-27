@@ -1126,37 +1126,84 @@ function kerbLines(ground, tiles) {
   return out;
 }
 
-/** Soft round halo of the street lights. */
-function glowTexture() {
-  const { c, g } = canvas(16, 16);
-  const gradient = g.createRadialGradient(8, 8, 0, 8, 8, 8);
+/** Pool of light on the ground under a street light: bright in the middle, fading to the edge. */
+function poolTexture() {
+  const { c, g } = canvas(32, 32);
+  const gradient = g.createRadialGradient(16, 16, 0, 16, 16, 16);
   gradient.addColorStop(0, 'rgba(255, 255, 255, 1)');
-  gradient.addColorStop(0.35, 'rgba(255, 255, 255, 0.55)');
+  gradient.addColorStop(0.5, 'rgba(255, 255, 255, 0.5)');
   gradient.addColorStop(1, 'rgba(255, 255, 255, 0)');
   g.fillStyle = gradient;
-  g.fillRect(0, 0, 16, 16);
+  g.fillRect(0, 0, 32, 32);
   return new THREE.CanvasTexture(c);
 }
 
-/** @type {THREE.PointsMaterial | null} */
-let lampGlow = null;
+/**
+ * Materials of the street lights at night (#89): the lit lamp head, the cone of light below it and the
+ * pool of light on the ground, shared by every tile.
+ * @type {{head: THREE.MeshLambertMaterial, cone: THREE.MeshBasicMaterial, pool: THREE.MeshBasicMaterial} | null}
+ */
+let lampMaterials = null;
 /** @param {import('../settings/settings.js').Settings['lights']} lights */
-function glowMaterial(lights) {
-  lampGlow ??= new THREE.PointsMaterial({
-    color: lights.lampColor,
-    size: lights.lampGlowSize,
-    map: shared('glow', glowTexture),
-    transparent: true,
-    opacity: 0,
-    depthWrite: false,
-    blending: THREE.AdditiveBlending,
-  });
-  return lampGlow;
+function lampLook(lights) {
+  lampMaterials ??= {
+    head: new THREE.MeshLambertMaterial({
+      color: '#4a4f57',
+      emissive: lights.lampColor,
+      emissiveIntensity: 0,
+    }),
+    cone: new THREE.MeshBasicMaterial({
+      color: lights.lampColor,
+      vertexColors: true,
+      transparent: true,
+      opacity: 0,
+      depthWrite: false,
+      side: THREE.DoubleSide,
+      blending: THREE.AdditiveBlending,
+    }),
+    pool: new THREE.MeshBasicMaterial({
+      color: lights.lampColor,
+      map: shared('lampPool', poolTexture),
+      transparent: true,
+      opacity: 0,
+      depthWrite: false,
+      blending: THREE.AdditiveBlending,
+      polygonOffset: true,
+      polygonOffsetFactor: -2,
+    }),
+  };
+  return lampMaterials;
+}
+
+/** @type {THREE.BufferGeometry | null} */
+let coneGeometry = null;
+/**
+ * Cone of light under a lamp head, open at both ends, its top at the origin, widening down to the ground;
+ * bright at the top, fading to nothing on the ground.
+ * @param {import('../settings/settings.js').Settings['lights']} lights
+ */
+function lightCone(lights) {
+  if (coneGeometry) return coneGeometry;
+  const height = lights.lampHeight - 0.3;
+  const cone = new THREE.CylinderGeometry(0.25, lights.lampPoolRadius, height, 12, 1, true).translate(
+    0,
+    -height / 2,
+    0,
+  );
+  const position = cone.getAttribute('position');
+  const colors = new Float32Array(position.count * 3);
+  for (let k = 0; k < position.count; k++) {
+    const bright = 1 + position.getY(k) / height;
+    colors.set([bright, bright, bright], k * 3);
+  }
+  cone.setAttribute('color', new THREE.BufferAttribute(colors, 3));
+  coneGeometry = cone;
+  return cone;
 }
 
 /**
- * Street lights of a tile (#55): a pole with its lamp every lampSpacing metres along the kerbs, and the
- * halo of the lamp, shown at night.
+ * Street lights of a tile (#55, #89): a pole with its lamp head, the cone of light under it and the pool
+ * of light on the ground, both shown at night.
  * @param {Ground} ground @param {number[]} places flat [x, y, ...] world metres
  * @param {import('../settings/settings.js').Settings['lights']} lights
  */
@@ -1164,11 +1211,16 @@ function streetLamps(ground, places, lights) {
   const group = new THREE.Group();
   const n = places.length / 2;
   if (!n) return group;
+  const look = lampLook(lights);
   const pole = new THREE.BoxGeometry(0.18, lights.lampHeight, 0.18).translate(0, lights.lampHeight / 2, 0);
   const head = new THREE.BoxGeometry(0.7, 0.22, 0.4).translate(0, lights.lampHeight, 0);
-  const material = new THREE.MeshLambertMaterial({ color: '#4a4f57' });
-  const poles = new THREE.InstancedMesh(pole, material, n);
-  const heads = new THREE.InstancedMesh(head, material, n);
+  const pool = new THREE.CircleGeometry(lights.lampPoolRadius, 16).rotateX(-Math.PI / 2);
+  const poles = new THREE.InstancedMesh(pole, new THREE.MeshLambertMaterial({ color: '#4a4f57' }), n);
+  const heads = new THREE.InstancedMesh(head, look.head, n);
+  const cones = new THREE.InstancedMesh(lightCone(lights), look.cone, n);
+  const pools = new THREE.InstancedMesh(pool, look.pool, n);
+  cones.renderOrder = 20;
+  pools.renderOrder = 13;
   const matrix = new THREE.Matrix4();
   for (let i = 0; i < n; i++) {
     const x = places[i * 2],
@@ -1177,32 +1229,13 @@ function streetLamps(ground, places, lights) {
     matrix.makeTranslation(x, z, -y);
     poles.setMatrixAt(i, matrix);
     heads.setMatrixAt(i, matrix);
+    matrix.makeTranslation(x, z + lights.lampHeight - 0.15, -y);
+    cones.setMatrixAt(i, matrix);
+    matrix.makeTranslation(x, z + 0.06, -y);
+    pools.setMatrixAt(i, matrix);
   }
-  group.add(poles, heads);
+  group.add(poles, heads, cones, pools);
   return group;
-}
-
-/**
- * Halos of all the street lights in one mesh, drawn whatever the tiles around the bus: the city lights
- * stay on in the distance instead of appearing with each tile.
- * @param {Ground} ground @param {number[]} places flat [x, y, ...] world metres
- * @param {import('../settings/settings.js').Settings['lights']} lights
- */
-function lampHalos(ground, places, lights) {
-  const n = places.length / 2;
-  const glow = new Float32Array(n * 3);
-  for (let i = 0; i < n; i++) {
-    const x = places[i * 2],
-      y = places[i * 2 + 1];
-    // just under the lamp head, so that the head does not hide it from above
-    glow.set([x, ground.h(x, y) + lights.lampHeight - 0.4, -y], i * 3);
-  }
-  const points = new THREE.BufferGeometry();
-  points.setAttribute('position', new THREE.BufferAttribute(glow, 3));
-  const halos = new THREE.Points(points, glowMaterial(lights));
-  halos.renderOrder = 20;
-  halos.frustumCulled = false;
-  return halos;
 }
 
 // ------------------------------------------------------------------ arrets
@@ -1309,7 +1342,7 @@ function tileObjects(ground, tiles) {
 // ------------------------------------------------------------------ assemblage
 /**
  * @param {THREE.Scene} scene @param {Ground} hf
- * @param {{map: import('../common/types.js').MapData | null, tiles: Map<string, TileData>, stops: import('./kerb.js').StopPlace[], guide: import('./guidance.js').GuidanceLine, line: import('../common/types.js').LineData}} data
+ * @param {{map: import('../common/types.js').MapData | null, tiles: Map<string, TileData>, stops: import('./kerb.js').StopPlace[], guide: import('./guidance.js').GuidanceLine, line: import('../common/types.js').LineData, streets: import('./lamps.js').BuiltUpStreets}} data
  * @param {import('../world/track.js').Track} track
  * @param {import('../settings/settings.js').Settings} settings
  * @param {SeasonLook} season landscape of the date of the game (#70)
@@ -1338,7 +1371,7 @@ export function buildWorld(scene, hf, data, track, settings, season) {
         roadSurface(hf, one, street),
         sidewalks(hf, one, street),
         streetDetails(hf, one, street),
-        streetLamps(hf, placesAlong(kerbLines(hf, one), lights.lampSpacing), lights),
+        streetLamps(hf, data.streets.keep(placesAlong(kerbLines(hf, one), lights.lampSpacing)), lights),
       );
       const houses = buildings(hf, objects.buildings, 3 + keys.indexOf(key), walls(lights), street);
       const block = new THREE.Group();
@@ -1373,9 +1406,8 @@ export function buildWorld(scene, hf, data, track, settings, season) {
   const footprints = footprintsOf(tileObjects(hf, data.tiles).buildings);
   const blocked = data.stops.map((place) => shelterBlocked(footprints, place));
   scene.add(stops(hf, data.stops, blocked, data.line));
-  // every street light: halos everywhere, and the few real lights that follow the bus at night
-  const lampPlaces = placesAlong(kerbLines(hf, data.tiles), lights.lampSpacing);
-  scene.add(lampHalos(hf, lampPlaces, lights));
+  // every street light, for the few real lights that follow the bus at night
+  const lampPlaces = data.streets.keep(placesAlong(kerbLines(hf, data.tiles), lights.lampSpacing));
   const lamps = new PlaceGrid(lampPlaces, 100);
   return {
     route,
@@ -1386,9 +1418,11 @@ export function buildWorld(scene, hf, data, track, settings, season) {
      */
     setNight(level) {
       walls(lights).emissiveIntensity = level * lights.windowGlow;
-      const glow = glowMaterial(lights);
-      glow.opacity = level;
-      glow.visible = level > 0.01;
+      const look = lampLook(lights);
+      look.head.emissiveIntensity = level;
+      look.cone.opacity = level * lights.lampConeGlow;
+      look.pool.opacity = level * lights.lampPoolGlow;
+      look.cone.visible = look.pool.visible = level > 0.01;
     },
     index: new FootprintIndex(footprints, track),
     water: water.material,
