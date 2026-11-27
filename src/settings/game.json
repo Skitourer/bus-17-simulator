@@ -2173,6 +2173,91 @@
       "integer": true,
       "doc": "Places tried per simulation step to add the missing vehicles."
     },
+    "busGap": {
+      "value": 3,
+      "unit": "m",
+      "min": 0,
+      "max": 20,
+      "doc": "Extra distance the cars and bikes keep from the player's bus, a priority vehicle (#95)."
+    },
+    "yieldRadius": {
+      "value": 25,
+      "unit": "m",
+      "min": 0,
+      "max": 100,
+      "doc": "A vehicle does not enter a junction while the moving player's bus is this close to it and heading to it or in it (#95)."
+    },
+    "yieldSpeed": {
+      "value": 1,
+      "unit": "m/s",
+      "min": 0,
+      "max": 5,
+      "doc": "Below this speed the player's bus is waiting (stop, red light): the traffic no longer yields the junctions to it."
+    },
+    "stuckSpeed": {
+      "value": 0.5,
+      "unit": "m/s",
+      "min": 0,
+      "max": 3,
+      "doc": "A vehicle or the player's bus slower than this counts as stopped for the unsticking rules (#95)."
+    },
+    "stuckDelay": {
+      "value": 3,
+      "unit": "s",
+      "min": 0.5,
+      "max": 30,
+      "doc": "A vehicle stopped this long against the player's bus, or waiting for the stopped bus across its way, backs off or is removed (#95)."
+    },
+    "stuckContact": {
+      "value": 1.5,
+      "unit": "m",
+      "min": 0,
+      "max": 10,
+      "doc": "Free distance to the player's bus under which a stopped vehicle touches it."
+    },
+    "contactMargin": {
+      "value": 0.5,
+      "unit": "m",
+      "min": 0,
+      "max": 3,
+      "doc": "Margin around a vehicle within which the outline of the player's bus pushes against it."
+    },
+    "followAngle": {
+      "value": 45,
+      "unit": "deg",
+      "min": 0,
+      "max": 90,
+      "doc": "A vehicle whose way is within this angle of the heading of the bus ahead follows it (waits behind it) instead of crossing its way."
+    },
+    "backOffSpeed": {
+      "value": 1.5,
+      "unit": "m/s",
+      "min": 0.2,
+      "max": 5,
+      "doc": "Speed of a vehicle backing off from the player's bus."
+    },
+    "backOffDistance": {
+      "value": 8,
+      "unit": "m",
+      "min": 1,
+      "max": 30,
+      "doc": "Distance a stuck vehicle backs off from the player's bus."
+    },
+    "backOffMin": {
+      "value": 3,
+      "unit": "m",
+      "min": 0.5,
+      "max": 20,
+      "doc": "With less free room than this behind it, a stuck vehicle is removed instead (another one appears out of sight)."
+    },
+    "backOffs": {
+      "value": 2,
+      "unit": "count",
+      "min": 0,
+      "max": 10,
+      "integer": true,
+      "doc": "Times a vehicle backs off before it is removed when it is stuck again."
+    },
     "looks": {
       "value": 8,
       "unit": "count",

@@ -267,3 +267,109 @@ describe('Traffic', () => {
     expect(traffic.reservations.size).toBe(0);
   });
 });
+
+describe('Traffic and the player bus (#95)', () => {
+  /** The player's bus as one disc. @param {number} x @param {number} y @param {number} h @param {number} [v] */
+  const playerBus = (x, y, h, v = 0) => ({ x, y, r: 2, v, h, priority: true });
+
+  it('keeps a larger gap from the player bus than from another obstacle', () => {
+    const n = new RoadNetwork(crossroads(), P.speeds);
+    /** @param {boolean} priority */
+    const stopAt = (priority) => {
+      const traffic = quiet(n);
+      const c = car(traffic, laneOf(n, 0, 1), 20, { v: 8 });
+      run(traffic, 20, [{ ...playerBus(80, -1.5, 0), priority }]);
+      return c.x;
+    };
+    expect(stopAt(false) - stopAt(true)).toBeGreaterThan(P.busGap - P.probeStep);
+  });
+
+  it('leaves the junction to the moving bus, not to the bus waiting near it', () => {
+    const n = new RoadNetwork(crossroads(), P.speeds);
+    for (const [speed, yields] of /** @type {const} */ ([
+      [5, true],
+      [0, false],
+    ])) {
+      const traffic = quiet(n);
+      const c = car(traffic, laneOf(n, 0, 1), 190, { v: 2, next: laneOf(n, 1, 3) });
+      // the bus drives north to the junction from the south
+      traffic.leader(c, traffic.sortByLane(), [playerBus(201.5, -15, Math.PI / 2, speed)]);
+      expect(traffic.reservations.has(1)).toBe(!yields);
+    }
+  });
+
+  it('backs off from the bus standing across its way, then is removed if it stays stuck', () => {
+    const n = new RoadNetwork(crossroads(), P.speeds);
+    const traffic = quiet(n);
+    const c = car(traffic, laneOf(n, 0, 1), 50);
+    // the bus faces the car on its half of the road
+    const bus = playerBus(70, -1.5, Math.PI);
+    let closest = 0;
+    for (let k = 0; k < 20 * 20 && !c.backOffs; k++) {
+      run(traffic, 0.05, [bus]);
+      closest = Math.max(closest, c.s);
+    }
+    expect(c.backOffs).toBe(1);
+    run(traffic, P.backOffDistance / P.backOffSpeed, [bus]);
+    expect(closest - c.s).toBeGreaterThan(P.backOffDistance / 2);
+    run(traffic, 60, [bus]);
+    expect(traffic.vehicles).toEqual([]);
+  });
+
+  it('waits behind the stopped bus it follows without backing off', () => {
+    const n = new RoadNetwork(crossroads(), P.speeds);
+    const traffic = quiet(n);
+    const c = car(traffic, laneOf(n, 0, 1), 50);
+    run(traffic, 60, [playerBus(70, -1.5, 0)]);
+    expect(c.backOffs).toBeUndefined();
+    expect(traffic.vehicles).toEqual([c]);
+  });
+
+  it('is removed at once when it has no room to back off', () => {
+    const n = new RoadNetwork(crossroads(), P.speeds);
+    const traffic = quiet(n);
+    const c = car(traffic, laneOf(n, 0, 1), 3);
+    traffic.backOff(c, traffic.sortByLane(), []);
+    expect(c.gone).toBe(true);
+    const behind = car(traffic, laneOf(n, 0, 1), 20);
+    const front = car(traffic, laneOf(n, 0, 1), 20 + P.carLength + 1);
+    traffic.backOff(front, traffic.sortByLane(), []);
+    expect(front.gone).toBe(true);
+    expect(behind.gone).toBeUndefined();
+  });
+
+  it('gives way when the driver keeps pushing the bus against its side, not against its rear', () => {
+    const n = new RoadNetwork(crossroads(), P.speeds);
+    const traffic = quiet(n);
+    const c = car(traffic, laneOf(n, 0, 1), 100, { desired: 0 });
+    // the nose of the bus against its back, and the room just before the nose a little into it
+    const rear = [
+      { x: c.x - P.carLength / 2 - 0.2, y: c.y },
+      { x: c.x - P.carLength / 2 + 1, y: c.y + 0.5 },
+    ];
+    for (let k = 0; k < (P.stuckDelay + 1) * 20; k++) traffic.pushedBy(rear, 0, 0.05);
+    expect(c.backing).toBeUndefined();
+    const side = [{ x: c.x, y: c.y + P.carWidth / 2 + 0.2 }];
+    for (let k = 0; k < (P.stuckDelay + 1) * 20; k++) traffic.pushedBy(side, -Math.PI / 2, 0.05);
+    expect(c.backing).toBeGreaterThan(0);
+  });
+
+  it('gives way when it got inside the bus, even going the same way', () => {
+    const n = new RoadNetwork(crossroads(), P.speeds);
+    const traffic = quiet(n);
+    const c = car(traffic, laneOf(n, 0, 1), 100, { desired: 0 });
+    const body = [-3, -1.5, 0, 1.5, 3].map((along) => ({ x: c.x + along, y: c.y + 0.4 }));
+    for (let k = 0; k < (P.stuckDelay + 1) * 20; k++) traffic.pushedBy(body, 0, 0.05);
+    expect(c.backing).toBeGreaterThan(0);
+  });
+
+  it('gives way to the bus pushing against its side while driving alongside', () => {
+    const n = new RoadNetwork(crossroads(), P.speeds);
+    const traffic = quiet(n);
+    const c = car(traffic, laneOf(n, 0, 1), 100, { desired: 0 });
+    // the side of the bus, heading the same way, touches the rear half of the car
+    const side = [{ x: c.x - P.carLength / 4, y: c.y + P.carWidth / 2 + 0.2 }];
+    for (let k = 0; k < (P.stuckDelay + 1) * 20; k++) traffic.pushedBy(side, 0, 0.05);
+    expect(c.backing).toBeGreaterThan(0);
+  });
+});

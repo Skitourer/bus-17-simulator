@@ -24,12 +24,13 @@ Fait
     Passages sous les bâtiments et entrées de tunnels (#83)
     Hauteurs réelles des bâtiments (IGN BD TOPO) et styles variés (#56)
     Lignes 18 et N62 dans le même monde, choix de la ligne dans le menu (#88)
+    Pilote auto et autres bus qui suivent la route et respectent les feux (#85)
+    La circulation ne bloque jamais le bus : priorité au bus, voitures qui reculent ou s'effacent (#95)
 
 À faire
     Optimisation : ne pas afficher ni simuler tous les objets mobiles de la carte (#47, #12, #19)
     Bus des autres horaires, dans le même sens et en sens inverse (#48)
     Bâtiments plus riches et monuments dessinés à la main (#16)
-    Pilote auto et autres bus qui suivent la route et respectent les feux (#85)
     Moins de lampadaires, cône de lumière vers le bas, aucun en zone rurale (#89)
     Mode deux joueurs en coopération, écran partagé verticalement ou horizontalement (#51)
     Volume sonore dans les réglages, quand le jeu aura du son

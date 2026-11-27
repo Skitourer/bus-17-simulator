@@ -211,6 +211,9 @@ let lightShift = 0;
 let sunElevation = 0;
 /** red lights run by the player (#77) */
 let redLightsRun = 0;
+/** test pilot: time it has been held by the traffic, and the longest such wait (s), for ?auto runs (#95) */
+let trafficWait = 0,
+  trafficWaitMax = 0;
 let bumps = 0,
   progress = 0,
   offT = 0,
@@ -493,6 +496,8 @@ async function load() {
     bumps +
     ' / red ' +
     redLightsRun +
+    ' / traffic wait ' +
+    trafficWaitMax.toFixed(1) +
     ' / lat ' +
     nearest(drive.center.x, drive.center.y, progress, 60).d.toFixed(1);
   $('loading').hidden = true;
@@ -522,12 +527,15 @@ function trafficObstacles(centre) {
   const r = B.bodyWidth / 2 + 0.3;
   /** @type {import('./traffic.js').Obstacle[]} */
   const out = [];
-  /** @param {number} x @param {number} y @param {number} h @param {number} length @param {number} v centre */
-  const discs = (x, y, h, length, v) => {
+  /**
+   * @param {number} x @param {number} y @param {number} h @param {number} length @param {number} v centre
+   * @param {boolean} priority the player's bus (#95)
+   */
+  const discs = (x, y, h, length, v, priority) => {
     const count = Math.max(2, Math.ceil(length / r));
     for (let k = 0; k < count; k++) {
       const along = -length / 2 + r / 2 + ((length - r) * k) / (count - 1);
-      out.push({ x: x + Math.cos(h) * along, y: y + Math.sin(h) * along, r, v, h });
+      out.push({ x: x + Math.cos(h) * along, y: y + Math.sin(h) * along, r, v, h, priority });
     }
   };
   // the player's bus: from its front back over its whole length, rear body included (taken straight)
@@ -538,10 +546,21 @@ function trafficObstacles(centre) {
     drive.h,
     playerLength,
     Math.max(0, drive.v),
+    true,
   );
+  // and the room just before its nose, where a crossing car would stop it (#95)
+  const claim = B.bodyLength / 2 + r;
+  out.push({
+    x: centre.x + Math.cos(drive.h) * claim,
+    y: centre.y + Math.sin(drive.h) * claim,
+    r,
+    v: Math.max(0, drive.v),
+    h: drive.h,
+    priority: true,
+  });
   for (const b of fleet.buses)
     if (Math.hypot(b.x - centre.x, b.y - centre.y) < S.traffic.despawnRadius)
-      discs(b.x, b.y, b.h, S.bus.bodyLength, 0);
+      discs(b.x, b.y, b.h, S.bus.bodyLength, 0, false);
   return out;
 }
 
@@ -600,6 +619,16 @@ function update(dt) {
   const busDiscs = trafficObstacles(centre);
   signals.advance(dt);
   traffic.update(dt, centre, [...busDiscs, ...walkers.obstacles()]);
+  // a car the driver keeps pushing against, or standing just before the bus held by it, gives way (#95)
+  if (doors.closed && !ghost && (inp.up || inp.down || trafficWait > 0)) {
+    const nose = B.bodyLength - B.rearOverhang + S.traffic.busGap / 2;
+    const ahead = inp.down ? [] : [-1, 0, 1].map((side) => drive.point(nose, (side * B.bodyWidth) / 2));
+    // and over its whole body, for a car or a bike that got inside the bus in a turn
+    const body = [];
+    for (let f = -B.rearOverhang; f <= B.bodyLength - B.rearOverhang; f += 1.5)
+      for (const side of [-1, 0, 1]) body.push(drive.point(f, (side * B.bodyWidth) / 2));
+    traffic.pushedBy([...drive.probes(), ...ahead, ...body], drive.h, dt);
+  }
   walkers.update(dt, centre, {
     vehicleComing: (x, y, impatient) =>
       traffic.approaching(x, y, impatient ? 0 : S.pedestrians.clearRadius, S.pedestrians.clearNear) ||
@@ -673,6 +702,10 @@ function autopilot() {
   // aim a metre before the line: the bus brakes progressively
   const room = Math.min(gap === null ? Infinity : gap - 1, clear);
   const speed = Math.min(S.simulation.autopilotSpeed, approachSpeed(room, S.traffic.braking));
+  // held by the traffic: waiting for a vehicle ahead, or wanting to go and not moving (pushed back)
+  const held = (clear < 3 || speed > 1) && drive.v < S.traffic.stuckSpeed;
+  trafficWait = held ? trafficWait + STEP : 0;
+  trafficWaitMax = Math.max(trafficWaitMax, trafficWait);
   // never the brake at a standstill: it would reverse
   return {
     up: drive.v < speed,
