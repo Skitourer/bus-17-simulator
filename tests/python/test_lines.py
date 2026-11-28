@@ -4,6 +4,7 @@ from lines import (
     bounds_of,
     corridor,
     departures_by_service,
+    network_of,
     overpass_polys,
     routes_xy,
     tiles_in,
@@ -64,3 +65,26 @@ def test_overpass_polys_one_filter_per_part_in_lat_lon() -> None:
     assert len(polys) == 2
     values = [float(v) for v in polys[0].split()]
     assert all(44.98 <= la <= 45.02 for la in values[0::2])
+
+
+def test_network_of_keeps_one_point_in_every_and_the_last() -> None:
+    pts = [v for k in range(5) for v in (k * 2.0, 0.0, 200.0)]
+    line = {
+        'id': '17',
+        'color': '#33A457',
+        'step': 2.0,
+        'calendar': {'S': {'days': '1111100', 'start': '20261124', 'end': '20261218'}},
+        'routes': [
+            {
+                'pts': pts,
+                'stops': [{'name': 'A', 's': 0.0, 't': 0}, {'name': 'B', 's': 8.0, 't': 60}],
+                'services': {'S': ['06:35']},
+            }
+        ],
+    }
+    network = network_of([line], 3)
+    assert network['step'] == 6.0
+    route = network['lines'][0]['routes'][0]
+    assert route['xy'] == [0.0, 0.0, 6.0, 0.0, 8.0, 0.0]
+    assert route['stops'] == [0.0, 0, 8.0, 60]
+    assert network['lines'][0]['color'] == '#33A457'
