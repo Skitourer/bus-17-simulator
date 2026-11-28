@@ -55,5 +55,6 @@ lint = "ruff check"
 typecheck = "pyright"
 test = "pytest"
 serve = "python tools/serve.py"
+build-data = "python tools/build_all.py"
 check = ["_format_check", "lint", "typecheck", "test"]
 _format_check = "ruff format --check"

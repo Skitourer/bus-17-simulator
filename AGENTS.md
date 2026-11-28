@@ -267,7 +267,7 @@ approved. An approval covers the proposed action only.
   `bus17-simulateur-v2.html`: older single-file prototype kept as UI reference.
 - **Commands**: `uv run poe serve` (no-cache static server, `tools/serve.py`), open
   `http://localhost:8017/`; plain `python -m http.server` lets browsers mix cached modules. Rebuild data (network needed, cached in `tools/cache/`,
-  git-ignored): `uv run python tools/build_line.py`, then `build_map.py`,
+  git-ignored): `uv run poe build-data` (`tools/build_all.py`, progress bars, `--from <step>` to resume) runs `build_line.py`, then `build_map.py`,
   `build_terrain.py`, `build_buildings.py`, `build_roads.py` (road graph, ADR 0002), `build_streets.py` (ground and road tiles, ADR 0003, terraces ADR 0011), `build_landmarks.py` (Bastille cable car and walls, Tour Perret); a pure refactor of `tools/` must leave
   `data/` byte-identical (`git status data/`).
 - **Checks**: `npm ci` and `uv sync` once, `uv run pre-commit install`; then

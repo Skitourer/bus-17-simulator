@@ -51,13 +51,14 @@ Les fichiers JSON de `data/grenoble/` sont produits par les scripts de `tools/` 
 réseau nécessaire ; les téléchargements sont mis en cache dans `tools/cache/`) :
 
 ```sh
-uv run python tools/build_line.py
-uv run python tools/build_map.py
-uv run python tools/build_terrain.py
-uv run python tools/build_buildings.py
-uv run python tools/build_roads.py
-uv run python tools/build_streets.py
+uv run poe build-data                  # toutes les étapes, avec une barre de progression
+uv run poe build-data --from streets   # reprendre à une étape
 ```
+
+Les étapes (`build_line`, `build_map`, `build_terrain`, `build_buildings`, `build_roads`,
+`build_streets`, `build_landmarks`) se lancent aussi une à une avec `uv run python tools/<étape>.py`.
+La première génération du réseau complet demande environ une heure de requêtes d'altitude IGN
+(ADR 0014).
 
 ## Documentation
 

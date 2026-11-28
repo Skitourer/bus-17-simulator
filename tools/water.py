@@ -4,6 +4,7 @@ along the ground mesh triangles.
 Pure functions on in-memory data (no network, no files). Coordinates in metres, local frame (x east, y north).
 """
 
+import math
 from collections.abc import Callable, Sequence
 
 import numpy as np
@@ -97,6 +98,19 @@ def water_level(
     shore = shore_heights(area, heights, x0, y0, nx, ny, step)
     level: FloatArray = np.where(np.isfinite(shore), np.minimum(smooth, shore - FREEBOARD), smooth)
     return level
+
+
+def tile_water_level(
+    area: BaseGeometry, heights: Heights, ox: float, oy: float, n: int, step: float
+) -> FloatArray:
+    """Water level at the n x n nodes of one tile, row by row from the south (#131): computed on the tile and
+    a margin as wide as the blur (3 LEVEL_SIGMA) and the bank minimum reach, so that it matches the level of a
+    grid over the whole world without holding that grid in memory."""
+    pad = math.ceil(max(3 * LEVEL_SIGMA, SHORE_RADIUS) / step) + 1
+    size = n + 2 * pad
+    level = water_level(area, heights, ox - pad * step, oy - pad * step, size, size, step)
+    out: FloatArray = level[pad : pad + n, pad : pad + n].ravel()
+    return out
 
 
 def boundary_lines(geom: BaseGeometry) -> list[LineString]:

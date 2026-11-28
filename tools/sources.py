@@ -3,6 +3,7 @@
 import hashlib
 import json
 import os
+import sys
 import time
 import urllib.parse
 import urllib.request
@@ -19,6 +20,7 @@ UA = {'User-Agent': 'bus17-prototype/0.1 (local game prototype)'}
 IGN_URL = 'https://data.geopf.fr/altimetrie/1.0/calcul/alti/rest/elevation.json'
 IGN_RES = 'ign_rge_alti_wld'
 IGN_BATCH = 150  # points per request accepted by the API
+SAVE_EVERY = 40  # batches between two writes of the elevation cache (a crash loses at most that many)
 # IGN Geoplateforme WFS (BD TOPO), Licence Ouverte 2.0
 WFS_URL = 'https://data.geopf.fr/wfs/ows'
 WFS_PAGE = 2000  # features per request, well under the server limit of 5000
@@ -76,6 +78,29 @@ def _query_elevations(chunk: list[str]) -> list[float]:
     raise SystemExit('API altimetrique IGN injoignable')
 
 
+PROGRESS_WIDTH = 30  # characters of a progress bar
+_last_tenth: dict[str, int] = {}
+
+
+def progress_bar(done: int, total: int, width: int = PROGRESS_WIDTH) -> str:
+    """A text progress bar "[######----]  60 %" (ASCII: the logs of Windows consoles are not UTF-8)."""
+    share = min(1.0, done / total) if total > 0 else 1.0
+    filled = round(share * width)
+    return f'[{"#" * filled}{"-" * (width - filled)}] {share * 100:3.0f} %'
+
+
+def progress(label: str, done: int, total: int) -> None:
+    """Progress of a long step (#131): redrawn in place in a terminal, one line per tenth in a log file."""
+    line = f'  {label} {progress_bar(done, total)} ({done}/{total})'
+    if sys.stdout.isatty():
+        print('\r' + line, end='\n' if done >= total else '', flush=True)
+        return
+    tenth = done * 10 // total if total > 0 else 10
+    if _last_tenth.get(label) != tenth:
+        _last_tenth[label] = tenth
+        print(line, flush=True)
+
+
 def elevations(latlons: list[Point]) -> list[float | None]:
     """Elevation (m) of each (lat, lon), None outside IGN coverage; results are cached on disk."""
     os.makedirs(CACHE, exist_ok=True)
@@ -83,12 +108,16 @@ def elevations(latlons: list[Point]) -> list[float | None]:
     cache = _load_elevation_cache(cpath)
     keys = [f'{lat:.5f},{lon:.5f}' for lat, lon in latlons]
     todo = [k for k in dict.fromkeys(keys) if k not in cache]
-    for i in range(0, len(todo), IGN_BATCH):
+    for batch, i in enumerate(range(0, len(todo), IGN_BATCH)):
         chunk = todo[i : i + IGN_BATCH]
         for k, e in zip(chunk, _query_elevations(chunk), strict=True):
             cache[k] = e if e > -1000 else None  # -99999 = hors couverture
-        print(f'  altitudes {min(i + IGN_BATCH, len(todo))}/{len(todo)}')
+        progress('altitudes IGN', min(i + IGN_BATCH, len(todo)), len(todo))
         time.sleep(0.25)
+        # rewriting a cache of millions of points after every batch would cost more than the requests (#131)
+        if batch % SAVE_EVERY == SAVE_EVERY - 1:
+            _save_elevation_cache(cpath, cache)
+    if todo:
         _save_elevation_cache(cpath, cache)
     return [cache[k] for k in keys]
 
@@ -143,7 +172,6 @@ def wfs_features(typename: str, bbox: tuple[float, float, float, float]) -> list
             with open(cpath, 'w', encoding='utf-8') as f:
                 json.dump({'features': page}, f)
         features += page
-        print(f'  BD TOPO : {len(features)} objets')
         if len(page) < WFS_PAGE:
             return features
 

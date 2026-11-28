@@ -43,8 +43,9 @@ from collections import defaultdict
 from typing import Any
 
 import numpy as np
+from buildings import RECORD_HEAD
 from geo import Point
-from lines import corridor, read_lines, routes_xy, tiles_in
+from lines import TILE, corridor, read_lines, routes_xy, tiles_in
 from overpasses import (
     covered_ground,
     dig_underpasses,
@@ -58,7 +59,7 @@ from shapely import LineString, MultiLineString, MultiPoint, MultiPolygon, Polyg
 from shapely import Point as ShapelyPoint
 from shapely.geometry.base import BaseGeometry
 from shapes import FloatArray, clip, coordinates, distances, interpolate, points, polygon_parts
-from sources import CACHE, ROOT, read_json, write_json
+from sources import CACHE, ROOT, progress, read_json, write_json
 from streets import (
     BUILDING_CLEARANCE,
     PASSAGE_CLEARANCE,
@@ -93,11 +94,10 @@ from streets import (
     tunnel_portals,
 )
 from terraces import BELOW_REACH, footprint, split_edges, terrace_record, terrace_runs, terraced_ground
-from water import shore_lines, water_area, water_cut, water_level
+from water import shore_lines, tile_water_level, water_area, water_cut
 
 DATA = os.path.join(ROOT, 'data', 'grenoble')
 OUT = os.path.join(DATA, 'tiles')
-TILE = 500  # m (keeps every tile file under the 1 MB pre-commit limit)
 STEP = 5  # m between ground heights (#92: closer than the hairpins and stacked roads of the hillsides)
 TREE_SEED = 5
 # m/m: the cross slope reported by the build check; French roads have a 2.5 % cross fall, up to 7 % of
@@ -166,7 +166,7 @@ def buildings_and_trees(
     clipped = 0
     for rec in data['b']:
         values = [int(v) for v in rec]
-        head, flat = values[:5], values[5:]  # height, kind, style, roof rise, roof shape
+        head, flat = values[:RECORD_HEAD], values[RECORD_HEAD:]
         ring = [(flat[k] / 10, flat[k + 1] / 10) for k in range(0, len(flat), 2)]
         for part in lintels(ring, passages, head[0] / 10):
             c = Polygon(part).representative_point()
@@ -334,8 +334,6 @@ def main() -> None:
     print(f'{len(kept)} tuiles sur {nx * ny} dans le couloir des lignes')
     print('eau (niveau et rives)...')
     water = water_area(map_data['polys']['water'], (bx0, by0, bx0 + nx * TILE, by0 + ny * TILE))
-    cells = TILE // STEP
-    level = water_level(water, terrain.heights, bx0, by0, nx * cells + 1, ny * cells + 1, STEP)
     os.makedirs(OUT, exist_ok=True)
     for old in glob.glob(os.path.join(OUT, 't_*.json')):
         os.remove(old)
@@ -343,7 +341,8 @@ def main() -> None:
     print('sol des tuiles...')
     shaped: dict[TileKey, tuple[FloatArray, FloatArray]] = {}
     before: list[tuple[float, float, float]] = []
-    for i, j in kept:
+    for k, (i, j) in enumerate(kept):
+        progress('sol des tuiles', k + 1, len(kept))
         xs, ys = tile_grid(bx0 + i * TILE, by0 + j * TILE, n)
         local = clip(surface, near_tile(bx0 + i * TILE, by0 + j * TILE))
         natural = terrain.heights(xs, ys)
@@ -364,7 +363,8 @@ def main() -> None:
         MultiPoint([(x, y) for x, y, slope in before if slope > CROSS_SLOPE_MAX]),
     )
     print(f'  avant les terrasses : {sum(s[2] > CROSS_SLOPE_MAX for s in before)} triangles trop en devers')
-    for i, j in kept:
+    for k, (i, j) in enumerate(kept):
+        progress('tuiles', k + 1, len(kept))
         ox, oy = bx0 + i * TILE, by0 + j * TILE
         xs, ys = tile_grid(ox, oy, n)
         near = near_tile(ox, oy)
@@ -391,7 +391,6 @@ def main() -> None:
             split_pieces(walk, terraces.area, ox, oy, n) if isinstance(walk, Polygon | MultiPolygon) else []
         )
         wet, wet_pieces, dry_pieces = water_cut(water, ox, oy, n, STEP)
-        tile_level = level[j * cells : j * cells + n, i * cells : i * cells + n].ravel()
         tile_bridges = [
             bridge_record(e, p, ox, oy)
             for e, p in bridges
@@ -434,7 +433,11 @@ def main() -> None:
                 ],
                 'trees': [v for x, y in by_tile_trees.get((i, j), []) for v in (dm(x - ox), dm(y - oy))],
                 'water': rings_of(MultiPolygon(wet_pieces), ox, oy) if wet_pieces else [],
-                'water_level': [dm(float(z)) for z in tile_level] if wet else [],
+                'water_level': [
+                    dm(float(z)) for z in tile_water_level(water, terrain.heights, ox, oy, n, STEP)
+                ]
+                if wet
+                else [],
                 'wet': wet,
                 'holes': holes,
                 'dry': rings_of(MultiPolygon(dry_pieces), ox, oy) if dry_pieces else [],

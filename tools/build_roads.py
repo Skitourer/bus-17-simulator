@@ -17,6 +17,7 @@ Output (local frame, coordinates in decimetres, compact arrays to keep the file 
 import os
 from typing import Any
 
+from buildings import RECORD_HEAD
 from geo import douglas_peucker, make_proj
 from lines import LINES_DIR, corridor, overpass_polys, read_lines, routes_xy
 from roads import (
@@ -34,7 +35,7 @@ from roads import (
     split_ways,
 )
 from shapely import LineString
-from sources import CACHE, ROOT, overpass, read_json, write_json
+from sources import CACHE, ROOT, overpass, progress, read_json, write_json
 
 LINE_INDEX = os.path.join(LINES_DIR, 'index.json')
 OUT = os.path.join(ROOT, 'data', 'grenoble', 'roads.json')
@@ -129,9 +130,10 @@ def main() -> None:
     polys = overpass_polys(area, to_ll, POLY_SIMPLIFY)
     print(f'Requete Overpass (graphe routier, {len(polys)} zone(s))...')
     by_id: dict[int, dict[str, Any]] = {}
-    for poly in polys:
+    for k, poly in enumerate(polys):
         query = f'[out:json][timeout:300];way["highway"~"{HIGHWAY_REGEX}"](poly:"{poly}");out geom qt;'
         by_id.update((el['id'], el) for el in overpass(query)['elements'])
+        progress('Overpass routes', k + 1, len(polys))
     elements = list(by_id.values())
     ways = [
         Way(el['id'], el['nodes'], [to_xy(g['lat'], g['lon']) for g in el['geometry']], el.get('tags', {}))
@@ -148,16 +150,17 @@ def main() -> None:
 
     print('Requete Overpass (feux)...')
     signal_nodes: dict[int, dict[str, Any]] = {}
-    for poly in polys:
+    for k, poly in enumerate(polys):
         query = f'[out:json][timeout:120];node["highway"="traffic_signals"](poly:"{poly}");out qt;'
         signal_nodes.update((el['id'], el) for el in overpass(query)['elements'] if el['type'] == 'node')
+        progress('Overpass feux', k + 1, len(polys))
     signals = [to_xy(el['lat'], el['lon']) for el in signal_nodes.values()]
     groups = signal_groups(signals, nodes, edges, SIGNAL_REACH, SIGNAL_GATHER)
     print(f'{len(signals)} feux, {len(groups)} carrefours a feux')
 
     on_route = route_edges(edges, routes, ROUTE_TOLERANCE, ROUTE_SHARE)
     print(f'{len(on_route)} troncons parcourus par les lignes')
-    footprints = [footprint_summary(b[4:]) for b in read_json(BUILDINGS)['b']]
+    footprints = [footprint_summary(b[RECORD_HEAD:]) for b in read_json(BUILDINGS)['b']]
     built_up = built_up_edges(
         edges, footprints, BUILT_UP_RADIUS, BUILT_UP_COUNT, BUILT_UP_COVER, BUILT_UP_STEP, BUILT_UP_SHARE
     )

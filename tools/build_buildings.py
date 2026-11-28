@@ -22,7 +22,7 @@ from lines import LINES_DIR, corridor, overpass_polys, read_lines, routes_xy
 from shapely import LineString, box
 from shapely import Point as ShapelyPoint
 from shapely.geometry.base import BaseGeometry
-from sources import CACHE, overpass, read_json, wfs_features, write_json
+from sources import CACHE, overpass, progress, read_json, wfs_features, write_json
 
 LINE_INDEX = os.path.join(LINES_DIR, 'index.json')
 OUT = os.path.join(CACHE, 'buildings.json')
@@ -36,10 +36,12 @@ BDTOPO_LAYER = 'BDTOPO_V3:batiment'
 def osm_elements(selector: str, area: BaseGeometry, to_ll: Projection, output: str) -> list[dict[str, Any]]:
     """OSM elements matching `selector` in an area, one Overpass query per part, without duplicates."""
     seen: dict[int, dict[str, Any]] = {}
-    for poly in overpass_polys(area, to_ll, POLY_SIMPLIFY):
+    polys = overpass_polys(area, to_ll, POLY_SIMPLIFY)
+    for k, poly in enumerate(polys):
         res = overpass(f'[out:json][timeout:300];{selector}(poly:"{poly}");out {output} qt;')
         for el in res['elements']:
             seen[el['id']] = el
+        progress(f'Overpass {selector}', k + 1, len(polys))
     return list(seen.values())
 
 
@@ -59,15 +61,18 @@ def bdtopo_features(area: BaseGeometry, to_ll: Projection) -> list[dict[str, Any
     """BD TOPO buildings of the boxes touching the area, each building once."""
     x0, y0, x1, y1 = area.bounds
     seen: dict[str, dict[str, Any]] = {}
-    for j in range(int((y1 - y0) // WFS_BOX) + 1):
-        for i in range(int((x1 - x0) // WFS_BOX) + 1):
-            bx, by = x0 + i * WFS_BOX, y0 + j * WFS_BOX
-            if not area.intersects(box(bx, by, bx + WFS_BOX, by + WFS_BOX)):
-                continue
-            south, west = to_ll(bx, by)
-            north, east = to_ll(bx + WFS_BOX, by + WFS_BOX)
-            for feature in wfs_features(BDTOPO_LAYER, (south, west, north, east)):
-                seen[str(feature['properties']['cleabs'])] = feature
+    corners = [
+        (x0 + i * WFS_BOX, y0 + j * WFS_BOX)
+        for j in range(int((y1 - y0) // WFS_BOX) + 1)
+        for i in range(int((x1 - x0) // WFS_BOX) + 1)
+    ]
+    boxes = [(bx, by) for bx, by in corners if area.intersects(box(bx, by, bx + WFS_BOX, by + WFS_BOX))]
+    for k, (bx, by) in enumerate(boxes):
+        south, west = to_ll(bx, by)
+        north, east = to_ll(bx + WFS_BOX, by + WFS_BOX)
+        for feature in wfs_features(BDTOPO_LAYER, (south, west, north, east)):
+            seen[str(feature['properties']['cleabs'])] = feature
+        progress('WFS BD TOPO', k + 1, len(boxes))
     return list(seen.values())
 
 
