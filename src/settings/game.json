@@ -1824,6 +1824,13 @@
       "max": 30,
       "doc": "A stop looks for the kerb up to this distance to the right of the route centre line (the widest street of the route puts it 7.3 m away, at Verdun – Préfecture); farther, it keeps its GTFS position."
     },
+    "stopMerge": {
+      "value": 25,
+      "unit": "m",
+      "min": 5,
+      "max": 80,
+      "doc": "A stop of another route of the line (the other direction) gets its own shelter unless one already stands this close (partial services share the stops of their direction)."
+    },
     "shelterSetback": {
       "value": 1,
       "unit": "m",
@@ -3077,6 +3084,36 @@
       "min": 30,
       "max": 1000,
       "doc": "People are drawn up to this distance from the camera."
+    }
+  },
+  "minimap": {
+    "lineHueStart": {
+      "value": 140,
+      "unit": "degree",
+      "min": 0,
+      "max": 360,
+      "doc": "Hue of the first line on the minimap; the next lines turn by the golden angle (137.5°) so that each line has its own colour (the GTFS colours are shared by a family of lines)."
+    },
+    "lineSaturation": {
+      "value": 75,
+      "unit": "%",
+      "min": 0,
+      "max": 100,
+      "doc": "Saturation of the line colours on the minimap."
+    },
+    "lineLightness": {
+      "value": 45,
+      "unit": "%",
+      "min": 20,
+      "max": 80,
+      "doc": "Lightness of the line colours on the minimap (readable on the light map background)."
+    },
+    "lineLightnessSpread": {
+      "value": 12,
+      "unit": "%",
+      "min": 0,
+      "max": 30,
+      "doc": "Every other line is this much darker on the minimap, to tell close hues apart."
     }
   },
   "tiles": {

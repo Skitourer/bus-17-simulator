@@ -40,7 +40,7 @@ import { Doors, StopService, drawService, serviceSeed } from './stops.js';
 import { Crowd } from './crowd.js';
 import { StressTest } from './stress.js';
 import { Fleet, projectOnTrack } from './fleet.js';
-import { daySchedule, networkBuses } from './lineNetwork.js';
+import { daySchedule, linesThrough, mapColours, networkBuses } from './lineNetwork.js';
 import { OtherBuses } from './otherBuses.js';
 import { RoadNetwork, Traffic } from './traffic.js';
 import { TrafficLook } from './traffic3d.js';
@@ -266,6 +266,8 @@ let otherBuses;
 /** the routes of every line on the service day, for the minimap (#130) @type {import('./lineNetwork.js').RouteSchedule[]} */
 let networkRoutes = [];
 let networkStep = 0;
+/** line of each direction of the fleet: the chosen line, then the lines through its tiles @type {string[]} */
+let fleetLines = [];
 /** cars and bikes around the bus (#49) @type {Traffic} */
 let traffic;
 /** @type {TrafficLook} */
@@ -423,6 +425,26 @@ async function load() {
       lines: i === P.route ? ownStopLines : stopLinesOf(g),
     };
   });
+  fleetLines = fleetDirections.map(() => line.id);
+  if (networkData)
+    await addOtherLines(
+      networkData,
+      tileIndex,
+      tiles,
+      serviceDay,
+      fleetDirections,
+      (route, step) => {
+        const routeTrack = new Track(route, step);
+        const g = guidanceLine(
+          routeTrack,
+          roadLanes,
+          laneOffsets(routeTrack, kerbs, laneParams),
+          guideParams,
+        );
+        return { track: new Track(drivingRoute(route, g), step), lines: stopLinesOf(g) };
+      },
+      get,
+    );
   fleet = new Fleet(
     fleetDirections,
     S.fleet,
@@ -435,6 +457,22 @@ async function load() {
     shelterSetback: S.world.shelterSetback,
     laneOffset: S.gameplay.laneOffset,
     bodyWidth: B.bodyWidth,
+  });
+  // the stops of the other routes of the line too (the other direction): one more place per stop not
+  // already drawn
+  const stopParams = {
+    kerbSearch: S.world.kerbSearch,
+    shelterSetback: S.world.shelterSetback,
+    laneOffset: S.gameplay.laneOffset,
+    bodyWidth: B.bodyWidth,
+  };
+  /** @type {import('./kerb.js').StopPlace[]} */
+  const otherPlaces = [];
+  routes.forEach((route, i) => {
+    if (i === P.route) return;
+    for (const p of placeStops(route, kerbs, stopParams))
+      if (![...places, ...otherPlaces].some((q) => Math.hypot(q.x - p.x, q.y - p.y) < S.world.stopMerge))
+        otherPlaces.push(p);
   });
   track.stops.forEach((s, i) => {
     // the front door must reach the kerb, not the GTFS point that may lie on the carriageway
@@ -452,7 +490,7 @@ async function load() {
   world = buildWorld(
     scene,
     hf,
-    { map, tiles, stops: places, guide, line, streets, landmarks },
+    { map, tiles, stops: [...places, ...otherPlaces], guide, line, streets, landmarks },
     track,
     S,
     season,
@@ -487,6 +525,9 @@ async function load() {
   if (bus.trailer) scene.add(bus.trailer.group);
   minimap = new Minimap($('map'), map, line);
   minimap.setTrack(track);
+  minimap.setOtherStops(otherPlaces);
+  const lineIds = networkData ? networkData.lines.map((/** @type {{id: string}} */ l) => l.id) : [line.id];
+  minimap.setColours(mapColours(lineIds, S.minimap));
   if (P.map) minimap.zoomBy(P.map);
   buildSynoptic();
   $('svc').textContent = t('game.serviceInfo', {
@@ -915,8 +956,36 @@ function render(dt) {
   }
 
   hud();
-  const network = networkBuses(networkRoutes, networkStep, clock.t, S.fleet, new Set([line.id]));
-  minimap.draw({ x: c.x, y: c.y, h: drive.h }, service.next, fleet.buses, network);
+  // the simulated buses (the chosen line and the lines through its tiles), then the timetable of the others
+  const simulated = fleet.buses.map((b) => ({ x: b.x, y: b.y, line: fleetLines[b.dir] }));
+  const scheduled = networkBuses(networkRoutes, networkStep, clock.t, S.fleet, new Set(fleetLines));
+  minimap.draw({ x: c.x, y: c.y, h: drive.h }, service.next, [...simulated, ...scheduled]);
+}
+
+/**
+ * The buses of the other lines through the loaded tiles drive in the world too (#130): their line files are
+ * loaded and each route with departures that day becomes a direction of the fleet.
+ * @param {import('./lineNetwork.js').NetworkData} network @param {{x0: number, y0: number, size: number}} tileIndex
+ * @param {Map<string, unknown>} tiles loaded tiles @param {string} serviceDay "YYYYMMDD"
+ * @param {import('./fleet.js').FleetDirection[]} directions completed in place
+ * @param {(route: import('../common/types.js').Route, step: number) => {track: Track, lines: import('./signals.js').RouteStopLine[]}} drivable
+ * @param {(file: string) => Promise<import('../common/types.js').LineData>} get
+ */
+async function addOtherLines(network, tileIndex, tiles, serviceDay, directions, drivable, get) {
+  /** @param {number} x @param {number} y */
+  const loaded = (x, y) =>
+    tiles.has(
+      Math.floor((x - tileIndex.x0) / tileIndex.size) + '_' + Math.floor((y - tileIndex.y0) / tileIndex.size),
+    );
+  const ids = linesThrough(network, loaded).filter((id) => id !== line.id);
+  const others = await Promise.all(ids.map((id) => get(`lines/${encodeURIComponent(id)}.json`)));
+  for (const other of others)
+    other.routes.forEach((route, i) => {
+      const departures = departuresOf(other, [i], serviceDay).map((d) => toSec(d.time));
+      if (!departures.length) return;
+      directions.push({ ...drivable(route, other.step), departures, lane: () => 0 });
+      fleetLines.push(other.id);
+    });
 }
 
 /**
