@@ -40,6 +40,7 @@ import { Doors, StopService, drawService, serviceSeed } from './stops.js';
 import { Crowd } from './crowd.js';
 import { StressTest } from './stress.js';
 import { Fleet, projectOnTrack } from './fleet.js';
+import { daySchedule, networkBuses } from './lineNetwork.js';
 import { OtherBuses } from './otherBuses.js';
 import { RoadNetwork, Traffic } from './traffic.js';
 import { TrafficLook } from './traffic3d.js';
@@ -262,6 +263,9 @@ let stress = null;
 let fleet;
 /** @type {OtherBuses} */
 let otherBuses;
+/** the routes of every line on the service day, for the minimap (#130) @type {import('./lineNetwork.js').RouteSchedule[]} */
+let networkRoutes = [];
+let networkStep = 0;
 /** cars and bikes around the bus (#49) @type {Traffic} */
 let traffic;
 /** @type {TrafficLook} */
@@ -340,9 +344,11 @@ async function load() {
       if (!r.ok) throw new Error(f);
       return r.json();
     });
-  const [index, l, map, terrain, tileIndex, roads, landmarks] = await Promise.all([
+  const [index, l, networkData, map, terrain, tileIndex, roads, landmarks] = await Promise.all([
     get('lines/index.json'),
     get(`lines/${encodeURIComponent(P.line)}.json`),
+    // every line on the minimap (#130); the game runs without it
+    get('lines/network.json').catch(() => null),
     get('map.json').catch(() => null),
     get('terrain.json'),
     get('tiles/index.json'),
@@ -393,6 +399,10 @@ async function load() {
     console.info('guidance off the roads (m along the route):', offRoadStretches(guide.onRoad, track.step));
   // the service date of the timetable; without one, the first day type of the line
   const serviceDay = P.day || dayTypeDates(line.calendar, new Date())[0]?.date || '';
+  if (networkData) {
+    networkRoutes = daySchedule(networkData, serviceDay, S.fleet);
+    networkStep = networkData.step;
+  }
   // the other services of the day on every route of the line (the player's route shares its track and lane)
   const fleetRoutes = routes
     .map((route, i) => ({
@@ -905,7 +915,8 @@ function render(dt) {
   }
 
   hud();
-  minimap.draw({ x: c.x, y: c.y, h: drive.h }, service.next, fleet.buses);
+  const network = networkBuses(networkRoutes, networkStep, clock.t, S.fleet, new Set([line.id]));
+  minimap.draw({ x: c.x, y: c.y, h: drive.h }, service.next, fleet.buses, network);
 }
 
 /**

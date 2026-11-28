@@ -14,6 +14,9 @@ Output (local metres, x = east, y = north, origin = lines.ORIGIN shared by every
       "calendar": { service_id: {"days": "1111100", "start": "20261117", "end": "20261218"} } }
   lines/index.json { "origin": [lat, lon], "bbox": [x0, y0, x1, y1] (all routes),
       "lines": [ { "id", "name", "color", "text_color", "termini": [first stop, last stop] }, ... ] }
+  lines/network.json { "step": 20, "lines": [ { "id", "color", "calendar",
+      "routes": [ { "xy": [x0, y0, ...] (one point every `step` m), "stops": [s0, t0, s1, t1, ...],
+                    "services": {...} }, ... ] }, ... ] }   (every line on the minimap, #130)
 """
 
 import csv
@@ -38,11 +41,21 @@ from geo import (
     project_on,
     resample,
 )
-from lines import LINES, LINES_DIR, ORIGIN, Pattern, bounds_of, departures_by_service, trip_patterns
+from lines import (
+    LINES,
+    LINES_DIR,
+    ORIGIN,
+    Pattern,
+    bounds_of,
+    departures_by_service,
+    network_of,
+    trip_patterns,
+)
 from sources import CACHE, elevations, fetch, write_json
 
 GTFS_URL = 'https://data.mobilites-m.fr/api/gtfs/SEM'
 STEP = 2.0  # pas de reechantillonnage (m)
+NETWORK_EVERY = 10  # one point in 10 of each route in network.json: 20 m, enough for the minimap
 SMOOTH_M = 12.0  # demi-fenetre du lissage gaussien du trace (arrondit les angles droits)
 ELEV_EVERY = 10.0  # un echantillon d'altitude tous les 10 m
 ELEV_SMOOTH_M = 40.0  # lissage de l'altitude
@@ -221,6 +234,7 @@ def main() -> None:
     shapes = read_shapes(table, {t['shape_id'] for t in trips}, to_xy)
 
     index: list[dict[str, Any]] = []
+    built: list[dict[str, Any]] = []
     every_route: list[list[Point]] = []
     for name in LINES:
         gtfs_route = routes_by_name[name]
@@ -239,6 +253,7 @@ def main() -> None:
             'calendar': line_calendar(table, routes),
         }
         write_json(os.path.join(LINES_DIR, f'{name}.json'), line)
+        built.append(line)
         main_route = routes[0]
         index.append(
             {
@@ -253,6 +268,7 @@ def main() -> None:
         os.path.join(LINES_DIR, 'index.json'),
         {'origin': list(ORIGIN), 'bbox': [round(v, 1) for v in bounds_of(every_route)], 'lines': index},
     )
+    write_json(os.path.join(LINES_DIR, 'network.json'), network_of(built, NETWORK_EVERY))
 
 
 if __name__ == '__main__':

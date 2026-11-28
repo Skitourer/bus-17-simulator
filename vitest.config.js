@@ -34,6 +34,7 @@ export default defineConfig({
         'src/hd2d/guidance.js',
         'src/hd2d/budget.js',
         'src/hd2d/fleet.js',
+        'src/hd2d/lineNetwork.js',
         'src/hd2d/tiling.js',
         'src/hd2d/daylight.js',
         'src/hd2d/lamps.js',

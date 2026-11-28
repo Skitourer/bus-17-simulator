@@ -166,8 +166,9 @@ export class Minimap {
   /**
    * @param {{x:number, y:number, h:number}} bp position et cap du bus @param {number} nextStop
    * @param {readonly {x: number, y: number}[]} [others] the other buses of the line (#48)
+   * @param {readonly {x: number, y: number, color: string}[]} [network] the buses of the other lines (#130)
    */
-  draw(bp, nextStop, others = []) {
+  draw(bp, nextStop, others = [], network = []) {
     if (this.root.classList.contains('hidden') || !this.track) return;
     const cv = this.cv,
       g = this.g,
@@ -270,16 +271,24 @@ export class Minimap {
         g.fillText(st.name, sx + 8, sy + 3);
       }
     });
-    // the other buses of the line: small squares in the line colour (the stops are round)
-    g.fillStyle = this.color;
+    // the buses of the other lines, smaller, in their line colour; then the other buses of the line: small
+    // squares in the line colour (the stops are round)
     g.strokeStyle = '#1a1a1a';
-    g.lineWidth = 2;
-    for (const o of others) {
-      const [ox, oy] = toS(o.x, o.y);
-      if (ox < -10 || oy < -10 || ox > w + 10 || oy > h + 10) continue;
-      g.fillRect(ox - 5, oy - 5, 10, 10);
-      g.strokeRect(ox - 5, oy - 5, 10, 10);
+    /** @param {number} x @param {number} y @param {number} half */
+    const square = (x, y, half) => {
+      const [ox, oy] = toS(x, y);
+      if (ox < -10 || oy < -10 || ox > w + 10 || oy > h + 10) return;
+      g.fillRect(ox - half, oy - half, 2 * half, 2 * half);
+      g.strokeRect(ox - half, oy - half, 2 * half, 2 * half);
+    };
+    g.lineWidth = 1;
+    for (const o of network) {
+      g.fillStyle = o.color;
+      square(o.x, o.y, 3.5);
     }
+    g.fillStyle = this.color;
+    g.lineWidth = 2;
+    for (const o of others) square(o.x, o.y, 5);
     // bus : fleche orientee
     const [bx, by] = toS(bp.x, bp.y);
     g.save();

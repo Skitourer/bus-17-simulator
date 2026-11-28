@@ -105,6 +105,29 @@ def departures_by_service(trips: list[Row], first_departure: dict[str, str]) -> 
     return {sid: sorted(times) for sid, times in out.items()}
 
 
+def network_of(lines: list[dict[str, Any]], every: int) -> dict[str, Any]:
+    """Compact timetable of every line for the minimap (#130): colour, calendar and, by route, one point of
+    the route in `every` ([x, y, ...], every `every` * step metres), its stops [s, t, ...] (m along the route,
+    s from the departure) and its departures by service."""
+    out: list[dict[str, Any]] = []
+    for line in lines:
+        routes: list[dict[str, Any]] = []
+        for route in line['routes']:
+            pts = route['pts']
+            count = len(pts) // 3
+            keep = [*range(0, count - 1, every), count - 1]
+            routes.append(
+                {
+                    'xy': [v for k in keep for v in (pts[3 * k], pts[3 * k + 1])],
+                    'stops': [v for stop in route['stops'] for v in (stop['s'], stop['t'])],
+                    'services': route['services'],
+                }
+            )
+        out.append({'id': line['id'], 'color': line['color'], 'calendar': line['calendar'], 'routes': routes})
+    step = lines[0]['step'] * every if lines else 0
+    return {'step': step, 'lines': out}
+
+
 def read_lines() -> list[dict[str, Any]]:
     """Every line file written by build_line.py, in menu order."""
     return [read_json(os.path.join(LINES_DIR, f'{name}.json')) for name in LINES]
