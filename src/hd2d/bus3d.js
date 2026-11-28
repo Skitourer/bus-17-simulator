@@ -440,8 +440,33 @@ function makeRearBody(bus, t, rearMat, joint, wheelGeometry, wheelMaterial) {
 }
 
 /**
+ * The four wheels of a standard bus as one geometry, origin at the middle of the bus on the road, +X forward:
+ * the same wheels as the player's bus, for the other buses of the line.
+ * @param {BusSettings} bus
+ */
+export function wheelsGeometry(bus) {
+  const rearAxle = bus.rearOverhang - bus.bodyLength / 2;
+  /** @type {number[]} */
+  const positions = [];
+  /** @type {number[]} */
+  const normals = [];
+  for (const x of [rearAxle, rearAxle + bus.wheelbase])
+    for (const z of [-1.05, 1.05]) {
+      const wheel = new THREE.CylinderGeometry(0.5, 0.5, 0.35, 10).rotateX(Math.PI / 2).translate(x, 0.5, z);
+      const flat = wheel.toNonIndexed();
+      positions.push(...flat.attributes.position.array);
+      normals.push(...flat.attributes.normal.array);
+    }
+  const geometry = new THREE.BufferGeometry();
+  geometry.setAttribute('position', new THREE.Float32BufferAttribute(positions, 3));
+  geometry.setAttribute('normal', new THREE.Float32BufferAttribute(normals, 3));
+  return geometry;
+}
+
+/**
  * Look of the other buses of the line (#48), drawn instanced: the body box with the same textures, origin
- * at the middle of the bus on the road, +X forward. No wheels nor interior (seen from outside only).
+ * at the middle of the bus on the road, +X forward. No interior (seen from outside only); the wheels are
+ * wheelsGeometry.
  * @param {BusSettings} bus @param {boolean} open doors open (bus dwelling at a stop)
  */
 export function busLook(bus, open) {
