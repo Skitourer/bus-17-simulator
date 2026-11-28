@@ -26,6 +26,12 @@ CONCRETE_ROOF = '4'  # MAJIC roof material code of concrete (terrace roofs)
 PUBLIC_NATURES = ('Eglise', 'Chapelle', 'Château', 'Tour, donjon', 'Fort, blockhaus, casemate')
 BUSINESS_USAGES = ('Commercial et services', 'Industriel', 'Agricole')
 PITCHED_SHAPES = ('gabled', 'hipped', 'pyramidal', 'half-hipped', 'gambrel', 'mansard', 'skillion')
+# roof shapes drawn by the game (#16): OSM roof:shape values that end in gables, the others are hipped
+FLAT_ROOF, HIPPED_ROOF, GABLED_ROOF = range(3)
+GABLED_SHAPES = ('gabled', 'gambrel', 'skillion', 'saltbox')
+# share of gabled roofs by facade family when OSM does not say: gables on most houses, sheds and farms,
+# fewer in the old town, hips on the large blocks and public buildings (owner's wish for varied roofs)
+GABLED_SHARE = (0.35, 0.2, 0.3, 0.6, 0.7, 0.1)
 
 # Facade families drawn by the game (index stored in the data)
 CITY, SLAB, MODERN, HOUSE, INDUSTRIAL, PUBLIC = range(6)
@@ -154,6 +160,17 @@ def roof_rise(fp: Footprint, tags: dict[str, str]) -> float:
     return min(rise, ROOF_PITCH * short_side(fp.ring) / 2)
 
 
+def roof_shape(fp: Footprint, tags: dict[str, str], rise: float, style: int) -> int:
+    """Roof shape drawn by the game: flat without rise, else OSM roof:shape, else a stable draw by family."""
+    if rise <= 0:
+        return FLAT_ROOF
+    shape = tags.get('roof:shape', '')
+    if shape in PITCHED_SHAPES:
+        return GABLED_ROOF if shape in GABLED_SHAPES else HIPPED_ROOF
+    draw = (seed_of(fp.ident) >> 8) % 1000 / 1000
+    return GABLED_ROOF if draw < GABLED_SHARE[style] else HIPPED_ROOF
+
+
 def short_side(ring: Sequence[Point]) -> float:
     """Short side of the smallest rectangle around a footprint (m)."""
     rectangle = Polygon(ring).minimum_rotated_rectangle
@@ -177,13 +194,16 @@ def style_of(kind: int, height: float, area: float) -> int:
 
 
 def building_record(fp: Footprint, tags: dict[str, str]) -> list[int]:
-    """[height_dm, kind, style, roof_rise_dm, x, y, ...] in decimetres (see build_buildings.py)."""
+    """[height_dm, kind, style, roof_rise_dm, roof_shape, x, y, ...] in dm (see build_buildings.py)."""
     kind = kind_of(fp, tags)
     height = wall_height(fp, tags, kind)
+    style = style_of(kind, height, fp.area)
+    rise = roof_rise(fp, tags)
     return [
         round(height * 10),
         kind,
-        style_of(kind, height, fp.area),
-        round(roof_rise(fp, tags) * 10),
+        style,
+        round(rise * 10),
+        roof_shape(fp, tags, rise, style),
         *(round(v * 10) for xy in fp.ring for v in xy),
     ]

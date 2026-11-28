@@ -77,12 +77,40 @@ export function ringArea(ring) {
  * @returns {number[][][] | null}
  */
 export function hippedRoof(ring, rise, params) {
+  return pitchedRoof(ring, rise, params, false);
+}
+
+/**
+ * Faces of a gabled roof over a footprint (#16): two slopes meeting on a ridge along the whole long axis, and
+ * a vertical gable at each end (the faces with no horizontal extent, drawn as walls); null like hippedRoof.
+ * @param {number[][]} ring counter-clockwise footprint @param {number} rise m
+ * @param {{roofPitch: number, roofCompactness: number}} params
+ * @returns {number[][][] | null}
+ */
+export function gabledRoof(ring, rise, params) {
+  return pitchedRoof(ring, rise, params, true);
+}
+
+/**
+ * Whether a roof face is vertical (a gable end): no area seen from above.
+ * @param {number[][]} face [x, y, z] points
+ */
+export function isGable(face) {
+  return Math.abs(ringArea(face)) < 1e-6;
+}
+
+/**
+ * @param {number[][]} ring @param {number} rise @param {{roofPitch: number, roofCompactness: number}} params
+ * @param {boolean} gabled ridge to the ends of the long axis (gables) or stopped short of them (hips)
+ * @returns {number[][][] | null}
+ */
+function pitchedRoof(ring, rise, params, gabled) {
   const box = orientedBox(ring);
   if (box.width <= 0 || Math.abs(ringArea(ring)) < params.roofCompactness * box.length * box.width)
     return null;
   const z = Math.min(rise, (params.roofPitch * box.width) / 2);
   if (z <= 0) return null;
-  const half = (box.length - box.width) / 2;
+  const half = gabled ? box.length / 2 : (box.length - box.width) / 2;
   /** @param {number[]} p @returns {number[]} point of the ridge above a footprint point */
   const ridge = ([x, y]) => {
     const a = Math.max(-half, Math.min(half, (x - box.cx) * box.ux + (y - box.cy) * box.uy));

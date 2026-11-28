@@ -8,7 +8,7 @@
  * Conversion de repere : local (x est, y nord, z altitude) -> Three (X = x, Y = z, Z = -y).
  */
 import * as THREE from 'three';
-import { hippedRoof } from './roofs.js';
+import { gabledRoof, hippedRoof, isGable } from './roofs.js';
 import { buildingLevels, plinthColour, wallColour } from './facades.js';
 import { tree, shelter, stopPole } from './sprites.js';
 import { quayWalls, waterSurface } from './water.js';
@@ -904,9 +904,22 @@ const FACADES = [
 const PLAIN_U = 0.02,
   PLAIN_V = 0.5;
 
-/** Tile roofs of the pitched roofs, slate on public buildings. */
-const TILES = ['#a0543c', '#8f4a35', '#9c5a44', '#a86a4c'],
-  SLATE = '#5f656d';
+/** Tile roofs of the pitched roofs (red, brown and orange clay), slate and zinc on public buildings and on
+ * some old-town blocks. */
+const TILES = [
+    '#a0543c',
+    '#8f4a35',
+    '#9c5a44',
+    '#a86a4c',
+    '#b5643f',
+    '#8a5a48',
+    '#9e4b3a',
+    '#7d4a3a',
+    '#b87a55',
+  ],
+  SLATES = ['#5f656d', '#6b7078', '#56606a', '#7a7f86'];
+/** roof shape codes of the data (tools/buildings.py) */
+const GABLED_ROOF = 2;
 
 /** @type {Record<number, string>} flat roof colour by building kind (see geo.building_kind) */
 const ROOFS = { 0: '#8a8d93', 1: '#a0543c', 2: '#7c8086', 3: '#6e8a95' };
@@ -1033,10 +1046,10 @@ function buildings(hf, data, seed, wallMaterial, street, lifts) {
   const col = new THREE.Color(),
     plinth = new THREE.Color();
   data.b.forEach((b, index) => {
-    const [height, kind, style, riseDm] = b;
+    const [height, kind, style, riseDm, roofShape] = b;
     const h = height / 10;
     const ring = [];
-    for (let i = 4; i < b.length; i += 2) ring.push([b[i] / 10, b[i + 1] / 10]);
+    for (let i = 5; i < b.length; i += 2) ring.push([b[i] / 10, b[i + 1] / 10]);
     const family = FACADES[style] ?? FACADES[0];
     // window rhythm of the building: bays of 3 to 4 m
     const bay = 3 + Math.floor(r() * 3) * 0.5;
@@ -1079,26 +1092,44 @@ function buildings(hf, data, seed, wallMaterial, street, lifts) {
       for (let k = 0; k < 6; k++) WF.push(style);
       u += L;
     }
-    const shade = (r() - 0.5) * 0.08;
-    const faces = riseDm > 0 ? hippedRoof(ring, riseDm / 10, street) : null;
+    const spread = {
+      hue: street.facadeHueSpread,
+      saturation: street.facadeSaturationSpread,
+      lightness: street.facadeLightnessSpread,
+    };
+    const pitched = roofShape === GABLED_ROOF ? gabledRoof : hippedRoof;
+    const faces = riseDm > 0 ? pitched(ring, riseDm / 10, street) : null;
     if (faces) {
-      const rc = new THREE.Color(kind === 3 ? SLATE : TILES[Math.floor(r() * TILES.length)]).offsetHSL(
-        0,
-        0,
-        shade,
+      const slate = kind === 3 || (style === 0 && r() < street.slateRoofShare);
+      const rc = new THREE.Color().setRGB(
+        ...wallColour(slate ? SLATES : TILES, r, spread),
+        THREE.SRGBColorSpace,
       );
-      for (const face of faces)
+      for (const face of faces) {
+        // gable ends are walls: the wall colour, a plain texel of the facade
+        const gable = isGable(face);
         for (let k = 1; k + 1 < face.length; k++)
           for (const [x, y, z] of [face[0], face[k], face[k + 1]]) {
+            if (gable) {
+              WP.push(x, top + z, -y);
+              WU.push(PLAIN_U, PLAIN_V);
+              WC.push(col.r, col.g, col.b);
+              WF.push(style);
+              continue;
+            }
             RP.push(x, top + z, -y);
             RC.push(rc.r, rc.g, rc.b);
           }
+      }
       return;
     }
     // toit plat triangule
     const contour = ring.map(([x, y]) => new THREE.Vector2(x, y));
     const tris = THREE.ShapeUtils.triangulateShape(contour, []);
-    const rc = new THREE.Color(ROOFS[kind] || ROOFS[0]).offsetHSL(0, 0, shade);
+    const rc = new THREE.Color().setRGB(
+      ...wallColour([ROOFS[kind] || ROOFS[0]], r, { ...spread, hue: 0 }),
+      THREE.SRGBColorSpace,
+    );
     for (const t of tris) {
       for (const k of [t[0], t[2], t[1]]) {
         // normale vers le haut apres conversion Z = -y
@@ -1143,7 +1174,7 @@ function buildings(hf, data, seed, wallMaterial, street, lifts) {
 function footprintsOf(data) {
   return data.b.map((b) => {
     const ring = [];
-    for (let i = 4; i < b.length; i += 2) ring.push([b[i] / 10, b[i + 1] / 10]);
+    for (let i = 5; i < b.length; i += 2) ring.push([b[i] / 10, b[i + 1] / 10]);
     const xs = ring.map((p) => p[0]),
       ys = ring.map((p) => p[1]);
     return { ring, x0: Math.min(...xs), y0: Math.min(...ys), x1: Math.max(...xs), y1: Math.max(...ys) };
@@ -1484,10 +1515,10 @@ function tileObjects(ground, tiles) {
     const [ti, tj] = key.split('_').map(Number);
     const ox = (ix.x0 + ti * ix.size) * 10,
       oy = (ix.y0 + tj * ix.size) * 10;
-    for (const [h, kind, style, rise, ...ring] of tile.buildings)
-      out.b.push([h, kind, style, rise, ...ring.map((v, k) => v + (k % 2 ? oy : ox))]);
-    for (const [h, kind, style, rise, base, ...ring] of tile.lintels ?? []) {
-      over.b.push([h, kind, style, rise, ...ring.map((v, k) => v + (k % 2 ? oy : ox))]);
+    for (const [h, kind, style, rise, roof, ...ring] of tile.buildings)
+      out.b.push([h, kind, style, rise, roof, ...ring.map((v, k) => v + (k % 2 ? oy : ox))]);
+    for (const [h, kind, style, rise, roof, base, ...ring] of tile.lintels ?? []) {
+      over.b.push([h, kind, style, rise, roof, ...ring.map((v, k) => v + (k % 2 ? oy : ox))]);
       lifts.push(base / 10);
     }
     for (let k = 0; k + 1 < tile.trees.length; k += 2)

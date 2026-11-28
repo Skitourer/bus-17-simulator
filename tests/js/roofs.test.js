@@ -1,6 +1,6 @@
 // @ts-check
 import { describe, expect, it } from 'vitest';
-import { hippedRoof, orientedBox, ringArea } from '../../src/hd2d/roofs.js';
+import { gabledRoof, hippedRoof, isGable, orientedBox, ringArea } from '../../src/hd2d/roofs.js';
 
 const shape = { roofPitch: 0.6, roofCompactness: 0.75 };
 /** 20 m x 10 m rectangle, counter-clockwise, turned by `angle`. @param {number} [angle] */
@@ -93,5 +93,30 @@ describe('hippedRoof', () => {
         shape,
       ),
     ).toBeNull();
+  });
+});
+
+describe('gabledRoof', () => {
+  it('gives a rectangle two long slopes up to a ridge along its whole length, and two vertical gables', () => {
+    const faces = /** @type {number[][][]} */ (gabledRoof(rectangle(), 2, shape));
+    expect(faces.map((f) => f.length)).toEqual([4, 3, 4, 3]);
+    expect(faces.map(isGable)).toEqual([false, true, false, true]);
+    const top = faces.flat().filter((p) => p[2] > 0);
+    expect(Math.min(...top.map((p) => p[0]))).toBeCloseTo(0);
+    expect(Math.max(...top.map((p) => p[0]))).toBeCloseTo(20);
+    for (const [, y] of top) expect(y).toBeCloseTo(5);
+  });
+
+  it('leaves L shapes flat like the hipped roofs', () => {
+    const l = [
+      [0, 0],
+      [20, 0],
+      [20, 4],
+      [4, 4],
+      [4, 20],
+      [0, 20],
+    ];
+    expect(gabledRoof(l, 2, shape)).toBeNull();
+    expect(hippedRoof(rectangle(), 2, shape)?.some(isGable)).toBe(false);
   });
 });

@@ -6,10 +6,10 @@ Corridor of CORRIDOR m around every route of every line (tools/lines.py).
 Data: IGN BD TOPO (Licence Ouverte 2.0) through the Geoplateforme WFS; (c) OpenStreetMap contributors, ODbL.
 Output (local frame, decimetres):
   { "attribution": ...,
-    "b": [[height, kind, style, roof_rise, x0, y0, x1, y1, ...], ...],   # counter-clockwise footprints
+    "b": [[height, kind, style, roof_rise, roof_shape, x0, y0, x1, y1, ...], ...],   # counter-clockwise
     "trees": [x, y, ...] }
   height: walls; kind: see geo.building_kind; style: facade family (tools/buildings.py); roof_rise: height of
-  a pitched roof above the walls, 0 when flat.
+  a pitched roof above the walls, 0 when flat; roof_shape: 0 flat, 1 hipped, 2 gabled (tools/buildings.py).
 """
 
 import os

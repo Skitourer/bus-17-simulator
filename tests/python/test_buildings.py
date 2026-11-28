@@ -6,6 +6,9 @@ from typing import Any
 import pytest
 from buildings import (
     CITY,
+    FLAT_ROOF,
+    GABLED_ROOF,
+    HIPPED_ROOF,
     HOUSE,
     INDUSTRIAL,
     MODERN,
@@ -18,6 +21,7 @@ from buildings import (
     osm_tags_for,
     outer_ring,
     roof_rise,
+    roof_shape,
     seed_of,
     short_side,
     style_of,
@@ -139,6 +143,17 @@ def test_roof_rise_is_pitched_only_when_the_roof_really_rises() -> None:
     assert roof_rise(fp(roof_rise=0.2), {'roof:shape': 'gabled'}) == pytest.approx(1.5)
 
 
+def test_roof_shape_follows_osm_then_a_stable_draw_by_family() -> None:
+    assert roof_shape(fp(), {}, 0.0, HOUSE) == FLAT_ROOF
+    assert roof_shape(fp(), {'roof:shape': 'gambrel'}, 2.0, CITY) == GABLED_ROOF
+    assert roof_shape(fp(), {'roof:shape': 'half-hipped'}, 2.0, HOUSE) == HIPPED_ROOF
+    houses = [roof_shape(fp(ident=f'BATIMENT{k}'), {}, 2.0, HOUSE) for k in range(400)]
+    publics = [roof_shape(fp(ident=f'BATIMENT{k}'), {}, 2.0, PUBLIC) for k in range(400)]
+    assert 0.45 < houses.count(GABLED_ROOF) / 400 < 0.75
+    assert publics.count(GABLED_ROOF) / 400 < 0.2
+    assert roof_shape(fp(ident='BATIMENT7'), {}, 2.0, HOUSE) == houses[7]
+
+
 def test_short_side() -> None:
     assert short_side(fp().ring) == pytest.approx(10)
     assert short_side([(0.0, 0.0), (1.0, 1.0), (2.0, 2.0)]) == 0.0
@@ -154,7 +169,8 @@ def test_style_of() -> None:
 
 
 def test_building_record_and_seed() -> None:
-    rec = building_record(fp(roof_rise=2.0), {})
-    assert rec[:4] == [120, 0, CITY, 20]
-    assert rec[4:6] == [0, 0]
+    rec = building_record(fp(roof_rise=2.0), {'roof:shape': 'gabled'})
+    assert rec[:5] == [120, 0, CITY, 20, GABLED_ROOF]
+    assert rec[5:7] == [0, 0]
+    assert building_record(fp(), {})[3:5] == [0, FLAT_ROOF]
     assert seed_of('BATIMENT1') == seed_of('BATIMENT1') != seed_of('BATIMENT2')

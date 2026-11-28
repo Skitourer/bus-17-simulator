@@ -18,9 +18,12 @@ under Licence Ouverte 2.0.
   `roof:shape`).
 - `tools/buildings.py` (pure, tested) derives a facade family (old town, slab, modern, house,
   shed, public) and a pitched roof height from the roof points (1.5 m or more, not concrete,
-  at most about 30°). Records become `[height, kind, style, roof_rise, ring...]`.
-- The game draws the families from one facade atlas (a shader picks the column), and hipped
-  roofs along the long axis of each footprint (`src/hd2d/roofs.js`, tested).
+  at most about 30°), and a roof shape (#16): OSM `roof:shape` when known, else a stable draw
+  between hipped and gabled by facade family. Records become
+  `[height, kind, style, roof_rise, roof_shape, ring...]`.
+- The game draws the families from one facade atlas (a shader picks the column), and hipped or
+  gabled roofs along the long axis of each footprint (`src/hd2d/roofs.js`, tested), in clay tile,
+  slate or zinc colours varied by building.
 
 ## Consequences
 
