@@ -65,6 +65,7 @@ from streets import (
     lintels,
     load_edges,
     passage_zone,
+    rings_of,
     road_cross_slopes,
     road_pieces,
     road_profiles,
@@ -89,18 +90,6 @@ JUNCTION_MARGIN = 10.0  # m around a junction where the slope of a side street i
 
 def dm(v: float) -> int:
     return round(v * 10)
-
-
-def rings_of(geom: Polygon | MultiPolygon, ox: float, oy: float) -> list[list[list[int]]]:
-    """Polygons as lists of rings [x, y, ...] in decimetres relative to (ox, oy), without closing point."""
-    polys = [geom] if isinstance(geom, Polygon) else list(geom.geoms)
-    out: list[list[list[int]]] = []
-    for p in polys:
-        if p.is_empty or p.area < 1.0:
-            continue
-        rings = [p.exterior, *p.interiors]
-        out.append([[v for x, y in list(r.coords)[:-1] for v in (dm(x - ox), dm(y - oy))] for r in rings])
-    return out
 
 
 def bridge_record(e: RoadEdge, prof: Profile, ox: float, oy: float) -> list[int]:

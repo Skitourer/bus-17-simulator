@@ -49,7 +49,7 @@ correspondait pas à ce qui était dessiné.
 
 - Chaussées plates en travers, carrefours propres, ponts au-dessus de l'eau, et objets
   posés sur ce qui est dessiné.
-- Environ 70 Mo de tuiles générées dans le dépôt (19 Mo compressés tels que servis),
+- Environ 75 Mo de tuiles générées dans le dépôt (21 Mo compressés tels que servis),
   reconstruites par le script après tout changement des routes ou du relief. La grille de
   5 m (#92, 28/11/2026) les a doublées, ainsi que les triangles de sol dessinés près du bus
   (1,5 à 2 fois), et a réduit d'environ 60 % la surface de chaussée inclinée de plus de 7 %

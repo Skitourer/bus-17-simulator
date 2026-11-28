@@ -46,6 +46,7 @@ from shapes import (
 PROFILE_STEP = 5.0  # m between height samples along a road
 PROFILE_SMOOTH = 2.0  # gaussian sigma in samples (10 m): removes the 40 m terrain grid facets
 SIDEWALK = 2.5  # m of flat ground kept beside the carriageway (future sidewalks)
+MIN_PIECE_AREA = 0.05  # m², smallest carriageway or sidewalk piece kept in a ground triangle
 BANK = 8.0  # m over which the ground blends from the road height back to the natural terrain
 # two one-way carriageways of the same road (#92): at most this gap between their edges (central reserve,
 # tram tracks), heading the same way or opposite within about 37 degrees
@@ -468,8 +469,36 @@ def road_pieces(surface: Polygon | MultiPolygon, ox: float, oy: float, n: int, s
     pieces: list[Polygon] = []
     for geom in intersections(hit, surface):
         parts = list(geom.geoms) if isinstance(geom, MultiPolygon) else [geom]
-        pieces += [g for g in parts if isinstance(g, Polygon) and g.area > 0.05]
+        pieces += [g for g in parts if isinstance(g, Polygon) and g.area > MIN_PIECE_AREA]
     return pieces
+
+
+def rings_of(geom: Polygon | MultiPolygon, ox: float, oy: float) -> list[list[list[int]]]:
+    """Polygons as lists of rings [x, y, ...] in decimetres relative to (ox, oy), without closing point.
+    Pieces down to MIN_PIECE_AREA are kept: on the 5 m grid many carriageway and sidewalk pieces are smaller
+    than 1 m², and dropping them left holes where the ground showed through (#92). A ring that rounding to
+    decimetres flattens to fewer than 3 points is dropped."""
+    polys = [geom] if isinstance(geom, Polygon) else list(geom.geoms)
+    out: list[list[list[int]]] = []
+    for p in polys:
+        if p.is_empty or p.area <= MIN_PIECE_AREA:
+            continue
+        rings: list[list[int]] = []
+        for k, ring in enumerate([p.exterior, *p.interiors]):
+            corners: list[tuple[int, int]] = []
+            for x, y in list(ring.coords)[:-1]:
+                corner = (round((x - ox) * 10), round((y - oy) * 10))
+                if not corners or corners[-1] != corner:
+                    corners.append(corner)
+            if len(corners) > 1 and corners[0] == corners[-1]:
+                corners.pop()
+            if len(set(corners)) >= 3:
+                rings.append([v for corner in corners for v in corner])
+            elif k == 0:
+                break
+        else:
+            out.append(rings)
+    return out
 
 
 MIN_BUILDING_AREA = 12.0  # m2, same threshold as build_buildings.py
