@@ -25,7 +25,7 @@ python -m http.server 8017
 ```
 
 Puis ouvrir <http://localhost:8017/>, choisir une ligne, un sens, un jour et un départ, et conduire.
-Touches : Z/↑ accélérer · S/↓ freiner puis reculer · Q D/← → tourner · M carte · P pause.
+Touches : Z/↑ accélérer · S/↓ freiner, rappuyer à l'arrêt pour reculer · Q D/← → tourner · M carte · P pause.
 
 ## Développement
 

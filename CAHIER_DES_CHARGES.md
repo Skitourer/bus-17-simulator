@@ -160,7 +160,7 @@ Structure d'un thème (à conserver dans le code) :
 
 | ID | Exigence | Priorité | Statut |
 |---|---|---|---|
-| CTRL-01 | PC : ZQSD ou flèches. Haut = accélérer ; Bas = freiner puis reculer à l'arrêt ; Gauche/Droite = tourner. | P0 | FAIT (ZQSD + WASD + flèches) |
+| CTRL-01 | PC : ZQSD ou flèches. Haut = accélérer ; Bas = freiner puis, après un nouvel appui à l'arrêt, reculer ; Gauche/Droite = tourner. | P0 | FAIT (ZQSD + WASD + flèches) |
 | CTRL-02 | Téléphone : **volant tactile** (à la place des flèches) + pédales accélérateur / frein. **Reporté — PC uniquement pour l'instant.** | P2 | À FAIRE |
 | CTRL-03 | Touche C / bouton « Ville » : changer de ville (prototype uniquement). | — | FAIT |
 | CTRL-04 | Touche / bouton de changement de caméra (voir GFX-06). | P0 | À FAIRE |
