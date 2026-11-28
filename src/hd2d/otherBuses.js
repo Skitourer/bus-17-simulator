@@ -4,7 +4,8 @@
  * doors open (dwelling at a stop), the nearest buses within the drawing distance only (#47).
  */
 import { ModelPool } from './instances.js';
-import { brakeLampGeometry, brakeMaterial, busLook } from './bus3d.js';
+import * as THREE from 'three';
+import { brakeLampGeometry, brakeMaterial, busLook, wheelsGeometry } from './bus3d.js';
 import { lodOf, nearestWithin } from './budget.js';
 import { groundPose } from './traffic.js';
 
@@ -27,9 +28,14 @@ export class OtherBuses {
       budget.capacity,
     );
     this.brakes.mesh.castShadow = false;
+    this.wheels = new ModelPool(
+      wheelsGeometry(bus),
+      new THREE.MeshLambertMaterial({ color: '#151515' }),
+      budget.capacity,
+    );
     this.wheelbase = bus.wheelbase;
     this.width = bus.bodyWidth;
-    scene.add(this.shut.mesh, this.open.mesh, this.brakes.mesh);
+    scene.add(this.shut.mesh, this.open.mesh, this.brakes.mesh, this.wheels.mesh);
     this.shown = 0;
   }
 
@@ -56,7 +62,9 @@ export class OtherBuses {
       if (b.dwelling) this.open.set(open++, b.x, b.y, z, b.h, pitch, roll);
       else this.shut.set(shut++, b.x, b.y, z, b.h, pitch, roll);
       if (b.braking) this.brakes.set(braking++, b.x, b.y, z, b.h, pitch, roll);
+      this.wheels.set(shut + open - 1, b.x, b.y, z, b.h, pitch, roll);
     }
+    this.wheels.show(shut + open);
     this.brakes.show(braking);
     this.shut.show(shut);
     this.open.show(open);
