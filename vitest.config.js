@@ -30,6 +30,7 @@ export default defineConfig({
         'src/hd2d/facades.js',
         'src/hd2d/sounds.js',
         'src/hd2d/indicators.js',
+        'src/hd2d/cablecar.js',
         'src/hd2d/guidance.js',
         'src/hd2d/budget.js',
         'src/hd2d/fleet.js',

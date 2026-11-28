@@ -340,13 +340,15 @@ async function load() {
       if (!r.ok) throw new Error(f);
       return r.json();
     });
-  const [index, l, map, terrain, tileIndex, roads] = await Promise.all([
+  const [index, l, map, terrain, tileIndex, roads, landmarks] = await Promise.all([
     get('lines/index.json'),
     get(`lines/${encodeURIComponent(P.line)}.json`),
     get('map.json').catch(() => null),
     get('terrain.json'),
     get('tiles/index.json'),
     get('roads.json'),
+    // landmarks drawn by hand (#16); the world stands without them
+    get('landmarks.json').catch(() => null),
   ]);
   lineIndex = index;
   line = l;
@@ -437,7 +439,14 @@ async function load() {
   gameDate = P.date ? alignDate(P.date, weekdaysOn(line.calendar, serviceDay)) : serviceDay;
   const season = seasonLook(dayOfYear(gameDate), S.seasons);
   const streets = new BuiltUpStreets(roads, S.lights.lampReach);
-  world = buildWorld(scene, hf, { map, tiles, stops: places, guide, line, streets }, track, S, season);
+  world = buildWorld(
+    scene,
+    hf,
+    { map, tiles, stops: places, guide, line, streets, landmarks },
+    track,
+    S,
+    season,
+  );
   otherBuses = new OtherBuses(scene, busGeometry(S, 'std'), S.budget, S.lights);
   redLights = new RedLightWatch(signals, S.signals.redMinSpeed, S.signals.redLineMargin);
   traffic = new Traffic(network, S.traffic, Math.random, signals);
@@ -505,6 +514,11 @@ async function load() {
   }
   // debug: start at a place of the map (?debug&at=x,y,heading)
   if (debug && P.at) teleport(P.at.x, P.at.y, P.at.h ?? drive.h);
+  // debug: free flight from a camera place (?debug&eye=x,y,height,heading,pitch)
+  if (debug && P.eye) {
+    setFlying(true);
+    fly.start(P.eye.x, P.eye.y, hf.h(P.eye.x, P.eye.y) + P.eye.height, P.eye.yaw, P.eye.pitch);
+  }
   if (debug) showDebug(true);
   // mode test : ?auto&ff=40 -> simule 40 s d'un coup (pilote automatique)
   const ff = +(new URLSearchParams(location.search).get('ff') || 0);
@@ -852,6 +866,7 @@ function render(dt) {
   bus.interior.userData.wheel.rotation.y = steeringWheelAngle(drive.delta, B.steeringRatio);
   sky.position.copy(camera.position);
   world.water.uniforms.time.value += dt;
+  world.landmarks?.update(clock.t);
   crowd.update(dt, service.onBoard);
   crowd.draw(camera.position.x, -camera.position.z);
   world.tiles.update(c.x, c.y, S.tiles.buildBudget);

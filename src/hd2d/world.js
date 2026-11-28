@@ -17,6 +17,7 @@ import { BillboardPool } from './instances.js';
 import { TileSet } from './tileset.js';
 import { PlaceGrid, placesAlong } from './lamps.js';
 import { mountainColour } from './season.js';
+import { buildLandmarks, skips } from './landmarks.js';
 
 /** @typedef {ReturnType<typeof import('./season.js').seasonLook>} SeasonLook */
 
@@ -1566,8 +1567,9 @@ function stops(hf, places, blocked, line) {
  * Buildings (clipped off the carriageway) and trees (off roads and buildings) of all tiles, in the world
  * frame: buildings as BuildingsData records in decimetres, trees as flat [x, y, ...] in metres.
  * @param {Ground} ground @param {Map<string, TileData>} tiles
+ * @param {import('./landmarks.js').LandmarksData | null} [landmarks] drawn by hand: their buildings are left out
  */
-function tileObjects(ground, tiles) {
+function tileObjects(ground, tiles, landmarks = null) {
   /** @type {import('../common/types.js').BuildingsData} */
   const out = { attribution: '', b: [], trees: [] };
   /** @type {import('../common/types.js').BuildingsData} parts of buildings over the passages */
@@ -1581,8 +1583,11 @@ function tileObjects(ground, tiles) {
     const [ti, tj] = key.split('_').map(Number);
     const ox = (ix.x0 + ti * ix.size) * 10,
       oy = (ix.y0 + tj * ix.size) * 10;
-    for (const [h, kind, style, rise, roof, ...ring] of tile.buildings)
+    for (const [h, kind, style, rise, roof, ...ring] of tile.buildings) {
+      // a landmark drawn by hand replaces the building of the data (#16)
+      if (landmarks && skips(landmarks, (ox + ring[0]) / 10, (oy + ring[1]) / 10)) continue;
       out.b.push([h, kind, style, rise, roof, ...ring.map((v, k) => v + (k % 2 ? oy : ox))]);
+    }
     for (const [h, kind, style, rise, roof, base, ...ring] of tile.lintels ?? []) {
       over.b.push([h, kind, style, rise, roof, ...ring.map((v, k) => v + (k % 2 ? oy : ox))]);
       lifts.push(base / 10);
@@ -1596,7 +1601,7 @@ function tileObjects(ground, tiles) {
 // ------------------------------------------------------------------ assemblage
 /**
  * @param {THREE.Scene} scene @param {Ground} hf
- * @param {{map: import('../common/types.js').MapData | null, tiles: Map<string, TileData>, stops: import('./kerb.js').StopPlace[], guide: import('./guidance.js').GuidanceLine, line: import('../common/types.js').LineData, streets: import('./lamps.js').BuiltUpStreets}} data
+ * @param {{map: import('../common/types.js').MapData | null, tiles: Map<string, TileData>, stops: import('./kerb.js').StopPlace[], guide: import('./guidance.js').GuidanceLine, line: import('../common/types.js').LineData, streets: import('./lamps.js').BuiltUpStreets, landmarks: import('./landmarks.js').LandmarksData | null}} data
  * @param {import('../world/track.js').Track} track
  * @param {import('../settings/settings.js').Settings} settings
  * @param {SeasonLook} season landscape of the date of the game (#70)
@@ -1619,7 +1624,7 @@ export function buildWorld(scene, hf, data, track, settings, season) {
     (key) => {
       const tile = /** @type {TileData} */ (data.tiles.get(key));
       const one = new Map([[key, tile]]);
-      const objects = tileObjects(hf, one);
+      const objects = tileObjects(hf, one, data.landmarks);
       const streets = new THREE.Group();
       streets.add(
         roadSurface(hf, one, street),
@@ -1659,7 +1664,8 @@ export function buildWorld(scene, hf, data, track, settings, season) {
   const route = routeStrip(hf, track, data.guide);
   scene.add(route);
   // collisions need every building from the start, drawn or not: their outlines are light
-  const footprints = footprintsOf(tileObjects(hf, data.tiles).buildings);
+  const footprints = footprintsOf(tileObjects(hf, data.tiles, data.landmarks).buildings);
+  const landmarks = data.landmarks ? buildLandmarks(scene, hf, data.landmarks, settings.landmarks) : null;
   const blocked = data.stops.map((place) => shelterBlocked(footprints, place));
   scene.add(stops(hf, data.stops, blocked, data.line));
   // every street light, for the few real lights that follow the bus at night
@@ -1668,6 +1674,7 @@ export function buildWorld(scene, hf, data, track, settings, season) {
   return {
     route,
     lamps,
+    landmarks,
     /**
      * Night level of the street lights and the windows, 0 (day) to 1 (night).
      * @param {number} level

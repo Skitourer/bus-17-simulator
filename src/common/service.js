@@ -195,6 +195,18 @@ function placeParam(value) {
   return { x: parts[0], y: parts[1], h: parts.length === 3 ? (parts[2] * Math.PI) / 180 : null };
 }
 
+/**
+ * A camera place "x,y,height,heading,pitch" (m, m, m, degrees, degrees), or null when missing or malformed.
+ * @param {string | null} value
+ * @returns {{x: number, y: number, height: number, yaw: number, pitch: number} | null}
+ */
+function eyeParam(value) {
+  const parts = (value || '').split(',').map(Number);
+  if (parts.length !== 5 || parts.some((v) => !Number.isFinite(v))) return null;
+  const [x, y, height, yaw, pitch] = parts;
+  return { x, y, height, yaw: (yaw * Math.PI) / 180, pitch: (pitch * Math.PI) / 180 };
+}
+
 /** Parametres de partie passes dans l'URL par la page d'accueil. */
 export function readParams() {
   const q = new URLSearchParams(location.search);
@@ -216,6 +228,9 @@ export function readParams() {
     stop: q.get('stop') || '',
     // debug start at a place of the map: "x,y" or "x,y,heading" (m, m, degrees from east, counter-clockwise)
     at: placeParam(q.get('at')),
+    // debug free-flight camera at start: "x,y,height,heading,pitch" (m, m, m above the ground, degrees from
+    // east counter-clockwise, degrees down)
+    eye: eyeParam(q.get('eye')),
     stress: Math.max(0, Math.floor(+(q.get('stress') || 0)) || 0),
   };
 }
