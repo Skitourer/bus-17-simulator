@@ -806,7 +806,7 @@ function render(dt) {
   crowd.update(dt, service.onBoard);
   crowd.draw(camera.position.x, -camera.position.z);
   world.tiles.update(c.x, c.y, S.tiles.buildBudget);
-  otherBuses.draw(fleet.buses, camera.position.x, -camera.position.z);
+  otherBuses.draw(fleet.buses, camera.position.x, -camera.position.z, (x, y, zRef) => hf.surface(x, y, zRef));
   drawWalkers(camera.position.x, -camera.position.z);
   signalLook.update();
   trafficLook.draw(traffic.vehicles, camera.position.x, -camera.position.z, (x, y) =>
