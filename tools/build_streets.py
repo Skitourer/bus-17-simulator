@@ -43,8 +43,8 @@ from typing import Any
 import numpy as np
 from geo import Point
 from lines import corridor, read_lines, routes_xy, tiles_in
+from overpasses import covered_ground, dig_underpasses, separate_levels, underpass_crossings
 from overpasses import crossings as bridge_crossings
-from overpasses import dig_underpasses, separate_levels, underpass_crossings
 from shapely import LineString, MultiLineString, MultiPoint, MultiPolygon, Polygon, box, union_all
 from shapely import Point as ShapelyPoint
 from shapely.geometry.base import BaseGeometry
@@ -54,6 +54,7 @@ from streets import (
     BUILDING_CLEARANCE,
     PASSAGE_CLEARANCE,
     PROFILE_STEP,
+    SIDEWALK,
     TREE_CLEARANCE,
     Profile,
     RoadEdge,
@@ -350,6 +351,8 @@ def main() -> None:
         ground, natural = shaped[(i, j)]
         if isinstance(local, Polygon | MultiPolygon) and not local.is_empty:
             ground, on_ground = terraces.ground(xs, ys, ground, natural, near)
+            on_roads = distances(local, points(xs, ys)) <= SIDEWALK
+            ground = covered_ground(xs, ys, ground, [(edges[k], profiles[k]) for k in underpasses], on_roads)
             slopes += road_cross_slopes(
                 ground, ox, oy, n, STEP, on_ground, terraces.ground_heights, junctions
             )

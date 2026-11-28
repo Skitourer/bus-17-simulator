@@ -741,22 +741,24 @@ function tunnelMouths(hf, key, portals) {
       y = oy + yd / 10,
       w = widthDm / 10 + 1;
     m.makeRotationY(mrad / 1000).setPosition(x, hf.h(x, y), -y);
+    // an underpass (#86) goes on under the ground: only its headwall shows, the ground covers the rest
+    const inside = hf.tunnelAt(x + Math.cos(mrad / 1000) * 2, y + Math.sin(mrad / 1000) * 2);
+    const length = inside === null ? depth : wall;
     // local frame: +x into the tunnel, +y up, +z across the road
     for (const side of [-1, 1])
       add(
-        new THREE.BoxGeometry(depth, clearance, wall).translate(
-          depth / 2,
+        new THREE.BoxGeometry(length, clearance, wall).translate(
+          length / 2,
           clearance / 2,
           (side * (w + wall)) / 2,
         ),
         concrete,
       );
     add(
-      new THREE.BoxGeometry(depth, wall, w + 2 * wall).translate(depth / 2, clearance + wall / 2, 0),
+      new THREE.BoxGeometry(length, wall, w + 2 * wall).translate(length / 2, clearance + wall / 2, 0),
       concrete,
     );
     // the dark inside, a little behind the mouth, where no underpass floor goes on
-    const inside = hf.tunnelAt(x + Math.cos(mrad / 1000) * 2, y + Math.sin(mrad / 1000) * 2);
     if (inside === null)
       add(new THREE.PlaneGeometry(w, clearance).rotateY(-Math.PI / 2).translate(0.3, clearance / 2, 0), dark);
   }
