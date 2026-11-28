@@ -13,6 +13,7 @@ from buildings import (
     INDUSTRIAL,
     MODERN,
     PUBLIC,
+    RECORD_HEAD,
     SLAB,
     Footprint,
     building_record,
@@ -174,3 +175,9 @@ def test_building_record_and_seed() -> None:
     assert rec[5:7] == [0, 0]
     assert building_record(fp(), {})[3:5] == [0, FLAT_ROOF]
     assert seed_of('BATIMENT1') == seed_of('BATIMENT1') != seed_of('BATIMENT2')
+
+
+def test_record_head_comes_before_the_outline() -> None:
+    # build_roads.py read the outline from the 5th value after the roof shape was added (#131)
+    rec = building_record(fp(), {})
+    assert rec[RECORD_HEAD:] == [0, 0, 200, 0, 200, 100, 0, 100]

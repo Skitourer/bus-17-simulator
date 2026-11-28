@@ -193,6 +193,9 @@ def style_of(kind: int, height: float, area: float) -> int:
     return CITY
 
 
+RECORD_HEAD = 5  # values before the outline in a building record: height, kind, style, roof rise, roof shape
+
+
 def building_record(fp: Footprint, tags: dict[str, str]) -> list[int]:
     """[height_dm, kind, style, roof_rise_dm, roof_shape, x, y, ...] in dm (see build_buildings.py)."""
     kind = kind_of(fp, tags)

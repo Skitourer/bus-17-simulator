@@ -9,12 +9,17 @@ Sortie : coordonnees locales en metres (memes axes que lines/*.json), arrondies 
                "rail": [...] } }
 """
 
+import math
 import os
 from typing import Any
 
+import numpy as np
+import shapely
 from geo import Point, Projection, douglas_peucker, dp_ring, join_rings, make_proj
-from lines import CORRIDOR, LINES_DIR
-from sources import ROOT, overpass, read_json, write_json
+from lines import CORRIDOR, LINES_DIR, QUERY_BOX, corridor, read_lines, routes_xy
+from shapely import box
+from shapely.geometry.base import BaseGeometry
+from sources import ROOT, overpass, progress, read_json, write_json
 
 LINE_INDEX = os.path.join(LINES_DIR, 'index.json')
 OUT = os.path.join(ROOT, 'data', 'grenoble', 'map.json')
@@ -127,18 +132,52 @@ def classify(
     return polys, lines
 
 
+def query_boxes(
+    x0: float, y0: float, x1: float, y1: float, area: BaseGeometry
+) -> list[tuple[float, float, float, float]]:
+    """Boxes of QUERY_BOX m over an extent that touch an area: one Overpass query each (#131)."""
+    nx, ny = math.ceil((x1 - x0) / QUERY_BOX), math.ceil((y1 - y0) / QUERY_BOX)
+    out: list[tuple[float, float, float, float]] = []
+    for j in range(ny):
+        for i in range(nx):
+            b = (
+                x0 + i * QUERY_BOX,
+                y0 + j * QUERY_BOX,
+                min(x1, x0 + (i + 1) * QUERY_BOX),
+                min(y1, y0 + (j + 1) * QUERY_BOX),
+            )
+            if area.intersects(box(*b)):
+                out.append(b)
+    return out
+
+
+def touches(element: dict[str, Any], area: BaseGeometry, to_xy: Projection) -> bool:
+    """Whether a way or a relation (with its geometry) has a point inside an area."""
+    geoms = [element['geometry']] if 'geometry' in element else []
+    geoms += [m['geometry'] for m in element.get('members', []) if 'geometry' in m]
+    xy = [to_xy(g['lat'], g['lon']) for geom in geoms for g in geom]
+    return bool(xy) and bool(np.any(shapely.contains_xy(area, [p[0] for p in xy], [p[1] for p in xy])))
+
+
 def main() -> None:
     line = read_json(LINE_INDEX)
     lat0, lon0 = line['origin']
     to_xy, to_ll = make_proj(lat0, lon0)
     x0, y0, x1, y1 = line['bbox']
     x0, y0, x1, y1 = x0 - MARGIN, y0 - MARGIN, x1 + MARGIN, y1 + MARGIN
-    s, w = to_ll(x0, y0)
-    n, e = to_ll(x1, y1)
-    bb = f'{s:.5f},{w:.5f},{n:.5f},{e:.5f}'
-    print(f'Requete Overpass ({bb})...')
-    els = overpass(QUERY.format(highways=HIGHWAYS, bb=bb))['elements']
-    print(f'  {len(els)} elements')
+    # the map covers the corridor around the lines (ADR 0010), queried box by box
+    area = corridor([route for line_data in read_lines() for route in routes_xy(line_data)], MARGIN)
+    found: dict[tuple[str, int], dict[str, Any]] = {}
+    boxes = query_boxes(x0, y0, x1, y1, area)
+    for k, (bx0, by0, bx1, by1) in enumerate(boxes):
+        s, w = to_ll(bx0, by0)
+        n, e = to_ll(bx1, by1)
+        bb = f'{s:.5f},{w:.5f},{n:.5f},{e:.5f}'
+        for el in overpass(QUERY.format(highways=HIGHWAYS, bb=bb))['elements']:
+            found.setdefault((el['type'], el['id']), el)
+        progress('Overpass carte', k + 1, len(boxes))
+    els = [el for el in found.values() if touches(el, area, to_xy)]
+    print(f'  {len(els)} elements dans le couloir (sur {len(found)})')
     polys, lines = classify(els, to_xy)
 
     out: dict[str, Any] = {

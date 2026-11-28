@@ -12,6 +12,7 @@ from water import (
     gaussian_blur,
     min_filter,
     shore_lines,
+    tile_water_level,
     water_area,
     water_cut,
     water_level,
@@ -90,6 +91,17 @@ def test_water_level_follows_the_terrain_under_the_water() -> None:
     west, east = level[40, 20], level[40, 60]
     assert east > west  # the terrain rises eastwards by 1 m per 40 m
     assert east - west == pytest.approx(10, abs=1.5)
+
+
+def test_tile_water_level_matches_the_level_of_a_whole_grid() -> None:
+    sloped = TerrainGrid(
+        x0=-800, y0=-800, nx=41, ny=41, step=40, dm=[round((200 + i) * 10) for i in range(41)] * 41
+    )
+    river = box(-600, -40, 600, 40)
+    whole = water_level(river, sloped.heights, -800, -800, 321, 321, 5)
+    # a tile of 21 x 21 nodes at (-50, -50), far enough from the edges of the whole grid
+    tile = tile_water_level(river, sloped.heights, -50, -50, 21, 5)
+    assert tile == pytest.approx(whole[150:171, 150:171].ravel(), abs=1e-9)
 
 
 def test_shore_lines_skip_the_tile_edges() -> None:

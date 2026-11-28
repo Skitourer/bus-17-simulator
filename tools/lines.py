@@ -3,14 +3,16 @@
 Pure logic (no network, no files) except `read_lines`, which reads the line files written by build_line.py.
 """
 
+import math
 import os
 from collections import defaultdict
 from dataclasses import dataclass, field
 from typing import Any
 
 from geo import Point, Projection
-from shapely import MultiLineString, MultiPolygon, Polygon, box
+from shapely import MultiLineString, box
 from shapely.geometry.base import BaseGeometry
+from shapes import polygon_parts
 from sources import ROOT, read_json
 
 # M réso route_short_name of every line of the game, in menu order
@@ -21,6 +23,8 @@ ORIGIN: Point = (45.2134, 5.78085)
 LINES_DIR = os.path.join(ROOT, 'data', 'grenoble', 'lines')
 # m around every route: the world (map, terrain, roads, tiles) is built in this corridor (ADR 0010)
 CORRIDOR = 1500.0
+QUERY_BOX = 8000.0  # m: side of the boxes of one Overpass query
+TILE = 500  # m side of the world tiles (keeps every tile file under the 1 MB pre-commit limit)
 
 type Row = dict[str, str]
 
@@ -76,17 +80,22 @@ def tiles_in(
     ]
 
 
-def overpass_polys(area: BaseGeometry, to_ll: Projection, simplify: float) -> list[str]:
-    """Overpass `poly:` filters ("lat lon lat lon ...") of the outer rings of an area, simplified by
-    `simplify` m (holes filled: a superset is enough)."""
-    simple = area.simplify(simplify)
-    parts = list(simple.geoms) if isinstance(simple, MultiPolygon) else [simple]
+def overpass_polys(
+    area: BaseGeometry, to_ll: Projection, simplify: float, size: float = QUERY_BOX
+) -> list[str]:
+    """Overpass `poly:` filters ("lat lon lat lon ...") of the outer rings of an area cut into boxes of `size`
+    m (one query over the whole network runs out of time, #131), simplified by `simplify` m (holes filled: a
+    superset is enough)."""
+    x0, y0, x1, y1 = area.bounds
     out: list[str] = []
-    for part in parts:
-        if not isinstance(part, Polygon) or part.is_empty:
-            continue
-        coords = list(part.exterior.coords)[:-1]
-        out.append(' '.join(f'{la:.5f} {lo:.5f}' for la, lo in (to_ll(x, y) for x, y in coords)))
+    for j in range(math.ceil((y1 - y0) / size)):
+        for i in range(math.ceil((x1 - x0) / size)):
+            piece = area.intersection(
+                box(x0 + i * size, y0 + j * size, x0 + (i + 1) * size, y0 + (j + 1) * size)
+            )
+            for part in polygon_parts(piece.simplify(simplify)):
+                coords = list(part.exterior.coords)[:-1]
+                out.append(' '.join(f'{la:.5f} {lo:.5f}' for la, lo in (to_ll(x, y) for x, y in coords)))
     return out
 
 

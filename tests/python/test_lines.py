@@ -67,6 +67,14 @@ def test_overpass_polys_one_filter_per_part_in_lat_lon() -> None:
     assert all(44.98 <= la <= 45.02 for la in values[0::2])
 
 
+def test_overpass_polys_cut_a_long_area_into_boxes() -> None:
+    def to_ll(x: float, y: float) -> tuple[float, float]:
+        return (45 + y / 1000, 5 + x / 1000)
+
+    area = corridor([[(0.0, 0.0), (2500.0, 0.0)]], 10.0)
+    assert len(overpass_polys(area, to_ll, 1.0, 1000.0)) == 3
+
+
 def test_network_of_keeps_one_point_in_every_and_the_last() -> None:
     pts = [v for k in range(5) for v in (k * 2.0, 0.0, 200.0)]
     line = {
