@@ -109,6 +109,19 @@ PARTS: tuple[Part, ...] = (
     Part(('way', 66619444), 'stone', height=6.0),
     Part(('way', 66620290), 'shelter', height=4.0),
     Part(('way', 66621243), 'shelter', height=4.0),
+    # the three towers of the Ile Verte (1967), 28 storeys and 98 m high (OSM building parts; PSS-Archi
+    # FR-38185-2859) on a 5 m base (their min_height); the BD TOPO holds only the base
+    *(
+        Part(
+            ('way', outline),
+            'concrete',
+            height=5.0,
+            tower=('way', part),
+            tower_style='concrete',
+            tower_height=98.0,
+        )
+        for outline, part in ((33756314, 233263821), (33756315, 233263819), (33756316, 233263820))
+    ),
 )
 SITES: tuple[Site, ...] = (Site(('way', 383545858), 'render'),)
 DEFAULT_HEIGHT = 10.0  # m, walls of a part without a BD TOPO building inside
