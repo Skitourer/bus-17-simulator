@@ -506,37 +506,15 @@ body.cabin #speed {
 }
 #cabin .dash {
   position: absolute;
-  left: 50%;
+  left: 16px;
   bottom: 30px;
-  transform: translateX(-50%);
-  width: min(760px, 94vw);
   display: flex;
   align-items: flex-end;
-  justify-content: space-between;
-  gap: 12px;
+  gap: 10px;
 }
-#cabin .wheel {
-  position: relative;
-  width: 240px;
-  height: 240px;
-  margin-bottom: -130px;
-  border: 18px solid #1d1f24;
-  border-radius: 50%;
-  box-sizing: border-box;
-  background:
-    linear-gradient(#1d1f24, #1d1f24) center / 100% 16px no-repeat,
-    linear-gradient(#1d1f24, #1d1f24) center bottom / 16px 50% no-repeat;
-}
-#cabin .wheel .hub {
-  position: absolute;
-  left: 50%;
-  top: 50%;
-  width: 56px;
-  height: 56px;
-  margin: -28px 0 0 -28px;
-  border-radius: 50%;
-  background: #33a457;
-  border: 4px solid #1d1f24;
+#cabin .mirror.inside {
+  border-width: 6px;
+  border-radius: 14px;
 }
 #cabin .gauge {
   min-width: 110px;

@@ -433,7 +433,7 @@ async function load() {
   trafficLook = new TrafficLook(scene, S.traffic, S.lights, S.budget.capacity);
   signalLook = new SignalLook(scene, signals, (x, y) => hf.h(x, y), S.signals);
   solid = { hit: (x, y) => world.index.hit(x, y) || fleet.hit(x, y) || traffic.hit(x, y) };
-  bus = makeBus(B, S.lights);
+  bus = makeBus(B, S.lights, S.camera);
   scene.add(bus.group);
   // headlights at the front corners of the bus, aimed at the road ahead
   headlights.forEach((light, i) => {
@@ -799,8 +799,8 @@ function render(dt) {
     camera.near = near;
     camera.updateProjectionMatrix();
   }
-  if (inside === 'cabin')
-    $('wheel').style.transform = `rotate(${-steeringWheelAngle(drive.delta, B.steeringRatio)}rad)`;
+  // the steering wheel of the dashboard turns about its column (#42)
+  bus.interior.userData.wheel.rotation.y = steeringWheelAngle(drive.delta, B.steeringRatio);
   sky.position.copy(camera.position);
   world.water.uniforms.time.value += dt;
   crowd.update(dt, service.onBoard);
@@ -830,6 +830,7 @@ function render(dt) {
     const rects = mirrors.rects(innerWidth, innerHeight);
     placeFrame($('mirrorL'), rects.left);
     placeFrame($('mirrorR'), rects.right);
+    placeFrame($('mirrorC'), rects.inside);
   }
 
   hud();
