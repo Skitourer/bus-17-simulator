@@ -1,39 +1,26 @@
 // @ts-check
 /**
- * Sound rules of the game: engine tone from the speed and the throttle, master volume from the player's
+ * Sound rules of the game: engine rate from the speed and the throttle, master volume from the player's
  * choice, and which events ring (doors, stop request). Pure logic; src/hd2d/audio.js plays them.
  */
 
 /** @typedef {import('../settings/settings.js').Settings['audio']} AudioSettings */
 
 /**
- * Engine tone: a diesel hum whose pitch follows the speed (gearbox steps are left out), louder and brighter
- * when the driver accelerates.
+ * Engine sound: the idling recording played faster with the speed (the engine turns faster), louder and
+ * brighter when the driver accelerates.
  * @param {number} speed m/s (either way) @param {number} throttle 0 (idle) to 1 (accelerating)
  * @param {AudioSettings} p
- * @returns {{frequency: number, gain: number, cutoff: number}} Hz, ratio, Hz
+ * @returns {{rate: number, gain: number, cutoff: number}} playback rate, ratio, Hz
  */
 export function engineTone(speed, throttle, p) {
   const pace = Math.min(1, Math.abs(speed) / p.engineTopSpeed);
   const push = Math.min(1, Math.max(0, throttle));
   return {
-    frequency: p.engineIdleHz + (p.engineTopHz - p.engineIdleHz) * pace,
+    rate: 1 + (p.engineTopRate - 1) * pace + p.engineLoadRate * push,
     gain: p.engineIdleGain + (p.engineLoadGain - p.engineIdleGain) * Math.max(push, pace * 0.5),
     cutoff: p.engineCutoffHz * (1 + push),
   };
-}
-
-/**
- * Harmonics of the engine voice (Fourier sine terms, for a Web Audio periodic wave): falling as 1/n^1.5 so
- * the hum stays round, the odd ones stronger for the hollow knock of a diesel. Term 0 (offset) is 0.
- * @param {number} count number of harmonics
- * @returns {{real: Float32Array, imag: Float32Array}}
- */
-export function engineHarmonics(count) {
-  const real = new Float32Array(count + 1),
-    imag = new Float32Array(count + 1);
-  for (let n = 1; n <= count; n++) imag[n] = (n % 2 ? 1 : 0.55) / Math.pow(n, 1.5);
-  return { real, imag };
 }
 
 /**

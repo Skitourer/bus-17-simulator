@@ -72,6 +72,7 @@ uv run python tools/build_streets.py
 - Tracé, arrêts, horaires : GTFS M réso (SMMAG), [ODbL](https://opendatacommons.org/licenses/odbl/).
 - Rues, bâtiments, arbres, eau, parcs : © [contributeurs OpenStreetMap](https://www.openstreetmap.org/copyright), ODbL.
 - Altitude : IGN RGE ALTI ; bâtiments : IGN BD TOPO, complétée par OpenStreetMap ; [Licence Ouverte 2.0](https://www.etalab.gouv.fr/licence-ouverte-open-licence/).
+- Sons du moteur et des portes : Work With Sounds sur [Wikimedia Commons](https://commons.wikimedia.org/wiki/Commons:Work_With_Sounds), [CC BY 4.0](https://creativecommons.org/licenses/by/4.0/) (voir `assets/audio/CREDITS.md`).
 
 Les fichiers de `data/` sont des bases de données dérivées et restent sous ODbL /
 Licence Ouverte. La livrée du bus est imaginaire ; ce projet n'est pas affilié à M réso

@@ -1,23 +1,23 @@
 // @ts-check
 import { describe, expect, it } from 'vitest';
-import { doorSound, engineHarmonics, engineTone, masterGain, stopBell } from '../../src/hd2d/sounds.js';
+import { doorSound, engineTone, masterGain, stopBell } from '../../src/hd2d/sounds.js';
 import { SETTINGS } from './fixtures.js';
 
 const A = SETTINGS.audio;
 
 describe('engineTone', () => {
-  it('idles low and quiet, and rises with the speed up to its top', () => {
-    const idle = engineTone(0, 0, A);
-    expect(idle).toEqual({ frequency: A.engineIdleHz, gain: A.engineIdleGain, cutoff: A.engineCutoffHz });
-    expect(engineTone(A.engineTopSpeed, 0, A).frequency).toBeCloseTo(A.engineTopHz);
-    expect(engineTone(2 * A.engineTopSpeed, 0, A).frequency).toBeCloseTo(A.engineTopHz);
-    expect(engineTone(-A.engineTopSpeed / 2, 0, A).frequency).toBeGreaterThan(A.engineIdleHz);
+  it('idles at the recorded rate, and turns faster with the speed up to its top', () => {
+    expect(engineTone(0, 0, A)).toEqual({ rate: 1, gain: A.engineIdleGain, cutoff: A.engineCutoffHz });
+    expect(engineTone(A.engineTopSpeed, 0, A).rate).toBeCloseTo(A.engineTopRate);
+    expect(engineTone(2 * A.engineTopSpeed, 0, A).rate).toBeCloseTo(A.engineTopRate);
+    expect(engineTone(-A.engineTopSpeed / 2, 0, A).rate).toBeGreaterThan(1);
   });
 
-  it('is louder and brighter under throttle', () => {
+  it('is louder, faster and brighter under throttle', () => {
     const pushed = engineTone(5, 1, A);
     expect(pushed.gain).toBeCloseTo(A.engineLoadGain);
     expect(pushed.cutoff).toBeCloseTo(2 * A.engineCutoffHz);
+    expect(pushed.rate - engineTone(5, 0, A).rate).toBeCloseTo(A.engineLoadRate);
     expect(engineTone(5, 0, A).gain).toBeLessThan(pushed.gain);
   });
 });
@@ -43,17 +43,5 @@ describe('door and bell events', () => {
     expect(stopBell(0, 1)).toBe(true);
     expect(stopBell(1, 2)).toBe(false);
     expect(stopBell(2, 0)).toBe(false);
-  });
-});
-
-describe('engineHarmonics', () => {
-  it('falls with the rank, the odd harmonics stronger, no offset', () => {
-    const { real, imag } = engineHarmonics(8);
-    expect(real.every((v) => v === 0)).toBe(true);
-    expect(imag[0]).toBe(0);
-    expect(imag[1]).toBe(1);
-    expect(imag[5]).toBeGreaterThan(imag[4]);
-    expect(imag[3]).toBeLessThan(imag[1]);
-    expect(imag.length).toBe(9);
   });
 });

@@ -1899,104 +1899,103 @@
       "max": 1,
       "doc": "Master gain of the high volume."
     },
-    "engineIdleHz": {
-      "value": 38,
-      "unit": "Hz",
-      "min": 15,
-      "max": 120,
-      "doc": "Pitch of the engine at a standstill: a diesel bus idles at about 600 to 800 rpm, a hum around 40 Hz."
+    "engineLoopStart": {
+      "value": 13,
+      "unit": "s",
+      "min": 0,
+      "max": 94,
+      "doc": "Start of the idling loop in the engine recording (assets/audio/bus-engine.ogg, a MAN SG 220 city bus)."
     },
-    "engineTopHz": {
-      "value": 95,
-      "unit": "Hz",
-      "min": 30,
-      "max": 300,
-      "doc": "Pitch of the engine at engineTopSpeed."
+    "engineLoopEnd": {
+      "value": 21,
+      "unit": "s",
+      "min": 0,
+      "max": 94,
+      "doc": "End of the idling loop in the engine recording."
+    },
+    "engineTopRate": {
+      "value": 1.8,
+      "unit": "ratio",
+      "min": 1,
+      "max": 4,
+      "doc": "Playback rate of the idling recording at engineTopSpeed: the engine turns faster with the speed."
+    },
+    "engineLoadRate": {
+      "value": 0.15,
+      "unit": "ratio",
+      "min": 0,
+      "max": 1,
+      "doc": "Extra playback rate under full throttle."
     },
     "engineTopSpeed": {
       "value": 15,
       "unit": "m/s",
       "min": 1,
       "max": 40,
-      "doc": "Speed at which the engine pitch stops rising (54 km/h, town speed limit 50 km/h)."
+      "doc": "Speed at which the engine rate stops rising (54 km/h, town speed limit 50 km/h)."
     },
     "engineIdleGain": {
-      "value": 0.12,
-      "unit": "ratio",
-      "min": 0,
-      "max": 1,
-      "doc": "Loudness of the idling engine."
-    },
-    "engineLoadGain": {
-      "value": 0.3,
-      "unit": "ratio",
-      "min": 0,
-      "max": 1,
-      "doc": "Loudness of the engine under full throttle."
-    },
-    "engineCutoffHz": {
-      "value": 300,
-      "unit": "Hz",
-      "min": 50,
-      "max": 5000,
-      "doc": "Low-pass filter of the engine hum when idling; doubled under full throttle (a brighter, rougher sound)."
-    },
-    "engineHarmonics": {
-      "value": 16,
-      "unit": "count",
-      "min": 1,
-      "max": 64,
-      "doc": "Harmonics of the engine voice: more make it brighter and rougher.",
-      "integer": true
-    },
-    "engineDetune": {
-      "value": 0.008,
-      "unit": "ratio",
-      "min": 0,
-      "max": 0.05,
-      "doc": "Detuning of the two engine voices from each other: a slow beat that thickens the hum."
-    },
-    "engineSubGain": {
-      "value": 0.6,
-      "unit": "ratio",
-      "min": 0,
-      "max": 1,
-      "doc": "Loudness of the sine an octave below the engine voice (the body of the sound)."
-    },
-    "engineChugRatio": {
-      "value": 0.25,
-      "unit": "ratio",
-      "min": 0.05,
-      "max": 1,
-      "doc": "Beat of the engine loudness as a share of its pitch: the firing of the cylinders heard one by one."
-    },
-    "engineChugDepth": {
-      "value": 0.3,
-      "unit": "ratio",
-      "min": 0,
-      "max": 1,
-      "doc": "Depth of the beat of the engine loudness."
-    },
-    "engineRumbleHz": {
-      "value": 160,
-      "unit": "Hz",
-      "min": 30,
-      "max": 1000,
-      "doc": "Low-pass filter of the rumble noise under the engine hum."
-    },
-    "engineRumbleGain": {
       "value": 0.5,
       "unit": "ratio",
       "min": 0,
       "max": 2,
-      "doc": "Loudness of the rumble noise, as a share of the engine loudness."
+      "doc": "Loudness of the idling engine."
+    },
+    "engineLoadGain": {
+      "value": 1,
+      "unit": "ratio",
+      "min": 0,
+      "max": 2,
+      "doc": "Loudness of the engine under full throttle."
+    },
+    "engineCutoffHz": {
+      "value": 1500,
+      "unit": "Hz",
+      "min": 100,
+      "max": 20000,
+      "doc": "Low-pass filter of the engine when idling, heard from the cabin; doubled under full throttle (a brighter, rougher sound)."
     },
     "engineGlide": {
       "value": 0.15,
       "unit": "s",
       "min": 0.01,
       "max": 2,
-      "doc": "Time constant of the changes of engine pitch and loudness."
+      "doc": "Time constant of the changes of engine rate and loudness."
+    },
+    "doorOpenFrom": {
+      "value": 0.2,
+      "unit": "s",
+      "min": 0,
+      "max": 20,
+      "doc": "Start of the door opening in the door recording (assets/audio/bus-doors.ogg)."
+    },
+    "doorOpenTo": {
+      "value": 3.9,
+      "unit": "s",
+      "min": 0,
+      "max": 20,
+      "doc": "End of the door opening in the door recording."
+    },
+    "doorCloseFrom": {
+      "value": 5.9,
+      "unit": "s",
+      "min": 0,
+      "max": 20,
+      "doc": "Start of the door closing in the door recording."
+    },
+    "doorCloseTo": {
+      "value": 9,
+      "unit": "s",
+      "min": 0,
+      "max": 20,
+      "doc": "End of the door closing in the door recording."
+    },
+    "doorGain": {
+      "value": 0.8,
+      "unit": "ratio",
+      "min": 0,
+      "max": 2,
+      "doc": "Loudness of the door recordings."
     },
     "doorBeepHz": {
       "value": 1800,
@@ -2011,27 +2010,6 @@
       "min": 0,
       "max": 1,
       "doc": "Loudness of the door warning beeps."
-    },
-    "doorHissHz": {
-      "value": 2500,
-      "unit": "Hz",
-      "min": 200,
-      "max": 10000,
-      "doc": "Centre of the band of the air hiss of the doors."
-    },
-    "doorHissGain": {
-      "value": 0.35,
-      "unit": "ratio",
-      "min": 0,
-      "max": 1,
-      "doc": "Loudness of the air hiss of the doors."
-    },
-    "doorHissTime": {
-      "value": 0.8,
-      "unit": "s",
-      "min": 0.1,
-      "max": 3,
-      "doc": "Length of the air hiss of the doors."
     },
     "bellHz": {
       "value": 880,
@@ -2048,7 +2026,7 @@
       "doc": "Loudness of the stop request bell."
     },
     "announceRate": {
-      "value": 1.0,
+      "value": 1,
       "unit": "ratio",
       "min": 0.5,
       "max": 2,

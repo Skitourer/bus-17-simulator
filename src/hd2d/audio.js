@@ -1,12 +1,17 @@
 // @ts-check
 /**
- * Sounds of the game, synthesised with the Web Audio API (no sound file): the engine, the doors, the stop
- * request bell, and the spoken announcement of the next stop (Web Speech API, the voice of the browser).
- * Browsers start audio only after a key press or a click on the page: `wake()` is called on each of them.
+ * Sounds of the game with the Web Audio API: the engine and the doors from recordings of a MAN SG 220 city
+ * bus (Work With Sounds, Wikimedia Commons, CC BY 4.0, see assets/audio/CREDITS.md), the warning beeps and
+ * the stop request bell synthesised, and the spoken announcement of the next stop (Web Speech API, the voice
+ * of the browser). Browsers start audio only after a key press or a click on the page: `wake()` is called on
+ * each of them.
  */
-import { engineHarmonics, engineTone } from './sounds.js';
+import { engineTone } from './sounds.js';
 
 /** @typedef {import('../settings/settings.js').Settings['audio']} AudioSettings */
+
+const ENGINE_URL = 'assets/audio/bus-engine.ogg',
+  DOORS_URL = 'assets/audio/bus-doors.ogg';
 
 export class SoundPlayer {
   /**
@@ -19,74 +24,44 @@ export class SoundPlayer {
     this.speech = speech;
     /** @type {AudioContext | null} */
     this.context = null;
-    /**
-     * @type {{voices: {o: OscillatorNode, ratio: number}[], filter: BiquadFilterNode, level: GainNode,
-     * chug: OscillatorNode, chugDepth: GainNode, rumbleLevel: GainNode} | null}
-     */
-    this.engine = null;
     /** @type {GainNode | null} */
     this.master = null;
+    /** @type {{source: AudioBufferSourceNode, filter: BiquadFilterNode, level: GainNode} | null} */
+    this.engine = null;
     /** @type {AudioBuffer | null} */
-    this.noise = null;
+    this.doorRecording = null;
   }
 
   /** Start the audio after a gesture of the player (once), or resume it after a pause of the browser. */
   wake() {
     if (this.gain <= 0) return;
-    if (!this.context) this.start();
+    if (!this.context) void this.start();
     else if (this.context.state === 'suspended') void this.context.resume();
   }
 
-  start() {
+  async start() {
     const ctx = new AudioContext();
-    const p = this.p;
     this.context = ctx;
     this.master = ctx.createGain();
     this.master.gain.value = this.gain;
     // a compressor softens the peaks when several sounds play together
     this.master.connect(ctx.createDynamicsCompressor()).connect(ctx.destination);
-    // one second of white noise, for the engine rumble and the air of the doors
-    this.noise = ctx.createBuffer(1, ctx.sampleRate, ctx.sampleRate);
-    const data = this.noise.getChannelData(0);
-    for (let k = 0; k < data.length; k++) data[k] = Math.random() * 2 - 1;
-    // the engine: two slightly detuned voices with the harmonics of a diesel and a sine an octave below,
-    // through a low-pass filter, beating at the firing rate of the cylinders
+    const [engine, doors] = await Promise.all([ENGINE_URL, DOORS_URL].map((url) => load(ctx, url)));
+    this.doorRecording = doors;
+    // the engine: the idling part of the recording in a loop, its rate and filter following the drive
+    const source = ctx.createBufferSource();
+    source.buffer = engine;
+    source.loop = true;
+    source.loopStart = this.p.engineLoopStart;
+    source.loopEnd = this.p.engineLoopEnd;
     const filter = ctx.createBiquadFilter();
     filter.type = 'lowpass';
-    filter.Q.value = 0.5;
-    filter.frequency.value = p.engineCutoffHz;
+    filter.frequency.value = this.p.engineCutoffHz;
     const level = ctx.createGain();
     level.gain.value = 0;
-    filter.connect(level).connect(this.master);
-    const { real, imag } = engineHarmonics(p.engineHarmonics);
-    const wave = ctx.createPeriodicWave(real, imag);
-    const voices = [1 - p.engineDetune, 1 + p.engineDetune, 0.5].map((ratio, k) => {
-      const o = ctx.createOscillator();
-      if (k < 2) o.setPeriodicWave(wave);
-      o.frequency.value = p.engineIdleHz * ratio;
-      const g = ctx.createGain();
-      g.gain.value = k < 2 ? 0.5 : p.engineSubGain;
-      o.connect(g).connect(filter);
-      o.start();
-      return { o, ratio };
-    });
-    const chug = ctx.createOscillator();
-    chug.frequency.value = p.engineIdleHz * p.engineChugRatio;
-    const chugDepth = ctx.createGain();
-    chugDepth.gain.value = 0;
-    chug.connect(chugDepth).connect(level.gain);
-    chug.start();
-    const rumble = ctx.createBufferSource();
-    rumble.buffer = this.noise;
-    rumble.loop = true;
-    const rumbleFilter = ctx.createBiquadFilter();
-    rumbleFilter.type = 'lowpass';
-    rumbleFilter.frequency.value = p.engineRumbleHz;
-    const rumbleLevel = ctx.createGain();
-    rumbleLevel.gain.value = 0;
-    rumble.connect(rumbleFilter).connect(rumbleLevel).connect(this.master);
-    rumble.start();
-    this.engine = { voices, filter, level, chug, chugDepth, rumbleLevel };
+    source.connect(filter).connect(level).connect(this.master);
+    source.start(0, this.p.engineLoopStart);
+    this.engine = { source, filter, level };
   }
 
   /**
@@ -95,39 +70,30 @@ export class SoundPlayer {
    */
   setEngine(speed, throttle, paused) {
     if (!this.context || !this.engine) return;
-    const e = this.engine;
     const tone = engineTone(speed, throttle, this.p);
-    const gain = paused ? 0 : tone.gain;
     const at = this.context.currentTime,
       glide = this.p.engineGlide;
-    for (const { o, ratio } of e.voices) o.frequency.setTargetAtTime(tone.frequency * ratio, at, glide);
-    e.chug.frequency.setTargetAtTime(tone.frequency * this.p.engineChugRatio, at, glide);
-    e.filter.frequency.setTargetAtTime(tone.cutoff, at, glide);
-    e.level.gain.setTargetAtTime(gain, at, glide);
-    e.chugDepth.gain.setTargetAtTime(gain * this.p.engineChugDepth, at, glide);
-    e.rumbleLevel.gain.setTargetAtTime(gain * this.p.engineRumbleGain, at, glide);
+    this.engine.source.playbackRate.setTargetAtTime(tone.rate, at, glide);
+    this.engine.filter.frequency.setTargetAtTime(tone.cutoff, at, glide);
+    this.engine.level.gain.setTargetAtTime(paused ? 0 : tone.gain, at, glide);
   }
 
   /** @param {'open' | 'close'} kind */
   doors(kind) {
-    if (!this.context || !this.master || !this.noise) return;
+    if (!this.context || !this.master || !this.doorRecording) return;
     const ctx = this.context,
+      p = this.p,
       at = ctx.currentTime;
     if (kind === 'close')
-      for (let k = 0; k < 3; k++) this.tone(this.p.doorBeepHz, at + k * 0.3, 0.15, this.p.doorBeepGain);
-    // the hiss of the air, after the beeps when the doors close
-    const start = kind === 'close' ? at + 0.9 : at;
+      for (let k = 0; k < 3; k++) this.tone(p.doorBeepHz, at + k * 0.3, 0.15, p.doorBeepGain);
+    // the air of the doors, after the beeps when they close
+    const [from, to] = kind === 'open' ? [p.doorOpenFrom, p.doorOpenTo] : [p.doorCloseFrom, p.doorCloseTo];
     const air = ctx.createBufferSource();
-    air.buffer = this.noise;
-    const band = ctx.createBiquadFilter();
-    band.type = 'bandpass';
-    band.frequency.value = this.p.doorHissHz;
+    air.buffer = this.doorRecording;
     const level = ctx.createGain();
-    level.gain.setValueAtTime(this.p.doorHissGain, start);
-    level.gain.exponentialRampToValueAtTime(0.001, start + this.p.doorHissTime);
-    air.connect(band).connect(level).connect(this.master);
-    air.start(start);
-    air.stop(start + this.p.doorHissTime);
+    level.gain.value = p.doorGain;
+    air.connect(level).connect(this.master);
+    air.start(kind === 'close' ? at + 0.9 : at, from, to - from);
   }
 
   /** The stop request bell: two notes, the second a fifth higher. */
@@ -167,4 +133,14 @@ export class SoundPlayer {
     speechSynthesis.cancel();
     speechSynthesis.speak(line);
   }
+}
+
+/**
+ * A recording, decoded.
+ * @param {AudioContext} ctx @param {string} url
+ */
+async function load(ctx, url) {
+  const response = await fetch(url);
+  if (!response.ok) throw new Error(`${url}: HTTP ${response.status}`);
+  return ctx.decodeAudioData(await response.arrayBuffer());
 }
