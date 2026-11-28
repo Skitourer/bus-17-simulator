@@ -1198,11 +1198,19 @@
       "doc": "Brightness of the head, tail and destination lights of the buses at night."
     },
     "brakeLightGlow": {
-      "value": 1.6,
+      "value": 1,
       "unit": "ratio",
       "min": 0,
       "max": 4,
-      "doc": "Brightness of the brake lights of the player's bus while braking, day and night."
+      "doc": "Brightness of the three brake lights of every vehicle while braking, the same day and night (#87); 1 is the full red of the screen."
+    },
+    "tailLightGlow": {
+      "value": 0.3,
+      "unit": "ratio",
+      "min": 0,
+      "max": 1,
+      "doc": "Brightness of the tail lights at night as a share of the brake lights (#87): a stop lamp is several times brighter than a tail lamp.",
+      "source": "UN ECE Regulation 7: rear position lamp 4 to 17 cd, stop lamp 60 to 185 cd"
     },
     "headlightIntensity": {
       "value": 400,
@@ -1844,6 +1852,13 @@
     }
   },
   "fleet": {
+    "brakeSpeed": {
+      "value": 0.5,
+      "unit": "m/s",
+      "min": 0,
+      "max": 3,
+      "doc": "Below this speed another bus of the line holds its brake: its brake lights are on, as when it slows down (#87)."
+    },
     "dwellTime": {
       "value": 20,
       "unit": "s",
@@ -2230,6 +2245,13 @@
       "min": 0,
       "max": 5,
       "doc": "Below this speed the player's bus is waiting (stop, red light): the traffic no longer yields the junctions to it."
+    },
+    "brakeLightDeceleration": {
+      "value": 0.8,
+      "unit": "m/s²",
+      "min": 0,
+      "max": 5,
+      "doc": "A car slowing down harder than this, or slower than stuckSpeed, shows its brake lights (#87); gentler slowing is engine braking."
     },
     "stuckSpeed": {
       "value": 0.5,

@@ -38,6 +38,7 @@ import { mustStop } from './signals.js';
  * @property {number} [backing] distance still to back off (m)
  * @property {number} [backOffs] times it backed off
  * @property {number} [pushed] time the player's bus has been pushing against it (s)
+ * @property {boolean} [braking] slowing down or standing: its brake lights are on (#87)
  */
 
 /**
@@ -479,6 +480,7 @@ export class Traffic {
     const { gap, speed, bus } = this.leader(v, byLane, obstacles);
     const acceleration = Math.max(-this.p.maxBraking, idmAcceleration(v.v, v.desired, gap, speed, this.p));
     v.v = Math.max(0, v.v + acceleration * dt);
+    v.braking = acceleration < -this.p.brakeLightDeceleration || v.v < this.p.stuckSpeed;
     v.stuck = this.waitsForBus(v, bus) ? (v.stuck ?? 0) + dt : 0;
     if (v.stuck > this.p.stuckDelay) {
       this.backOff(v, byLane, obstacles);

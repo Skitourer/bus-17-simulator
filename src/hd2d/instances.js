@@ -105,6 +105,31 @@ export class BillboardPool {
   }
 }
 
+/**
+ * Boxes merged into one geometry, origin on the ground at the middle of the model, +X forward.
+ * @param {...number[]} list [length, height, width, x, y, z] of each box (y: bottom)
+ */
+export function boxes(...list) {
+  const parts = list.map(([l, h, w, x, y, z]) => new THREE.BoxGeometry(l, h, w).translate(x, y + h / 2, z));
+  /** @type {number[]} */
+  const positions = [],
+    normals = [],
+    indices = [];
+  let offset = 0;
+  for (const part of parts) {
+    positions.push(...part.attributes.position.array);
+    normals.push(...part.attributes.normal.array);
+    for (const i of /** @type {THREE.BufferAttribute} */ (part.index).array) indices.push(i + offset);
+    offset += part.attributes.position.count;
+    part.dispose();
+  }
+  const geometry = new THREE.BufferGeometry();
+  geometry.setAttribute('position', new THREE.Float32BufferAttribute(positions, 3));
+  geometry.setAttribute('normal', new THREE.Float32BufferAttribute(normals, 3));
+  geometry.setIndex(indices);
+  return geometry;
+}
+
 /** One 3D model at many places, each with its heading. */
 export class ModelPool {
   /**

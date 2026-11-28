@@ -146,6 +146,21 @@ describe('Traffic', () => {
     expect(gap).toBeLessThan(P.minGap * 2);
   });
 
+  it('shows its brake lights while slowing down hard or standing, not while cruising (#87)', () => {
+    const n = new RoadNetwork(crossroads(), P.speeds);
+    const traffic = quiet(n);
+    const lane = laneOf(n, 0, 1);
+    const cruising = car(traffic, lane, 20, { v: 10, desired: 10 });
+    run(traffic, 0.5);
+    expect(cruising.braking).toBe(false);
+    car(traffic, lane, 60, { desired: 0 });
+    run(traffic, 0.5);
+    expect(cruising.braking).toBe(true);
+    run(traffic, 30);
+    expect(cruising.v).toBeLessThan(P.stuckSpeed);
+    expect(cruising.braking).toBe(true);
+  });
+
   it('stops before an obstacle on its path, such as the player bus', () => {
     const n = new RoadNetwork(crossroads(), P.speeds);
     const traffic = quiet(n);
