@@ -578,6 +578,36 @@
         "doc": "Passenger view: vertical field of view."
       }
     },
+    "dashboard": {
+      "wheelAhead": {
+        "value": 0.55,
+        "unit": "m",
+        "min": 0.2,
+        "max": 1,
+        "doc": "Cabin (#42): centre of the steering wheel this far ahead of the driver's eye."
+      },
+      "wheelBelow": {
+        "value": 0.5,
+        "unit": "m",
+        "min": 0.2,
+        "max": 1.2,
+        "doc": "Cabin (#42): centre of the steering wheel this far below the driver's eye."
+      },
+      "wheelTilt": {
+        "value": 0.45,
+        "unit": "rad",
+        "min": 0,
+        "max": 1.5,
+        "doc": "Cabin (#42): the wheel of a city bus lies nearly flat, its far edge raised by this angle from the horizontal."
+      },
+      "wheelRadius": {
+        "value": 0.25,
+        "unit": "m",
+        "min": 0.15,
+        "max": 0.35,
+        "doc": "Cabin (#42): radius of the steering wheel (city buses: about 500 mm across)."
+      }
+    },
     "mirrors": {
       "lines": {
         "value": 72,
@@ -628,6 +658,48 @@
         "min": 0,
         "max": 5,
         "doc": "Mirrors: the view aims this far outwards 10 m behind the mirror, to show the side of the road."
+      },
+      "insideFov": {
+        "value": 62,
+        "unit": "°",
+        "min": 20,
+        "max": 120,
+        "doc": "Interior mirror (#42): vertical field of view, wide like the convex mirror of a city bus."
+      },
+      "insideAspect": {
+        "value": 2.6,
+        "unit": "ratio",
+        "min": 1,
+        "max": 5,
+        "doc": "Interior mirror (#42): width / height."
+      },
+      "insideWidthShare": {
+        "value": 0.22,
+        "unit": "screen width",
+        "min": 0.05,
+        "max": 0.5,
+        "doc": "Interior mirror (#42): width on the screen."
+      },
+      "insideTop": {
+        "value": 0.1,
+        "unit": "screen height",
+        "min": 0,
+        "max": 0.8,
+        "doc": "Interior mirror (#42): top edge, from the top of the screen."
+      },
+      "insideHeight": {
+        "value": 2.7,
+        "unit": "m",
+        "min": 1.5,
+        "max": 3.2,
+        "doc": "Interior mirror (#42): height above the road, at the top of the windscreen."
+      },
+      "insideDrop": {
+        "value": 2,
+        "unit": "m",
+        "min": 0,
+        "max": 5,
+        "doc": "Interior mirror (#42): the view aims this far down 10 m behind the mirror, to show the seats and the floor."
       }
     },
     "interiorNear": {

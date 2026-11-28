@@ -7,6 +7,7 @@
 import * as THREE from 'three';
 import { digits } from './sprites.js';
 import { makeInterior } from './interior.js';
+import { eyePosition } from './views.js';
 import { boxes } from './instances.js';
 
 /** @typedef {import('./trailer.js').BusGeometry} BusSettings */
@@ -308,14 +309,15 @@ function rear(bus) {
 /**
  * @param {BusSettings} bus
  * @param {import('../settings/settings.js').Settings['lights']} lights
+ * @param {import('../settings/settings.js').Settings['camera']} camera driver's eye and dashboard (#42)
  */
-export function makeBus(bus, lights) {
+export function makeBus(bus, lights, camera) {
   tailColour = tailGlow(lights);
   const PPM = bus.texturePixelsPerMetre;
   const grp = new THREE.Group();
   const body = new THREE.Group(); // caisse (inclinee selon le relief et le roulis)
   grp.add(body);
-  const interior = makeInterior(bus);
+  const interior = makeInterior(bus, { eye: eyePosition(camera.cabin, bus), dash: camera.dashboard });
   body.add(interior);
   const roofTex = tex(bus.bodyLength * PPM, Math.round(bus.bodyWidth * PPM), (g, w, h) => {
     g.fillStyle = '#e4e6ea';

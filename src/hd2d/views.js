@@ -35,8 +35,8 @@ export function steeringWheelAngle(wheelAngle, ratio) {
 }
 
 /**
- * Screen rectangles of the two exterior mirrors (CSS pixels, origin at the top left), on the left and right
- * edges of the windscreen.
+ * Screen rectangles of the mirrors (CSS pixels, origin at the top left): the two exterior ones on the left
+ * and right edges of the windscreen, the interior one (#42) in the middle at the top of the windscreen.
  * @param {number} width @param {number} height screen size @param {Settings['camera']['mirrors']} mirrors
  */
 export function mirrorRects(width, height, mirrors) {
@@ -44,8 +44,21 @@ export function mirrorRects(width, height, mirrors) {
     h = Math.round(w / mirrors.aspect);
   const y = Math.round(height * mirrors.top);
   const margin = Math.round(width * 0.015);
+  const iw = Math.round(width * mirrors.insideWidthShare),
+    ih = Math.round(iw / mirrors.insideAspect);
   return {
     left: { x: margin, y, w, h },
     right: { x: width - margin - w, y, w, h },
+    inside: { x: Math.round((width - iw) / 2), y: Math.round(height * mirrors.insideTop), w: iw, h: ih },
   };
+}
+
+/**
+ * Pose of the steering wheel of a city bus (#42): its centre in the bus frame and its tilt from the
+ * horizontal, in front of the driver's eye.
+ * @param {{x: number, y: number, z: number}} eye driver's eye in the bus frame
+ * @param {Settings['camera']['dashboard']} dash
+ */
+export function wheelPose(eye, dash) {
+  return { x: eye.x + dash.wheelAhead, y: eye.y - dash.wheelBelow, z: eye.z, tilt: dash.wheelTilt };
 }

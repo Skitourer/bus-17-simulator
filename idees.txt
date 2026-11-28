@@ -31,6 +31,7 @@ Fait
     Voitures et vélos qui suivent la pente de la route (#93)
     Grille de sol de 5 m : routes moins inclinées en travers dans les lacets (#92, en partie)
     Trois feux stop, plus lumineux que les feux arrière (#87)
+    Rétroviseur intérieur et tableau de bord 3D avec volant (#42)
 
 À faire
     Optimisation : ne pas afficher ni simuler tous les objets mobiles de la carte (#47, #12, #19)
@@ -41,4 +42,3 @@ Fait
     Annonces sonores avec le nom du prochain arrêt
     Panneau d'information voyageur avec représentation linéaire du trajet
     (station précédente, prochaine station, station suivante)
-    Rétroviseur intérieur et tableau de bord 3D avec volant (#42)

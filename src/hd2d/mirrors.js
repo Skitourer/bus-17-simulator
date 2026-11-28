@@ -1,7 +1,9 @@
 // @ts-check
 /**
- * Exterior mirrors of the cabin view (#18): the scene seen backwards from each front corner of the bus,
- * rendered at a low resolution (HD-2D pixels), flipped like a mirror and drawn over the windscreen.
+ * Mirrors of the cabin view: the exterior ones (#18), the scene seen backwards from each front corner of
+ * the bus, and the interior one (#42), the convex mirror above the windscreen that shows the passengers and
+ * the doors. Rendered at a low resolution (HD-2D pixels), flipped like a mirror and drawn over the
+ * windscreen.
  */
 import * as THREE from 'three';
 import { mirrorRects } from './views.js';
@@ -19,13 +21,23 @@ export class Mirrors {
     this.bus = bus;
     const lines = params.lines,
       width = Math.round(lines * params.aspect);
-    /** @type {{target: THREE.WebGLRenderTarget, camera: THREE.PerspectiveCamera, side: number}[]} */
-    this.sides = [-1, 1].map((side) => {
-      const target = new THREE.WebGLRenderTarget(width, lines, { type: THREE.HalfFloatType });
+    /** @param {number} w @param {number} h */
+    const pixels = (w, h) => {
+      const target = new THREE.WebGLRenderTarget(w, h, { type: THREE.HalfFloatType });
       target.texture.magFilter = THREE.NearestFilter;
       target.texture.minFilter = THREE.NearestFilter;
-      return { target, camera: new THREE.PerspectiveCamera(params.fov, params.aspect, 0.3, 4000), side };
-    });
+      return target;
+    };
+    /** @type {{target: THREE.WebGLRenderTarget, camera: THREE.PerspectiveCamera, side: number}[]} */
+    this.sides = [-1, 1].map((side) => ({
+      target: pixels(width, lines),
+      camera: new THREE.PerspectiveCamera(params.fov, params.aspect, 0.3, 4000),
+      side,
+    }));
+    this.inside = {
+      target: pixels(Math.round(lines * params.insideAspect), lines),
+      camera: new THREE.PerspectiveCamera(params.insideFov, params.insideAspect, 0.1, 60),
+    };
     this.mat = new THREE.ShaderMaterial({
       uniforms: { map: { value: null } },
       vertexShader: 'varying vec2 vUv; void main(){ vUv = uv; gl_Position = vec4(position.xy, 0.0, 1.0); }',
@@ -55,7 +67,26 @@ export class Mirrors {
   }
 
   /**
-   * Render both mirrors over the screen, after the main view.
+   * Render one mirror into its pixels, then flipped into its rectangle of the screen.
+   * @param {THREE.Scene} scene @param {THREE.Camera} camera @param {THREE.WebGLRenderTarget} target
+   * @param {{x: number, y: number, w: number, h: number}} rect @param {number} height screen height
+   */
+  draw(scene, camera, target, rect, height) {
+    const r = this.r;
+    r.setRenderTarget(target);
+    r.render(scene, camera);
+    r.setRenderTarget(null);
+    // WebGL viewports start at the bottom left
+    r.setViewport(rect.x, height - rect.y - rect.h, rect.w, rect.h);
+    r.setScissor(rect.x, height - rect.y - rect.h, rect.w, rect.h);
+    r.setScissorTest(true);
+    this.mat.uniforms.map.value = target.texture;
+    r.render(this.scene, this.cam);
+    r.setScissorTest(false);
+  }
+
+  /**
+   * Render the three mirrors over the screen, after the main view.
    * @param {THREE.Scene} scene @param {THREE.Object3D} body bus body (mirrors move with it)
    * @param {number} width @param {number} height screen size (CSS pixels)
    */
@@ -74,18 +105,14 @@ export class Mirrors {
       camera.lookAt(
         body.localToWorld(this.ahead.set(x - 10, this.p.height - 0.6, z + side * this.p.outward)),
       );
-      r.setRenderTarget(target);
-      r.render(scene, camera);
-      r.setRenderTarget(null);
-      const rect = side < 0 ? rects.left : rects.right;
-      // WebGL viewports start at the bottom left
-      r.setViewport(rect.x, height - rect.y - rect.h, rect.w, rect.h);
-      r.setScissor(rect.x, height - rect.y - rect.h, rect.w, rect.h);
-      r.setScissorTest(true);
-      this.mat.uniforms.map.value = target.texture;
-      r.render(this.scene, this.cam);
-      r.setScissorTest(false);
+      this.draw(scene, camera, target, side < 0 ? rects.left : rects.right, height);
     }
+    // interior mirror above the middle of the windscreen, looking down the aisle towards the rear
+    const x = b.bodyLength - b.rearOverhang - 0.25;
+    const { camera, target } = this.inside;
+    camera.position.copy(body.localToWorld(this.local.set(x, this.p.insideHeight, 0)));
+    camera.lookAt(body.localToWorld(this.ahead.set(x - 10, this.p.insideHeight - this.p.insideDrop, 0)));
+    this.draw(scene, camera, target, rects.inside, height);
     r.setViewport(0, 0, width, height);
     r.shadowMap.autoUpdate = true;
   }
