@@ -13,6 +13,9 @@ export const BINDINGS = Object.freeze({
   left: ['KeyA', 'ArrowLeft'],
   right: ['KeyD', 'ArrowRight'],
   doors: ['Space'],
+  // turn signals (#119): A and E on AZERTY, Q and E on QWERTY, around the steering keys
+  indicatorLeft: ['KeyQ'],
+  indicatorRight: ['KeyE'],
   camera: ['KeyC'],
   resetView: ['KeyV'],
   guidance: ['KeyG'],

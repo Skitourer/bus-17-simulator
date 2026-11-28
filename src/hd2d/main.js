@@ -60,6 +60,7 @@ import { loadSettings } from '../settings/settings.js';
 import { applyPreferences, bindingsWith, loadPreferences, savePreferences } from '../settings/preferences.js';
 import { SoundPlayer } from './audio.js';
 import { doorSound, masterGain, stopBell } from './sounds.js';
+import { IndicatorSwitch, blinkOn } from './indicators.js';
 
 /** @param {string} id */
 const $ = (id) => /** @type {HTMLElement} */ (document.getElementById(id));
@@ -77,6 +78,9 @@ const sound = new SoundPlayer(S.audio, masterGain(preferences.volume, S.audio), 
   language: document.documentElement.lang || 'fr',
 });
 for (const type of ['keydown', 'pointerdown']) addEventListener(type, () => sound.wake());
+/** turn signals of the bus (#119), and whether their lamps were lit at the last frame (relay tick) */
+const indicators = new IndicatorSwitch(S.indicators);
+let blinkWasOn = false;
 /** state of the doors and people asking for the next stop at the last step, for their sounds */
 let soundDoors = 'closed',
   soundAlight = 0,
@@ -438,6 +442,7 @@ async function load() {
   redLights = new RedLightWatch(signals, S.signals.redMinSpeed, S.signals.redLineMargin);
   traffic = new Traffic(network, S.traffic, Math.random, signals);
   // cars on a bridge drive on its deck, the others on the ground below it (#75)
+  traffic.indicators = S.indicators;
   traffic.heightAt = (x, y, lane) =>
     (lane.bridge ? hf.deckAt(x, y) : lane.tunnel ? hf.tunnelAt(x, y) : null) ?? hf.h(x, y);
   const walkways = new Walkways(roads, S.traffic.speeds);
@@ -448,10 +453,10 @@ async function load() {
   walkers = new Pedestrians(walkways, S.pedestrians, S.passengers.looks, Math.random);
   walkerSprites = new BillboardPool(peopleAtlas(S.passengers.looks), S.passengers.looks, S.budget.capacity);
   scene.add(walkerSprites.mesh);
-  trafficLook = new TrafficLook(scene, S.traffic, S.lights, S.budget.capacity);
+  trafficLook = new TrafficLook(scene, S.traffic, S.lights, S.budget.capacity, S.indicators);
   signalLook = new SignalLook(scene, signals, (x, y) => hf.h(x, y), S.signals);
   solid = { hit: (x, y) => world.index.hit(x, y) || fleet.hit(x, y) || traffic.hit(x, y, busZ) };
-  bus = makeBus(B, S.lights, S.camera);
+  bus = makeBus(B, S.lights, S.camera, S.indicators);
   scene.add(bus.group);
   // headlights at the front corners of the bus, aimed at the road ahead
   headlights.forEach((light, i) => {
@@ -632,6 +637,7 @@ function update(dt) {
   const doorNoise = doorSound(soundDoors, doors.state);
   if (doorNoise) sound.doors(doorNoise);
   soundDoors = doors.state;
+  indicators.update(drive.delta);
   throttle = doors.closed && inp.up ? 1 : 0;
   const alight = service.request.alight;
   if (stopBell(soundAlight, alight)) sound.bell();
@@ -762,6 +768,18 @@ function stopToast(event) {
 }
 
 /** Toast once the doors are closed: the next stop, or the end of the service. */
+/** Turn signal lamps of the bus, the arrows of the dashboard and the relay tick (#119). */
+function showIndicators() {
+  const on = indicators.side !== null && blinkOn(clock.t, S.indicators);
+  const left = on && indicators.side === 'left',
+    right = on && indicators.side === 'right';
+  bus.setIndicators(left, right);
+  for (const id of ['blinkL', 'cabBlinkL']) $(id).classList.toggle('on', left);
+  for (const id of ['blinkR', 'cabBlinkR']) $(id).classList.toggle('on', right);
+  if (on !== blinkWasOn && (on || indicators.side)) sound.tick(S.indicators.tickHz, S.indicators.tickGain);
+  blinkWasOn = on;
+}
+
 function announceNextStop() {
   const st = track.stops[service.next];
   if (st) toast(t('toast.nextStop', { stop: st.name }), 'info');
@@ -811,6 +829,7 @@ function render(dt) {
     ((drive.v * drive.v * Math.tan(drive.delta)) / B.wheelbase) * 0.012;
   bus.body.rotation.set(roll, 0, pitch);
   bus.setBrake(drive.braking || !doors.closed);
+  showIndicators();
   for (const w of bus.wheels) w.rotation.z -= (drive.v * dt) / 0.5;
   renderRearBody(dt, sh);
 
@@ -839,8 +858,12 @@ function render(dt) {
   otherBuses.draw(fleet.buses, camera.position.x, -camera.position.z, (x, y, zRef) => hf.surface(x, y, zRef));
   drawWalkers(camera.position.x, -camera.position.z);
   signalLook.update();
-  trafficLook.draw(traffic.vehicles, camera.position.x, -camera.position.z, (x, y, zRef) =>
-    hf.surface(x, y, zRef ?? hf.h(x, y)),
+  trafficLook.draw(
+    traffic.vehicles,
+    camera.position.x,
+    -camera.position.z,
+    (x, y, zRef) => hf.surface(x, y, zRef ?? hf.h(x, y)),
+    clock.t,
   );
   if (stress) {
     stress.update(dt, { x: c.x, y: c.y, h: drive.h });
@@ -1215,6 +1238,8 @@ addEventListener('keydown', (e) => {
     if (doors.toggle(drive.v)) toast(t('toast.doorsTooFast'), 'bad');
     e.preventDefault();
   }
+  if (is('indicatorLeft')) indicators.press('left');
+  if (is('indicatorRight')) indicators.press('right');
   if (is('map')) minimap.cycleSize();
   if (is('pause')) setPause(!paused);
   if (is('menu')) {

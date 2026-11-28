@@ -1877,6 +1877,83 @@
       "doc": "Depth of the quay walls below the water surface."
     }
   },
+  "indicators": {
+    "color": {
+      "value": "#ffa21a",
+      "unit": "colour",
+      "doc": "Amber of the turn signal lamps (UN ECE Regulation 48)."
+    },
+    "glow": {
+      "value": 1.6,
+      "unit": "ratio",
+      "min": 0.5,
+      "max": 4,
+      "doc": "Brightness of a lit turn signal lamp, above 1 so it reads by day."
+    },
+    "blinkRate": {
+      "value": 1.5,
+      "unit": "Hz",
+      "min": 1,
+      "max": 2,
+      "doc": "Flashes per second: 90 per minute, within the 60 to 120 of UN ECE Regulation 48."
+    },
+    "duty": {
+      "value": 0.5,
+      "unit": "ratio",
+      "min": 0.2,
+      "max": 0.8,
+      "doc": "Share of each flash with the lamp lit."
+    },
+    "cancelSteer": {
+      "value": 0.15,
+      "unit": "rad",
+      "min": 0.02,
+      "max": 0.6,
+      "doc": "The bus indicator cancels itself once the wheels have turned this far towards the signalled side..."
+    },
+    "straightSteer": {
+      "value": 0.04,
+      "unit": "rad",
+      "min": 0.005,
+      "max": 0.3,
+      "doc": "...and then come back within this angle of straight."
+    },
+    "turnAngle": {
+      "value": 0.35,
+      "unit": "rad",
+      "min": 0.05,
+      "max": 1.5,
+      "doc": "A car signals a change of heading larger than this at a junction (about 20 degrees); less is going straight on."
+    },
+    "carSignalDistance": {
+      "value": 30,
+      "unit": "m",
+      "min": 5,
+      "max": 100,
+      "doc": "A car switches its indicator on this far before the junction where it turns: about 3 s at 36 km/h (French highway code R412-10: signal before turning)."
+    },
+    "carSignalAfter": {
+      "value": 8,
+      "unit": "m",
+      "min": 0,
+      "max": 40,
+      "doc": "A car keeps its indicator on this far into the road it has turned into."
+    },
+    "tickHz": {
+      "value": 2400,
+      "unit": "Hz",
+      "min": 200,
+      "max": 8000,
+      "doc": "Pitch of the relay tick of the bus indicator."
+    },
+    "tickGain": {
+      "value": 0.08,
+      "unit": "ratio",
+      "min": 0,
+      "max": 1,
+      "doc": "Loudness of the relay tick of the bus indicator."
+    }
+  },
   "audio": {
     "volumeLow": {
       "value": 0.25,

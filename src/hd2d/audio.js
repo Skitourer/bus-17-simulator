@@ -96,6 +96,15 @@ export class SoundPlayer {
     air.start(kind === 'close' ? at + 0.9 : at, from, to - from);
   }
 
+  /**
+   * Tick of the turn signal relay (#119).
+   * @param {number} frequency Hz @param {number} gain
+   */
+  tick(frequency, gain) {
+    if (!this.context) return;
+    this.tone(frequency, this.context.currentTime, 0.03, gain);
+  }
+
   /** The stop request bell: two notes, the second a fifth higher. */
   bell() {
     if (!this.context) return;

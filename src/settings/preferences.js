@@ -28,6 +28,8 @@ export const REMAPPABLE = Object.freeze(
     'left',
     'right',
     'doors',
+    'indicatorLeft',
+    'indicatorRight',
     'camera',
     'resetView',
     'guidance',

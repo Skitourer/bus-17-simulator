@@ -6,7 +6,8 @@
  */
 import * as THREE from 'three';
 import { ModelPool, boxes } from './instances.js';
-import { brakeMaterial, glowAtNight, tailGlow } from './bus3d.js';
+import { brakeMaterial, glowAtNight, indicatorMaterial, tailGlow } from './bus3d.js';
+import { blinkOn } from './indicators.js';
 import { groundPose } from './traffic.js';
 
 /** Car body colours, picked by the vehicle's look. */
@@ -52,9 +53,9 @@ export class TrafficLook {
   /**
    * @param {THREE.Scene} scene @param {import('../settings/settings.js').Settings['traffic']} p
    * @param {import('../settings/settings.js').Settings['lights']} lights @param {number} capacity most
-   * vehicles drawn
+   * vehicles drawn @param {import('../settings/settings.js').Settings['indicators']} indicators turn signals
    */
-  constructor(scene, p, lights, capacity) {
+  constructor(scene, p, lights, capacity, indicators) {
     this.p = p;
     const L = p.carLength,
       W = p.carWidth;
@@ -89,6 +90,19 @@ export class TrafficLook {
       ),
       brakeMaterial(lights),
     );
+    // turn signals (#119): front and rear corner lamps of each side, +Z being the right
+    this.indicators = indicators;
+    /** @param {number} z */
+    const corners = (z) =>
+      boxes(
+        [0.06, 0.1, 0.18, L / 2 + 0.01, 0.62, z * (W / 2 - 0.08)],
+        [0.06, 0.1, 0.18, -L / 2 - 0.04, 0.78, z * (W / 2 - 0.08)],
+      );
+    this.signals = {
+      left: pool(corners(-1), indicatorMaterial(indicators)),
+      right: pool(corners(1), indicatorMaterial(indicators)),
+    };
+    for (const side of Object.values(this.signals)) side.mesh.castShadow = false;
     const B = p.bikeLength;
     this.bikes = {
       frame: pool(
@@ -141,8 +155,9 @@ export class TrafficLook {
    * @param {import('./traffic.js').Vehicle[]} vehicles @param {number} x @param {number} y camera (m)
    * @param {(x: number, y: number, zRef: number | undefined) => number} heightAt drivable surface height near
    * the height of a vehicle's road (`zRef`, unknown without heights)
+   * @param {number} time game time (s), for the blinking of the turn signals
    */
-  draw(vehicles, x, y, heightAt) {
+  draw(vehicles, x, y, heightAt, time) {
     const near = vehicles
       .map((v) => ({ v, d: Math.hypot(v.x - x, v.y - y) }))
       .filter((item) => item.d <= this.p.drawDistance)
@@ -151,6 +166,7 @@ export class TrafficLook {
     let cars = 0,
       bikes = 0,
       braking = 0;
+    const lit = { left: 0, right: 0 };
     for (const { v } of near) {
       // on the slope of the road under the wheels (#93)
       const { z, pitch, roll } = groundPose(v, v.length * this.p.wheelbaseShare, (px, py) =>
@@ -167,6 +183,9 @@ export class TrafficLook {
         for (const part of Object.values(this.cars)) part.set(cars, v.x, v.y, z, v.h, pitch, roll);
         this.beam.set(cars, v.x, v.y, z, v.h, pitch, roll);
         if (v.braking) this.brakes.set(braking++, v.x, v.y, z, v.h, pitch, roll);
+        // each car blinks with its own phase
+        if (v.signal && blinkOn(time, this.indicators, v.id * 0.37))
+          this.signals[v.signal].set(lit[v.signal]++, v.x, v.y, z, v.h, pitch, roll);
         this.cars.body.mesh.setColorAt(cars, this.colour.set(CAR_COLOURS[v.variant % CAR_COLOURS.length]));
         cars++;
       }
@@ -174,6 +193,8 @@ export class TrafficLook {
     for (const part of Object.values(this.cars)) part.show(cars);
     this.beam.show(this.beamMaterial.visible ? cars : 0);
     this.brakes.show(braking);
+    this.signals.left.show(lit.left);
+    this.signals.right.show(lit.right);
     for (const part of Object.values(this.bikes)) part.show(bikes);
     for (const mesh of [this.cars.body.mesh, this.bikes.rider.mesh])
       if (mesh.instanceColor) mesh.instanceColor.needsUpdate = true;
