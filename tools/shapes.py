@@ -47,6 +47,12 @@ def distances(geom: BaseGeometry, pts: GeometryArray) -> FloatArray:
     return np.asarray(d, dtype=np.float64)
 
 
+def pair_distances(a: GeometryArray, b: GeometryArray) -> FloatArray:
+    """Distance between the geometries of two arrays, element by element."""
+    d = shapely.distance(a, b)  # pyright: ignore[reportUnknownMemberType]
+    return np.asarray(d, dtype=np.float64)
+
+
 def polygons(rings: FloatArray) -> GeometryArray:
     """Polygons from an array of closed rings, shape (n, k, 2)."""
     return cast(GeometryArray, np.asarray(shapely.polygons(rings), dtype=object))
