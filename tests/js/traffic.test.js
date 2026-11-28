@@ -393,6 +393,47 @@ describe('Traffic and the player bus (#95)', () => {
   });
 });
 
+describe('Traffic on two levels (#75)', () => {
+  /** Traffic whose north road is a bridge 6 m above the ground. */
+  function bridged() {
+    const n = new RoadNetwork(crossroads(8), P.speeds);
+    const traffic = quiet(n);
+    traffic.heightAt = (_x, _y, bridge) => (bridge ? 106 : 100);
+    return { n, traffic };
+  }
+
+  it('knows the lanes on a bridge and the height of each vehicle', () => {
+    const { n, traffic } = bridged();
+    expect(n.lanes[laneOf(n, 1, 2)].bridge).toBe(true);
+    expect(n.lanes[laneOf(n, 0, 1)].bridge).toBe(false);
+    expect(car(traffic, laneOf(n, 1, 2), 50).z).toBe(106);
+    expect(car(traffic, laneOf(n, 0, 1), 50).z).toBe(100);
+  });
+
+  it('drives under the bus on a bridge above it, and stops for the bus on its own level', () => {
+    const { n, traffic } = bridged();
+    const c = car(traffic, laneOf(n, 0, 1), 20, { v: 8 });
+    const bus = { x: 80, y: -1.5, r: 2, v: 0, h: 0, priority: true };
+    run(traffic, 20, [{ ...bus, z: 106 }]);
+    expect(c.x).toBeGreaterThan(80);
+    const d = car(traffic, laneOf(n, 0, 1), 20, { v: 8 });
+    traffic.vehicles = [d];
+    run(traffic, 20, [{ ...bus, z: 100.5 }]);
+    expect(d.x).toBeLessThan(80);
+  });
+
+  it('is neither hit nor pushed by the bus on another level', () => {
+    const { n, traffic } = bridged();
+    const c = car(traffic, laneOf(n, 0, 1), 50);
+    expect(traffic.hit(c.x, c.y, 106)).toBe(false);
+    expect(traffic.hit(c.x, c.y, 100)).toBe(true);
+    expect(traffic.hit(c.x, c.y)).toBe(true);
+    for (let k = 0; k < 200; k++) traffic.pushedBy([{ x: c.x, y: c.y }], Math.PI, 0.05, 106);
+    expect(c.pushed ?? 0).toBe(0);
+    expect(c.backOffs ?? 0).toBe(0);
+  });
+});
+
 describe('Traffic in built-up areas and in the countryside (#94)', () => {
   /** The crossroads with the west road in a village; the other roads in the countryside. */
   function village() {
