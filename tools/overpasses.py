@@ -13,8 +13,9 @@ from collections.abc import Sequence
 from dataclasses import dataclass
 
 import numpy as np
+import numpy.typing as npt
 from shapely import LineString, Point, STRtree
-from shapes import FloatArray, coordinates, interpolate
+from shapes import FloatArray, coordinates, distances, interpolate, locate, points
 from streets import Profile, RoadEdge
 
 # headroom of the French roads (4.75 m, ICTAAL / ARP gauge for new structures) plus the depth of a deck as
@@ -23,6 +24,7 @@ CLEARANCE = 5.55  # m from the road below up to the deck surface
 HUMP_GRADE = 0.06  # m/m: the deck rises at most this steeply towards the crossing (bus-friendly ramps)
 CUT_GRADE = 0.08  # m/m: the road below dips at most this steeply (French urban underpasses: 6 to 8 %)
 MARGIN = 1.0  # m beyond the edges of the crossing roads kept at full height or depth
+COVER_MARGIN = 2.0  # m of ground kept over an underpass beyond the sides of its road (the tunnel walls)
 
 
 @dataclass(frozen=True)
@@ -195,3 +197,28 @@ def approach_edges(edges: Sequence[RoadEdge]) -> set[int]:
     """Ground-level edges that start or end at a bridge: they carry the traffic up to the deck."""
     nodes = {n for e in edges if e.level == 'bridge' for n in (e.a, e.b)}
     return {k for k, e in enumerate(edges) if e.level == 'ground' and (e.a in nodes or e.b in nodes)}
+
+
+def covered_ground(
+    xs: FloatArray,
+    ys: FloatArray,
+    ground: FloatArray,
+    tunnels: Sequence[tuple[RoadEdge, Profile]],
+    on_roads: npt.NDArray[np.bool_],
+) -> FloatArray:
+    """Ground heights with the covered part of every underpass under at least CLEARANCE of ground: the
+    ground there was shaped by the ramps down into the trench, and the tunnel stuck out of it (#86). Between
+    the two mouths, over the road and COVER_MARGIN beyond its sides, the ground rises to the floor plus
+    CLEARANCE, except on the roads (`on_roads`): the road above keeps its own surface."""
+    out = ground.copy()
+    pts = points(xs, ys)
+    for e, p in tunnels:
+        line = LineString(e.coords)
+        near = np.flatnonzero((distances(line, pts) <= e.width / 2 + COVER_MARGIN) & ~on_roads)
+        if not len(near):
+            continue
+        s = locate(np.full(len(near), line, dtype=object), pts[near])
+        inside = (s > 0) & (s < line.length)
+        k, along = near[inside], s[inside]
+        out[k] = np.maximum(out[k], np.interp(along, p.s, p.z) + CLEARANCE)
+    return out

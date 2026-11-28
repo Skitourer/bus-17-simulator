@@ -8,6 +8,7 @@ from overpasses import (
     HUMP_GRADE,
     approach_edges,
     bridge_groups,
+    covered_ground,
     crossings,
     dig_underpasses,
     plateau,
@@ -119,3 +120,17 @@ def test_deep_enough_underpasses_stay_as_they_are() -> None:
     deep = [profiles[0], Profile(profiles[1].s, profiles[1].z - 10), *profiles[2:]]
     assert underpass_crossings(edges, deep)[0].missing == 0.0
     assert dig_underpasses(edges, deep) == deep
+
+
+def test_the_ground_covers_the_underpass_between_its_mouths() -> None:
+    edges, profiles = underpass()
+    dug = dig_underpasses(edges, profiles)
+    xs = np.array([0.0, 0.0, 0.0, 30.0])
+    ys = np.array([5.0, -14.0, -20.0, 5.0])
+    ground = np.full(4, 97.0)
+    out = covered_ground(xs, ys, ground, [(edges[1], dug[1])], np.zeros(4, dtype=bool))
+    assert covered_ground(xs, ys, ground, [(edges[1], dug[1])], np.ones(4, dtype=bool)).tolist() == [97.0] * 4
+    # over the tunnel: floor + CLEARANCE; in the trench before the mouth and away from it: unchanged
+    assert out[0] == pytest.approx(dug[1].at(20.0) + CLEARANCE)
+    assert out[1] == pytest.approx(dug[1].at(1.0) + CLEARANCE)
+    assert out[2:].tolist() == [97.0, 97.0]
