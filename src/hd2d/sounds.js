@@ -24,6 +24,19 @@ export function engineTone(speed, throttle, p) {
 }
 
 /**
+ * Harmonics of the engine voice (Fourier sine terms, for a Web Audio periodic wave): falling as 1/n^1.5 so
+ * the hum stays round, the odd ones stronger for the hollow knock of a diesel. Term 0 (offset) is 0.
+ * @param {number} count number of harmonics
+ * @returns {{real: Float32Array, imag: Float32Array}}
+ */
+export function engineHarmonics(count) {
+  const real = new Float32Array(count + 1),
+    imag = new Float32Array(count + 1);
+  for (let n = 1; n <= count; n++) imag[n] = (n % 2 ? 1 : 0.55) / Math.pow(n, 1.5);
+  return { real, imag };
+}
+
+/**
  * Master gain of a volume choice of the settings screen.
  * @param {'off' | 'low' | 'medium' | 'high'} volume @param {AudioSettings} p
  */

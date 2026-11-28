@@ -4,7 +4,7 @@
  * request bell, and the spoken announcement of the next stop (Web Speech API, the voice of the browser).
  * Browsers start audio only after a key press or a click on the page: `wake()` is called on each of them.
  */
-import { engineTone } from './sounds.js';
+import { engineHarmonics, engineTone } from './sounds.js';
 
 /** @typedef {import('../settings/settings.js').Settings['audio']} AudioSettings */
 
@@ -19,7 +19,10 @@ export class SoundPlayer {
     this.speech = speech;
     /** @type {AudioContext | null} */
     this.context = null;
-    /** @type {{osc: OscillatorNode[], filter: BiquadFilterNode, level: GainNode} | null} */
+    /**
+     * @type {{voices: {o: OscillatorNode, ratio: number}[], filter: BiquadFilterNode, level: GainNode,
+     * chug: OscillatorNode, chugDepth: GainNode, rumbleLevel: GainNode} | null}
+     */
     this.engine = null;
     /** @type {GainNode | null} */
     this.master = null;
@@ -36,30 +39,54 @@ export class SoundPlayer {
 
   start() {
     const ctx = new AudioContext();
+    const p = this.p;
     this.context = ctx;
     this.master = ctx.createGain();
     this.master.gain.value = this.gain;
-    this.master.connect(ctx.destination);
-    // the engine: a sawtooth and a square an octave below, through a low-pass filter
-    const filter = ctx.createBiquadFilter();
-    filter.type = 'lowpass';
-    filter.frequency.value = this.p.engineCutoffHz;
-    const level = ctx.createGain();
-    level.gain.value = 0;
-    filter.connect(level).connect(this.master);
-    const osc = /** @type {OscillatorType[]} */ (['sawtooth', 'square']).map((type, k) => {
-      const o = ctx.createOscillator();
-      o.type = type;
-      o.frequency.value = this.p.engineIdleHz / (k + 1);
-      o.connect(filter);
-      o.start();
-      return o;
-    });
-    this.engine = { osc, filter, level };
-    // one second of white noise, for the air of the doors
+    // a compressor softens the peaks when several sounds play together
+    this.master.connect(ctx.createDynamicsCompressor()).connect(ctx.destination);
+    // one second of white noise, for the engine rumble and the air of the doors
     this.noise = ctx.createBuffer(1, ctx.sampleRate, ctx.sampleRate);
     const data = this.noise.getChannelData(0);
     for (let k = 0; k < data.length; k++) data[k] = Math.random() * 2 - 1;
+    // the engine: two slightly detuned voices with the harmonics of a diesel and a sine an octave below,
+    // through a low-pass filter, beating at the firing rate of the cylinders
+    const filter = ctx.createBiquadFilter();
+    filter.type = 'lowpass';
+    filter.Q.value = 0.5;
+    filter.frequency.value = p.engineCutoffHz;
+    const level = ctx.createGain();
+    level.gain.value = 0;
+    filter.connect(level).connect(this.master);
+    const { real, imag } = engineHarmonics(p.engineHarmonics);
+    const wave = ctx.createPeriodicWave(real, imag);
+    const voices = [1 - p.engineDetune, 1 + p.engineDetune, 0.5].map((ratio, k) => {
+      const o = ctx.createOscillator();
+      if (k < 2) o.setPeriodicWave(wave);
+      o.frequency.value = p.engineIdleHz * ratio;
+      const g = ctx.createGain();
+      g.gain.value = k < 2 ? 0.5 : p.engineSubGain;
+      o.connect(g).connect(filter);
+      o.start();
+      return { o, ratio };
+    });
+    const chug = ctx.createOscillator();
+    chug.frequency.value = p.engineIdleHz * p.engineChugRatio;
+    const chugDepth = ctx.createGain();
+    chugDepth.gain.value = 0;
+    chug.connect(chugDepth).connect(level.gain);
+    chug.start();
+    const rumble = ctx.createBufferSource();
+    rumble.buffer = this.noise;
+    rumble.loop = true;
+    const rumbleFilter = ctx.createBiquadFilter();
+    rumbleFilter.type = 'lowpass';
+    rumbleFilter.frequency.value = p.engineRumbleHz;
+    const rumbleLevel = ctx.createGain();
+    rumbleLevel.gain.value = 0;
+    rumble.connect(rumbleFilter).connect(rumbleLevel).connect(this.master);
+    rumble.start();
+    this.engine = { voices, filter, level, chug, chugDepth, rumbleLevel };
   }
 
   /**
@@ -68,12 +95,17 @@ export class SoundPlayer {
    */
   setEngine(speed, throttle, paused) {
     if (!this.context || !this.engine) return;
+    const e = this.engine;
     const tone = engineTone(speed, throttle, this.p);
+    const gain = paused ? 0 : tone.gain;
     const at = this.context.currentTime,
       glide = this.p.engineGlide;
-    this.engine.osc.forEach((o, k) => o.frequency.setTargetAtTime(tone.frequency / (k + 1), at, glide));
-    this.engine.filter.frequency.setTargetAtTime(tone.cutoff, at, glide);
-    this.engine.level.gain.setTargetAtTime(paused ? 0 : tone.gain, at, glide);
+    for (const { o, ratio } of e.voices) o.frequency.setTargetAtTime(tone.frequency * ratio, at, glide);
+    e.chug.frequency.setTargetAtTime(tone.frequency * this.p.engineChugRatio, at, glide);
+    e.filter.frequency.setTargetAtTime(tone.cutoff, at, glide);
+    e.level.gain.setTargetAtTime(gain, at, glide);
+    e.chugDepth.gain.setTargetAtTime(gain * this.p.engineChugDepth, at, glide);
+    e.rumbleLevel.gain.setTargetAtTime(gain * this.p.engineRumbleGain, at, glide);
   }
 
   /** @param {'open' | 'close'} kind */
