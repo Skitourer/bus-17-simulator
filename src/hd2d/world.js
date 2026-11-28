@@ -310,6 +310,29 @@ function sidewalks(ground, tiles, street) {
 }
 
 /**
+ * Normals of pieces cut along the ground triangles, smoothed like those of the ground grid: each piece has
+ * its own vertices, so computed normals followed the plane of its triangle and the asphalt changed shade
+ * from one 5 m triangle to the next.
+ * @param {THREE.BufferGeometry} geo positions (x, height, -y) @param {Ground} ground
+ */
+function smoothNormals(geo, ground) {
+  const pos = geo.getAttribute('position'),
+    span = ground.index.step;
+  const normals = new Float32Array(pos.count * 3);
+  const n = new THREE.Vector3();
+  for (let k = 0; k < pos.count; k++) {
+    const x = pos.getX(k),
+      y = -pos.getZ(k);
+    // central differences over one grid step on each side, like the averaged normals of the grid vertices
+    const gx = (ground.h(x + span, y) - ground.h(x - span, y)) / (2 * span),
+      gy = (ground.h(x, y + span) - ground.h(x, y - span)) / (2 * span);
+    n.set(-gx, 1, gy).normalize();
+    normals.set([n.x, n.y, n.z], k * 3);
+  }
+  geo.setAttribute('normal', new THREE.BufferAttribute(normals, 3));
+}
+
+/**
  * One mesh from polygon pieces (cut along the ground triangles, so coplanar with the ground), lifted by `lift`.
  * @param {Ground} ground @param {Map<string, TileData>} tiles
  * @param {(tile: TileData) => number[][][]} select @param {number} lift @param {THREE.Texture} map
@@ -335,15 +358,19 @@ function piecesMesh(ground, tiles, select, lift, map, order) {
         P.push(v.x, ground.h(v.x, v.y) + lift, -v.y);
         U.push(v.x / 4, v.y / 4);
       }
-      for (const tri of THREE.ShapeUtils.triangulateShape(contour, holes))
-        I.push(base + tri[0], base + tri[2], base + tri[1]);
+      const all = vec.flat();
+      for (const [a, b, c] of THREE.ShapeUtils.triangulateShape(contour, holes)) {
+        // facing up whatever the ring orientation, so the smoothed normals are not flipped as back faces
+        const up = THREE.ShapeUtils.area([all[a], all[b], all[c]]) > 0;
+        I.push(base + a, base + (up ? b : c), base + (up ? c : b));
+      }
     }
   }
   const geo = new THREE.BufferGeometry();
   geo.setAttribute('position', new THREE.Float32BufferAttribute(P, 3));
   geo.setAttribute('uv', new THREE.Float32BufferAttribute(U, 2));
   geo.setIndex(I);
-  geo.computeVertexNormals();
+  smoothNormals(geo, ground);
   const mat = new THREE.MeshLambertMaterial({
     map,
     side: THREE.DoubleSide, // ring orientation from shapely is not guaranteed
