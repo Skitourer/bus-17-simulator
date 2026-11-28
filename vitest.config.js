@@ -27,6 +27,7 @@ export default defineConfig({
         'src/hd2d/shore.js',
         'src/hd2d/kerb.js',
         'src/hd2d/roofs.js',
+        'src/hd2d/facades.js',
         'src/hd2d/guidance.js',
         'src/hd2d/budget.js',
         'src/hd2d/fleet.js',

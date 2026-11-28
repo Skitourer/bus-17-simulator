@@ -9,6 +9,7 @@
  */
 import * as THREE from 'three';
 import { hippedRoof } from './roofs.js';
+import { buildingLevels, plinthColour, wallColour } from './facades.js';
 import { tree, shelter, stopPole } from './sprites.js';
 import { quayWalls, waterSurface } from './water.js';
 import { deckFromRecord } from './ground.js';
@@ -776,7 +777,29 @@ function tunnelMouths(hf, key, portals) {
  */
 const FACADES = [
   {
-    walls: ['#e8d6b0', '#dcc29b', '#efe6d4', '#cdb894', '#e6d0aa', '#d9b48c', '#f0e2c4', '#e2c7a6'],
+    // ochre, sand, cream, salmon and pink renders of the old town and the faubourgs
+    walls: [
+      '#e8d6b0',
+      '#dcc29b',
+      '#efe6d4',
+      '#cdb894',
+      '#e6d0aa',
+      '#d9b48c',
+      '#f0e2c4',
+      '#e2c7a6',
+      '#e3b98f',
+      '#d9a47c',
+      '#ecc9a8',
+      '#e8bfa8',
+      '#dba99a',
+      '#f1d9a0',
+      '#e6c77d',
+      '#d8c9a8',
+      '#c9b8a0',
+      '#e9dcc0',
+      '#cfd1bf',
+      '#d4c4b8',
+    ],
     windows: [[5, 4, 6, 8]],
     draw(g, x, y) {
       // window, sill and shutters
@@ -788,7 +811,23 @@ const FACADES = [
     },
   },
   {
-    walls: ['#e9e6df', '#d8d6d0', '#cfc9bd', '#e3ddd0', '#bfc3c6', '#d6cfc4'],
+    // white, beige and grey concrete, with the pastel panels of the 1960s-1970s estates
+    walls: [
+      '#e9e6df',
+      '#d8d6d0',
+      '#cfc9bd',
+      '#e3ddd0',
+      '#bfc3c6',
+      '#d6cfc4',
+      '#e8e0c8',
+      '#efe4c2',
+      '#e6d4c8',
+      '#d9dde0',
+      '#cdd6d2',
+      '#e4cfae',
+      '#c8c2b8',
+      '#dedad0',
+    ],
     windows: [[2, 5, 12, 6]],
     draw(g, x, y) {
       // balcony rail under a wide window
@@ -797,7 +836,17 @@ const FACADES = [
     },
   },
   {
-    walls: ['#c9ccd0', '#b9c0c7', '#d6d3cc', '#aeb6bd'],
+    walls: [
+      '#c9ccd0',
+      '#b9c0c7',
+      '#d6d3cc',
+      '#aeb6bd',
+      '#c2c9c4',
+      '#d0cbc2',
+      '#a9b3b8',
+      '#bcc4cc',
+      '#cfc6b6',
+    ],
     windows: [[1, 2, 14, 11]],
     draw(g, x, y) {
       // glazing bars
@@ -807,7 +856,21 @@ const FACADES = [
     },
   },
   {
-    walls: ['#efe3cc', '#e8d2b4', '#f2e6d8', '#e0c9a8', '#ead9c6'],
+    // rendered houses: cream, white, ochre, pink, pale yellow and pale green
+    walls: [
+      '#efe3cc',
+      '#e8d2b4',
+      '#f2e6d8',
+      '#e0c9a8',
+      '#ead9c6',
+      '#f3ecdf',
+      '#e9c99b',
+      '#eac0a6',
+      '#efdca0',
+      '#d9dcc0',
+      '#e2cdb9',
+      '#d6b892',
+    ],
     windows: [[6, 6, 4, 5]],
     draw(g, x, y) {
       g.fillStyle = '#7f9a6a';
@@ -816,7 +879,7 @@ const FACADES = [
     },
   },
   {
-    walls: ['#b8bcc0', '#9fa7ad', '#c4c0b6', '#8f9aa3'],
+    walls: ['#b8bcc0', '#9fa7ad', '#c4c0b6', '#8f9aa3', '#a7a9a0', '#b9b2a4', '#9ea89c', '#aab5bf'],
     windows: [[2, 2, 12, 2]],
     draw(g, x, y) {
       // corrugated cladding
@@ -825,7 +888,7 @@ const FACADES = [
     },
   },
   {
-    walls: ['#d8cbb0', '#cfc2a6', '#e0d6c2'],
+    walls: ['#d8cbb0', '#cfc2a6', '#e0d6c2', '#cdbfa8', '#e2d2b2', '#d2c8b8'],
     windows: [[6, 3, 4, 10]],
     draw(g, x, y) {
       // stone courses and a round-headed window
@@ -837,8 +900,7 @@ const FACADES = [
     },
   },
 ];
-/** stone plinth colour, and a texel of the facade texture without window (plain wall) */
-const PLINTH = new THREE.Color('#8f8a80');
+/** a texel of the facade texture without window (plain wall), for the plinths */
 const PLAIN_U = 0.02,
   PLAIN_V = 0.5;
 
@@ -961,14 +1023,15 @@ function walls(lights) {
  * the data, flat or hipped roofs (#56). With `lifts`, each building starts that high above the ground (parts
  * over a passage, #14): no plinth, and an underside.
  * @param {Ground} hf @param {import('../common/types.js').BuildingsData} data @param {number} seed colour stream
- * @param {THREE.Material} wallMaterial @param {{roofPitch: number, roofCompactness: number}} roofShape
+ * @param {THREE.Material} wallMaterial @param {WorldSettings} street roof shape, plinth and colours
  * @param {number[]} [lifts] m, one per building
  */
-function buildings(hf, data, seed, wallMaterial, roofShape, lifts) {
+function buildings(hf, data, seed, wallMaterial, street, lifts) {
   /** @type {number[][]} positions, uvs, colours and families of the walls; positions and colours of the roofs */
   const [WP, WU, WC, WF, RP, RC] = [[], [], [], [], [], []];
   const r = rng(seed);
-  const col = new THREE.Color();
+  const col = new THREE.Color(),
+    plinth = new THREE.Color();
   data.b.forEach((b, index) => {
     const [height, kind, style, riseDm] = b;
     const h = height / 10;
@@ -985,10 +1048,14 @@ function buildings(hf, data, seed, wallMaterial, roofShape, lifts) {
       zmax = Math.max(zmax, z);
     }
     const lift = lifts?.[index] ?? 0;
-    const top = zmax + h,
-      base = lift ? zmax + lift : zmin - 0.5,
-      floor = lift ? base : zmax + 0.2;
-    col.set(family.walls[Math.floor(r() * family.walls.length)]);
+    const { base, floor, top } = buildingLevels(zmin, zmax, h, lift, street);
+    const wall = wallColour(family.walls, r, {
+      hue: street.facadeHueSpread,
+      saturation: street.facadeSaturationSpread,
+      lightness: street.facadeLightnessSpread,
+    });
+    col.setRGB(...wall, THREE.SRGBColorSpace);
+    plinth.setRGB(...plinthColour(wall, street.plinthDarken), THREE.SRGBColorSpace);
     let u = 0;
     for (let i = 0; i < ring.length; i++) {
       const [x0, y0] = ring[i],
@@ -997,11 +1064,11 @@ function buildings(hf, data, seed, wallMaterial, roofShape, lifts) {
       const u0 = u / bay,
         u1 = (u + L) / bay;
       // deux triangles par quad (ordre anti-horaire vu de l'exterieur : l'anneau est anti-horaire)
-      // socle en pierre du point le plus bas au rez-de-chaussee : aucun mur n'est coupe par le relief
+      // plinth below the lowest corner: it hides the ground dipping between the corners
       if (!lift) {
         WP.push(x0, base, -y0, x1, base, -y1, x1, floor, -y1, x0, base, -y0, x1, floor, -y1, x0, floor, -y0);
         for (let k = 0; k < 6; k++) WU.push(PLAIN_U, PLAIN_V);
-        for (let k = 0; k < 6; k++) WC.push(PLINTH.r, PLINTH.g, PLINTH.b);
+        for (let k = 0; k < 6; k++) WC.push(plinth.r, plinth.g, plinth.b);
         for (let k = 0; k < 6; k++) WF.push(0);
       }
       // facade du rez-de-chaussee au toit
@@ -1013,7 +1080,7 @@ function buildings(hf, data, seed, wallMaterial, roofShape, lifts) {
       u += L;
     }
     const shade = (r() - 0.5) * 0.08;
-    const faces = riseDm > 0 ? hippedRoof(ring, riseDm / 10, roofShape) : null;
+    const faces = riseDm > 0 ? hippedRoof(ring, riseDm / 10, street) : null;
     if (faces) {
       const rc = new THREE.Color(kind === 3 ? SLATE : TILES[Math.floor(r() * TILES.length)]).offsetHSL(
         0,
@@ -1042,7 +1109,7 @@ function buildings(hf, data, seed, wallMaterial, roofShape, lifts) {
       if (lift)
         for (const k of t) {
           RP.push(ring[k][0], base, -ring[k][1]);
-          RC.push(PLINTH.r, PLINTH.g, PLINTH.b);
+          RC.push(plinth.r, plinth.g, plinth.b);
         }
     }
   });

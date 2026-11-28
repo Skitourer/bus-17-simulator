@@ -35,9 +35,10 @@ correspondait pas à ce qui était dessiné.
     de desserte et voies bus, des lignes axiales discontinues sur les rues à double sens
     d'au moins 5,5 m, et des passages piétons sur les grands axes près des carrefours ;
   - les bâtiments recoupés à 0,3 m de la chaussée, et les arbres (OSM et semés dans les
-    parcs et bois) gardés à 1 m de la chaussée et hors des bâtiments. Les bâtiments
-    reposent sur un socle en pierre depuis leur point le plus bas, donc aucun mur n'est
-    coupé par la pente.
+    parcs et bois) gardés à 1 m de la chaussée et hors des bâtiments. La façade d'un
+    bâtiment part de son point le plus bas, sur un socle bas d'une teinte plus sombre que
+    son mur, et entre dans la pente du côté haut (#16 : un socle en pierre jusqu'au point
+    le plus haut faisait de hauts murs gris dans les pentes).
 - Dans le jeu, `Ground` (`src/hd2d/ground.js`) est la seule source de hauteur : triangles
   du sol exactement comme affichés, tablier des ponts quand le véhicule est à leur niveau,
   grille IGN large hors des tuiles.

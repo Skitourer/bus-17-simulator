@@ -32,8 +32,10 @@ each read a terrain that did not match what was drawn.
     and busways, dashed centre lines on two-way streets of 5.5 m or more, and zebra
     crossings on main roads next to junctions;
   - buildings clipped 0.3 m off the carriageway, and trees (OSM and seeded in parks and
-    woods) kept 1 m off the carriageway and outside buildings. Buildings stand on a stone
-    plinth from their lowest ground point, so no wall is cut by the slope.
+    woods) kept 1 m off the carriageway and outside buildings. The facade of a building
+    starts at its lowest ground point, on a low plinth of a darker shade of its wall
+    colour, and goes into the slope on the high side (#16: a stone plinth up to the
+    highest point made tall grey walls on slopes).
 - In the game, `Ground` (`src/hd2d/ground.js`) is the single height source: ground
   triangles exactly as rendered, bridge decks when the vehicle is at deck level, the
   coarse IGN grid outside the tiles.

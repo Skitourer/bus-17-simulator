@@ -1686,6 +1686,48 @@
       "max": 1,
       "doc": "A footprint covering less of its smallest rectangle (L, U or T shapes) keeps a flat roof: one ridge would not fit it."
     },
+    "plinthHeight": {
+      "value": 0.2,
+      "unit": "m",
+      "min": 0,
+      "max": 1.5,
+      "doc": "Height of the plinth above the lowest corner of a building, where its facade starts."
+    },
+    "plinthDepth": {
+      "value": 0.5,
+      "unit": "m",
+      "min": 0,
+      "max": 3,
+      "doc": "Depth of the plinth below the lowest corner of a building: it hides the ground dipping between the corners."
+    },
+    "plinthDarken": {
+      "value": 0.25,
+      "unit": "ratio",
+      "min": 0,
+      "max": 0.9,
+      "doc": "Share of the lightness of the wall colour taken away for the plinth (rendered stone or concrete)."
+    },
+    "facadeHueSpread": {
+      "value": 0.025,
+      "unit": "turn",
+      "min": 0,
+      "max": 0.2,
+      "doc": "Largest shift of hue of a building's wall colour from its family palette, so that neighbours differ."
+    },
+    "facadeSaturationSpread": {
+      "value": 0.08,
+      "unit": "ratio",
+      "min": 0,
+      "max": 0.5,
+      "doc": "Largest shift of saturation of a building's wall colour from its family palette."
+    },
+    "facadeLightnessSpread": {
+      "value": 0.05,
+      "unit": "ratio",
+      "min": 0,
+      "max": 0.3,
+      "doc": "Largest shift of lightness of a building's wall colour from its family palette."
+    },
     "roadLift": {
       "value": 0.05,
       "unit": "m",
