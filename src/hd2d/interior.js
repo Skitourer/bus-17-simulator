@@ -11,6 +11,38 @@ import { wheelPose } from './views.js';
 
 /** @typedef {import('../settings/settings.js').Settings['bus']} BusSettings */
 
+/** Render layer shared by every object inside the bus and the lights that light them. */
+export const INTERIOR_LAYER = 1;
+
+/**
+ * Render the scene seen from inside the bus: the world without the interior, then the interior over it
+ * with a cleared depth. The camera is inside the bus, so nothing of the world lies between it and the
+ * interior, whereas the road decals, pulled towards the camera by their polygon offset, show through the
+ * floor at grazing angles.
+ * @param {THREE.WebGLRenderer} renderer @param {THREE.Scene} scene @param {THREE.Camera} camera
+ * @param {THREE.Object3D} interior
+ */
+export function renderFromInside(renderer, scene, camera, interior) {
+  interior.visible = false;
+  renderer.render(scene, camera);
+  interior.visible = true;
+  const layers = camera.layers.mask,
+    background = scene.background;
+  // the interior casts no shadow: keep the shadow map of the world drawn by the first pass
+  const shadows = renderer.shadowMap.autoUpdate;
+  camera.layers.set(INTERIOR_LAYER);
+  // a background colour would clear the first pass
+  scene.background = null;
+  renderer.autoClear = false;
+  renderer.shadowMap.autoUpdate = false;
+  renderer.clearDepth();
+  renderer.render(scene, camera);
+  renderer.autoClear = true;
+  renderer.shadowMap.autoUpdate = shadows;
+  scene.background = background;
+  camera.layers.mask = layers;
+}
+
 /** Interior heights (m above the road) of a low-floor city bus; windows between the sill and the header. */
 const LEVEL = { floor: 0.35, sill: 1.05, header: 2.45, ceiling: 2.95 };
 
@@ -209,6 +241,7 @@ export function makeInterior(bus, driver) {
       mesh.position.set(x, (FLOOR + CEILING) / 2, side * 0.33);
       group.add(mesh);
     }
+  group.traverse((object) => object.layers.enable(INTERIOR_LAYER));
   group.visible = false;
   return group;
 }

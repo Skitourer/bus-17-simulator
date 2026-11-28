@@ -46,7 +46,8 @@ describe('game.json', () => {
   it('leaves no tunable numeric constant in the code', () => {
     // a module-level UPPER_CASE name bound to a plain number (or arithmetic on numbers)
     const constant = /^(?:export )?const ([A-Z][A-Z0-9_]*) = -?[\d.]+(?:\s*[-+*/]\s*[\d.]+)*\s*[;,]/gm;
-    // not tunable: layout of the facade texture, calendar and astronomical constants (#55), golden ratio
+    // not tunable: layout of the facade texture, calendar and astronomical constants (#55), golden ratio,
+    // render layer ids
     const allowed = [
       'PLAIN_U',
       'FACADE_BAYS',
@@ -56,6 +57,7 @@ describe('game.json', () => {
       'YEAR_DAYS',
       'CELL',
       'GOLDEN',
+      'INTERIOR_LAYER',
     ];
     const found = SOURCES.flatMap(({ text }) => [...text.matchAll(constant)].map((m) => m[1]));
     expect(found.filter((name) => !allowed.includes(name))).toEqual([]);

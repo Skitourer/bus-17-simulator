@@ -9,6 +9,7 @@ import * as THREE from 'three';
 import { person } from './sprites.js';
 import { BillboardPool } from './instances.js';
 import { nearestWithin } from './budget.js';
+import { INTERIOR_LAYER } from './interior.js';
 
 /** @typedef {import('../settings/settings.js').Settings['passengers']} PassengerSettings */
 /** @typedef {import('../settings/settings.js').Settings['budget']} BudgetSettings */
@@ -74,6 +75,7 @@ export class Crowd {
       sprite.scale.set(params.height * 0.5 * 0.8, params.height * 0.8, 1);
       sprite.position.set(x, y, z);
       sprite.visible = false;
+      sprite.layers.enable(INTERIOR_LAYER);
       interior.add(sprite);
       return sprite;
     });

@@ -5,6 +5,7 @@
  * un vignettage et un leger etalonnage chaud.
  */
 import * as THREE from 'three';
+import { renderFromInside } from './interior.js';
 
 export class Post {
   /**
@@ -71,10 +72,14 @@ export class Post {
     return { iw, ih };
   }
 
-  /** @param {THREE.Scene} scene @param {THREE.Camera} camera */
-  render(scene, camera) {
+  /**
+   * @param {THREE.Scene} scene @param {THREE.Camera} camera
+   * @param {THREE.Object3D | null} interior inside of the bus when the camera is in it
+   */
+  render(scene, camera, interior) {
     this.r.setRenderTarget(this.rt);
-    this.r.render(scene, camera);
+    if (interior) renderFromInside(this.r, scene, camera, interior);
+    else this.r.render(scene, camera);
     this.r.setRenderTarget(null);
     this.r.render(this.scene, this.cam);
   }
