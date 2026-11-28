@@ -1,5 +1,11 @@
 import { describe, expect, it } from 'vitest';
-import { daySchedule, networkBuses, pointAlong } from '../../src/hd2d/lineNetwork.js';
+import {
+  daySchedule,
+  linesThrough,
+  mapColours,
+  networkBuses,
+  pointAlong,
+} from '../../src/hd2d/lineNetwork.js';
 import { SETTINGS } from './fixtures.js';
 
 const params = { ...SETTINGS.fleet, dwellTime: 20, maxDwellShare: 0.5 };
@@ -69,5 +75,22 @@ describe('networkBuses', () => {
   });
   it('leaves out the skipped lines', () => {
     expect(networkBuses(schedule, 100, at('08:00') + 70, params, new Set(['19']))).toEqual([]);
+  });
+});
+
+describe('mapColours', () => {
+  const p = { lineHueStart: 10, lineSaturation: 70, lineLightness: 50, lineLightnessSpread: 12 };
+  it('gives every line its own colour, neighbours far apart in hue', () => {
+    const colours = mapColours(['17', '18', 'N62'], p);
+    expect(new Set(Object.values(colours)).size).toBe(3);
+    expect(colours['17']).toBe('hsl(10.0 70% 50%)');
+    expect(colours['18']).toBe('hsl(147.5 70% 38%)');
+  });
+});
+
+describe('linesThrough', () => {
+  it('keeps the lines with a route point inside the area', () => {
+    expect(linesThrough(network, (x) => x > 250)).toEqual(['19']);
+    expect(linesThrough(network, (x) => x > 1000)).toEqual([]);
   });
 });

@@ -113,3 +113,41 @@ export function networkBuses(schedule, step, now, params, skip) {
   }
   return out;
 }
+
+/**
+ * A distinct colour for each line on the minimap (#130): the GTFS colours are shared by a whole family of
+ * lines (every Chrono is yellow), so the hues follow the golden angle in the order of the lines, every other
+ * line a little darker.
+ * @param {readonly string[]} ids lines in menu order
+ * @param {{lineHueStart: number, lineSaturation: number, lineLightness: number, lineLightnessSpread: number}} p
+ * @returns {Record<string, string>} CSS colour by line
+ */
+export function mapColours(ids, p) {
+  /** @type {Record<string, string>} */
+  const out = {};
+  ids.forEach((id, k) => {
+    // 137.5° (golden angle): two lines next to each other in the list never get close hues
+    const hue = (p.lineHueStart + k * 137.508) % 360;
+    const lightness = p.lineLightness - (k % 2) * p.lineLightnessSpread;
+    out[id] = `hsl(${hue.toFixed(1)} ${p.lineSaturation}% ${lightness}%)`;
+  });
+  return out;
+}
+
+/**
+ * The lines of the network with a route through an area (for instance the tiles loaded around the chosen
+ * line), whose buses are then simulated in full and drawn in the world.
+ * @param {NetworkData} network @param {(x: number, y: number) => boolean} inside
+ * @returns {string[]}
+ */
+export function linesThrough(network, inside) {
+  return network.lines
+    .filter((line) =>
+      line.routes.some((route) => {
+        for (let k = 0; k + 1 < route.xy.length; k += 2)
+          if (inside(route.xy[k], route.xy[k + 1])) return true;
+        return false;
+      }),
+    )
+    .map((line) => line.id);
+}

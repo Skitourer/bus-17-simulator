@@ -4,6 +4,8 @@
  * Nord en haut. Zoom molette / boutons (autour du curseur), glisser pour deplacer, suivi du bus.
  * Les chemins sont construits une fois (Path2D en metres) puis dessines avec une transformation.
  */
+import { t } from '../i18n/i18n.js';
+
 const STYLE = {
   land: '#ece7da',
   water: '#9cc9e6',
@@ -28,6 +30,13 @@ export class Minimap {
     this.cv = /** @type {HTMLCanvasElement} */ (root.querySelector('canvas'));
     this.g = /** @type {CanvasRenderingContext2D} */ (this.cv.getContext('2d'));
     this.color = line.color;
+    this.lineId = line.id;
+    /** @type {Record<string, string>} map colour of each line (#130) */
+    this.colours = {};
+    /** buses shown: every line, the chosen line only, none (#130) @type {'all' | 'line' | 'none'} */
+    this.busView = 'all';
+    /** @type {{x: number, y: number}[]} stops of the other routes of the line */
+    this.otherStops = [];
     this.zoom = 0.6; // pixels CSS par metre
     this.cx = 0;
     this.cy = 0; // centre de la vue (metres)
@@ -70,6 +79,30 @@ export class Minimap {
     this._syncBtn();
   }
 
+  /** @param {Record<string, string>} colours map colour of each line */
+  setColours(colours) {
+    this.colours = colours;
+    this.color = colours[this.lineId] ?? this.color;
+  }
+
+  /** @param {{x: number, y: number}[]} stops the stops of the other routes of the line */
+  setOtherStops(stops) {
+    this.otherStops = stops;
+  }
+
+  /** Next bus view: every line, then the chosen line only, then none. */
+  cycleBuses() {
+    this.busView = this.busView === 'all' ? 'line' : this.busView === 'line' ? 'none' : 'all';
+    this._syncBuses();
+  }
+
+  _syncBuses() {
+    const b = /** @type {HTMLButtonElement | null} */ (this.root.querySelector('[data-act="buses"]'));
+    if (!b) return;
+    b.textContent = { all: '▦', line: '▣', none: '▢' }[this.busView];
+    b.title = t(`game.mapBuses_${this.busView}`);
+  }
+
   _ui() {
     /** @param {string} act */
     const btn = (act) => /** @type {HTMLButtonElement} */ (this.root.querySelector(`[data-act="${act}"]`));
@@ -80,6 +113,8 @@ export class Minimap {
       this._syncBtn();
     };
     btn('size').onclick = () => this.cycleSize();
+    btn('buses').onclick = () => this.cycleBuses();
+    this._syncBuses();
     this.cv.addEventListener(
       'wheel',
       (e) => {
@@ -165,10 +200,9 @@ export class Minimap {
 
   /**
    * @param {{x:number, y:number, h:number}} bp position et cap du bus @param {number} nextStop
-   * @param {readonly {x: number, y: number}[]} [others] the other buses of the line (#48)
-   * @param {readonly {x: number, y: number, color: string}[]} [network] the buses of the other lines (#130)
+   * @param {readonly {x: number, y: number, line: string}[]} [buses] the other buses of every line (#48, #130)
    */
-  draw(bp, nextStop, others = [], network = []) {
+  draw(bp, nextStop, buses = []) {
     if (this.root.classList.contains('hidden') || !this.track) return;
     const cv = this.cv,
       g = this.g,
@@ -251,6 +285,18 @@ export class Minimap {
     /** @param {number} x @param {number} y */
     const toS = (x, y) => [w / 2 + (x - this.cx) * z, h / 2 - (y - this.cy) * z];
     g.font = '8px "Press Start 2P", monospace';
+    // the stops of the other direction: smaller, without their name
+    g.fillStyle = '#ffffff';
+    g.strokeStyle = this.color;
+    g.lineWidth = 2;
+    for (const st of this.otherStops) {
+      const [sx, sy] = toS(st.x, st.y);
+      if (sx < -10 || sy < -10 || sx > w + 10 || sy > h + 10) continue;
+      g.beginPath();
+      g.arc(sx, sy, 3, 0, Math.PI * 2);
+      g.fill();
+      g.stroke();
+    }
     tr.stops.forEach((st, i) => {
       const p = tr.pos(st.s, 0);
       const [sx, sy] = toS(p.x, p.y);
@@ -282,13 +328,15 @@ export class Minimap {
       g.strokeRect(ox - half, oy - half, 2 * half, 2 * half);
     };
     g.lineWidth = 1;
-    for (const o of network) {
-      g.fillStyle = o.color;
-      square(o.x, o.y, 3.5);
-    }
+    if (this.busView === 'all')
+      for (const o of buses)
+        if (o.line !== this.lineId) {
+          g.fillStyle = this.colours[o.line] ?? '#808080';
+          square(o.x, o.y, 3.5);
+        }
     g.fillStyle = this.color;
     g.lineWidth = 2;
-    for (const o of others) square(o.x, o.y, 5);
+    if (this.busView !== 'none') for (const o of buses) if (o.line === this.lineId) square(o.x, o.y, 5);
     // bus : fleche orientee
     const [bx, by] = toS(bp.x, bp.y);
     g.save();
