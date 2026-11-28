@@ -518,6 +518,7 @@ async function load() {
   if (debug && P.eye) {
     setFlying(true);
     fly.start(P.eye.x, P.eye.y, hf.h(P.eye.x, P.eye.y) + P.eye.height, P.eye.yaw, P.eye.pitch);
+    world.tiles.update(fly.x, fly.y, Infinity);
   }
   if (debug) showDebug(true);
   // mode test : ?auto&ff=40 -> simule 40 s d'un coup (pilote automatique)
@@ -869,7 +870,9 @@ function render(dt) {
   world.landmarks?.update(clock.t);
   crowd.update(dt, service.onBoard);
   crowd.draw(camera.position.x, -camera.position.z);
-  world.tiles.update(c.x, c.y, S.tiles.buildBudget);
+  // the detailed tiles follow the free-flight camera while flying (#124), the bus otherwise
+  if (flying) world.tiles.update(fly.x, fly.y, S.tiles.buildBudget);
+  else world.tiles.update(c.x, c.y, S.tiles.buildBudget);
   otherBuses.draw(fleet.buses, camera.position.x, -camera.position.z, (x, y, zRef) => hf.surface(x, y, zRef));
   drawWalkers(camera.position.x, -camera.position.z);
   signalLook.update();
