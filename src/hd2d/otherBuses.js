@@ -6,6 +6,7 @@
 import { ModelPool } from './instances.js';
 import { brakeLampGeometry, brakeMaterial, busLook } from './bus3d.js';
 import { lodOf, nearestWithin } from './budget.js';
+import { groundPose } from './traffic.js';
 
 export class OtherBuses {
   /**
@@ -26,6 +27,8 @@ export class OtherBuses {
       budget.capacity,
     );
     this.brakes.mesh.castShadow = false;
+    this.wheelbase = bus.wheelbase;
+    this.width = bus.bodyWidth;
     scene.add(this.shut.mesh, this.open.mesh, this.brakes.mesh);
     this.shown = 0;
   }
@@ -33,18 +36,26 @@ export class OtherBuses {
   /**
    * Draw the buses near the camera. A bus is big and few are running: it stays a 3D model up to the sprite
    * distance, then disappears.
+   * The buses stand on the drawn ground, like the player's bus and the cars, and not at the altitude of
+   * their route, which is smoothed differently.
    * @param {import('./fleet.js').FleetBus[]} buses @param {number} x @param {number} y camera position (m)
+   * @param {(x: number, y: number, zRef: number) => number} heightAt drawn surface nearest to an altitude
    */
-  draw(buses, x, y) {
+  draw(buses, x, y, heightAt) {
     let shut = 0,
       open = 0,
       braking = 0;
     for (const i of nearestWithin(buses, x, y, this.budget.spriteDistance, this.budget.capacity)) {
       const b = buses[i];
       if (lodOf(Math.hypot(b.x - x, b.y - y), this.budget) === 'hidden') continue;
-      if (b.dwelling) this.open.set(open++, b.x, b.y, b.z, b.h);
-      else this.shut.set(shut++, b.x, b.y, b.z, b.h);
-      if (b.braking) this.brakes.set(braking++, b.x, b.y, b.z, b.h);
+      // the route altitude picks the deck or the ground below at a bridge
+      const pose = groundPose({ x: b.x, y: b.y, h: b.h, width: this.width }, this.wheelbase, (px, py) =>
+        heightAt(px, py, b.z),
+      );
+      const { z, pitch, roll } = pose;
+      if (b.dwelling) this.open.set(open++, b.x, b.y, z, b.h, pitch, roll);
+      else this.shut.set(shut++, b.x, b.y, z, b.h, pitch, roll);
+      if (b.braking) this.brakes.set(braking++, b.x, b.y, z, b.h, pitch, roll);
     }
     this.brakes.show(braking);
     this.shut.show(shut);

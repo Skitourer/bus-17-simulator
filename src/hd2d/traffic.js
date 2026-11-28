@@ -225,7 +225,7 @@ function reversed(pts) {
 /**
  * Height and tilt of a vehicle on the ground under its wheels (#93): pitch from the heights under the front
  * and rear axles, roll from those under its left and right sides (none for a bike, which rides upright).
- * @param {{x: number, y: number, h: number, length: number, width: number, bike: boolean}} v
+ * @param {{x: number, y: number, h: number, width: number, bike?: boolean}} v
  * @param {number} wheelbase distance between the axles (m) @param {(x: number, y: number) => number} heightAt
  * @returns {{z: number, pitch: number, roll: number}} pitch > 0 nose up, roll > 0 left side up (radians)
  */
