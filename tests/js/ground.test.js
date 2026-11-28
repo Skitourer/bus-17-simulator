@@ -36,6 +36,26 @@ function oneTile(
   return new Ground(tiltedTerrain(0), index, tiles, SETTINGS.world.deckCatch, 1);
 }
 
+/** The data of the only tile of a ground made by oneTile. @param {Ground} ground */
+function tileData(ground) {
+  return {
+    ground: Array.from(/** @type {Float32Array} */ (ground.grids.get('0_0')), (m) => Math.round(m * 10)),
+    road: [],
+    sidewalks: [],
+    kerbs: [],
+    centre_lines: [],
+    crossings: [],
+    bridges: [],
+    buildings: [],
+    trees: [],
+    water: [],
+    water_level: [],
+    wet: [],
+    dry: [],
+    banks: [],
+  };
+}
+
 describe('Ground', () => {
   it('interpolates on the two triangles of each cell, like the mesh', () => {
     // cell (0, 0): a = 0, b = 10, c = 0, d = 0 -> the diagonal a-d separates the triangles
@@ -69,6 +89,24 @@ describe('Ground', () => {
     const ground = oneTile([0, 0, 0, 0, 0, 0, 0, 0, 0], [deck]);
     expect(ground.surface(10, 10, 0.2)).toBeCloseTo(1);
     expect(ground.surface(10, 18, 0.2)).toBeCloseTo(0); // beside the deck
+  });
+
+  it('gives the terrace height on a terrace and the ground grid beside and below it (#108)', () => {
+    // terrace 4 m wide along y = 10, from 3 m at x = 0 to 5 m at x = 20, over flat ground at 0 m
+    const tile = oneTile([0, 0, 0, 0, 0, 0, 0, 0, 0]);
+    const ground = new Ground(
+      tiltedTerrain(0),
+      tile.index,
+      new Map([['0_0', { ...tileData(tile), terraces: [[40, 0, 100, 30, 200, 100, 50]] }]]),
+      SETTINGS.world.deckCatch,
+      1,
+    );
+    expect(ground.h(10, 10)).toBeCloseTo(4);
+    expect(ground.h(10, 11.9)).toBeCloseTo(4);
+    expect(ground.h(10, 12.5)).toBeCloseTo(0); // beside the terrace
+    expect(ground.gridHeight(10, 10)).toBeCloseTo(0);
+    expect(ground.surface(10, 10, 0)).toBeCloseTo(4); // whatever the height of the vehicle
+    expect(ground.terraceHeight(-50, 10)).toBeNull();
   });
 
   it('finds the water pieces by ground triangle', () => {

@@ -11,6 +11,7 @@ import * as THREE from 'three';
 import { hippedRoof } from './roofs.js';
 import { tree, shelter, stopPole } from './sprites.js';
 import { quayWalls, waterSurface } from './water.js';
+import { deckFromRecord } from './ground.js';
 import { BillboardPool } from './instances.js';
 import { TileSet } from './tileset.js';
 import { PlaceGrid, placesAlong } from './lamps.js';
@@ -175,7 +176,7 @@ function terrainTile(ground, key, tile, material) {
       return out;
     });
     const base = P.length / 3;
-    for (const v of vec.flat()) vertex(v.x, v.y, ground.h(v.x, v.y));
+    for (const v of vec.flat()) vertex(v.x, v.y, ground.gridHeight(v.x, v.y));
     const [contour, ...holes] = vec;
     for (const tri of THREE.ShapeUtils.triangulateShape(contour, holes))
       I.push(base + tri[0], base + tri[2], base + tri[1]);
@@ -291,6 +292,7 @@ function roadSurface(ground, tiles, street) {
     street.roadLift,
     shared('asphalt', asphaltTexture),
     1,
+    street.wallSlopeJump,
   );
 }
 
@@ -306,6 +308,7 @@ function sidewalks(ground, tiles, street) {
     street.kerbHeight,
     shared('paving', pavingTexture),
     2,
+    street.wallSlopeJump,
   );
 }
 
@@ -314,18 +317,28 @@ function sidewalks(ground, tiles, street) {
  * its own vertices, so computed normals followed the plane of its triangle and the asphalt changed shade
  * from one 5 m triangle to the next.
  * @param {THREE.BufferGeometry} geo positions (x, height, -y) @param {Ground} ground
+ * @param {number} slopeJump m/m: a sharper change of slope between the two sides is the edge of a terrace
  */
-function smoothNormals(geo, ground) {
+function smoothNormals(geo, ground, slopeJump) {
   const pos = geo.getAttribute('position'),
     span = ground.index.step;
   const normals = new Float32Array(pos.count * 3);
   const n = new THREE.Vector3();
+  /** central difference over one grid step on each side, like the averaged normals of the grid vertices;
+   * across the edge of a terrace (#108) the side that stays on the same surface
+   * @param {number} back @param {number} here @param {number} ahead */
+  const slope = (back, here, ahead) => {
+    const before = (here - back) / span,
+      after = (ahead - here) / span;
+    if (Math.abs(after - before) <= slopeJump) return (before + after) / 2;
+    return Math.abs(before) < Math.abs(after) ? before : after;
+  };
   for (let k = 0; k < pos.count; k++) {
     const x = pos.getX(k),
-      y = -pos.getZ(k);
-    // central differences over one grid step on each side, like the averaged normals of the grid vertices
-    const gx = (ground.h(x + span, y) - ground.h(x - span, y)) / (2 * span),
-      gy = (ground.h(x, y + span) - ground.h(x, y - span)) / (2 * span);
+      y = -pos.getZ(k),
+      z = ground.h(x, y);
+    const gx = slope(ground.h(x - span, y), z, ground.h(x + span, y)),
+      gy = slope(ground.h(x, y - span), z, ground.h(x, y + span));
     n.set(-gx, 1, gy).normalize();
     normals.set([n.x, n.y, n.z], k * 3);
   }
@@ -337,8 +350,9 @@ function smoothNormals(geo, ground) {
  * @param {Ground} ground @param {Map<string, TileData>} tiles
  * @param {(tile: TileData) => number[][][]} select @param {number} lift @param {THREE.Texture} map
  * @param {number} order render order and polygon offset strength
+ * @param {number} slopeJump see smoothNormals
  */
-function piecesMesh(ground, tiles, select, lift, map, order) {
+function piecesMesh(ground, tiles, select, lift, map, order, slopeJump) {
   /** @type {number[]} */
   const P = [],
     U = [],
@@ -370,7 +384,7 @@ function piecesMesh(ground, tiles, select, lift, map, order) {
   geo.setAttribute('position', new THREE.Float32BufferAttribute(P, 3));
   geo.setAttribute('uv', new THREE.Float32BufferAttribute(U, 2));
   geo.setIndex(I);
-  smoothNormals(geo, ground);
+  smoothNormals(geo, ground, slopeJump);
   const mat = new THREE.MeshLambertMaterial({
     map,
     side: THREE.DoubleSide, // ring orientation from shapely is not guaranteed
@@ -587,6 +601,55 @@ function bridges(ground) {
   m.castShadow = true;
   m.receiveShadow = true;
   return m;
+}
+
+/**
+ * Retaining walls (#108) along the sides of the terraces of a tile where the ground lies lower: stone faces
+ * from below the ground up to a low wall above the road.
+ * @param {Ground} ground @param {string} key "i_j" @param {number[][]} records @param {WorldSettings} street
+ */
+function retainingWalls(ground, key, records, street) {
+  const [ox, oy] = tileOrigin(ground, key);
+  /** @type {number[]} */
+  const P = [];
+  for (const rec of records) {
+    const t = deckFromRecord(rec, ox, oy),
+      m = t.x.length;
+    // a side point of every sample, along the mean direction of its two segments so the faces join
+    const side = (/** @type {number} */ k, /** @type {number} */ s) => {
+      const a = Math.max(0, k - 1),
+        b = Math.min(m - 1, k + 1);
+      const dx = t.x[b] - t.x[a],
+        dy = t.y[b] - t.y[a],
+        L = Math.hypot(dx, dy) || 1;
+      const x = t.x[k] + (dy / L) * t.halfWidth * s,
+        y = t.y[k] - (dx / L) * t.halfWidth * s;
+      // the ground 0.3 m outside the terrace; the face goes 0.5 m into it, so no gap shows on uneven ground
+      const below = ground.gridHeight(x + (dy / L) * 0.3 * s, y - (dx / L) * 0.3 * s);
+      return { x, y, top: t.z[k] + street.retainingWallParapet, drop: t.z[k] - below, bottom: below - 0.5 };
+    };
+    for (const s of [-1, 1])
+      for (let k = 0; k + 1 < m; k++) {
+        const p = side(k, s),
+          q = side(k + 1, s);
+        if (Math.max(p.drop, q.drop) < street.retainingWallMinDrop) continue;
+        P.push(p.x, p.bottom, -p.y, q.x, q.bottom, -q.y, q.x, q.top, -q.y);
+        P.push(p.x, p.bottom, -p.y, q.x, q.top, -q.y, p.x, p.top, -p.y);
+      }
+  }
+  const geo = new THREE.BufferGeometry();
+  geo.setAttribute('position', new THREE.Float32BufferAttribute(P, 3));
+  geo.computeVertexNormals();
+  const mesh = new THREE.Mesh(
+    geo,
+    new THREE.MeshLambertMaterial({
+      color: street.retainingWallColor,
+      side: THREE.DoubleSide,
+      flatShading: true,
+    }),
+  );
+  mesh.castShadow = mesh.receiveShadow = true;
+  return mesh;
 }
 
 /**
@@ -1415,6 +1478,7 @@ export function buildWorld(scene, hf, data, track, settings, season) {
         block.add(above.walls, above.roofs);
       }
       if (tile.portals?.length) streets.add(tunnelMouths(hf, key, tile.portals));
+      if (tile.terraces?.length) streets.add(retainingWalls(hf, key, tile.terraces, street));
       return {
         fineGround: terrainTile(hf, key, tile, groundMaterial),
         streets,

@@ -1700,6 +1700,32 @@
       "max": 0.5,
       "doc": "Height of the sidewalks above the ground: a low kerb, readable at the HD-2D resolution."
     },
+    "retainingWallColor": {
+      "value": "#9a958a",
+      "unit": "colour",
+      "doc": "Colour of the stone retaining walls along the roads held up above a lower road (#108)."
+    },
+    "retainingWallParapet": {
+      "value": 0.6,
+      "unit": "m",
+      "min": 0,
+      "max": 1.5,
+      "doc": "Height of the low wall above the road along the drop of a retaining wall."
+    },
+    "wallSlopeJump": {
+      "value": 0.3,
+      "unit": "m/m",
+      "min": 0.05,
+      "max": 2,
+      "doc": "A change of ground slope this sharp over two grid steps is the edge of a terrace: the road and sidewalk shading there follows the side of the point, not the drop of the wall."
+    },
+    "retainingWallMinDrop": {
+      "value": 0.3,
+      "unit": "m",
+      "min": 0,
+      "max": 3,
+      "doc": "A retaining wall stands only where the ground beside the road lies at least this much lower."
+    },
     "markingLift": {
       "value": 0.02,
       "unit": "m",

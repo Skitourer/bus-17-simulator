@@ -24,6 +24,8 @@ import { Heightfield } from './heightfield.js';
  * @property {number[]} ground n x n heights (dm), row by row from the south
  * @property {number[][][]} road carriageway polygons: rings [x, y, ...] (dm, relative to the tile origin)
  * @property {number[][]} bridges [width, x, y, z, x, y, z, ...] (dm, x and y relative to the tile origin)
+ * @property {number[][]} [terraces] roads held up by a retaining wall above a lower road (#108), like `bridges`:
+ * inside them the ground height is the terrace height
  * @property {number[][][]} sidewalks sidewalk polygons, like `road`
  * @property {number[][]} kerbs carriageway outline along sidewalks: [x, y, ...] (dm, relative to the tile origin)
  * @property {number[][]} centre_lines dashed centre lines: [x, y, ...] (dm, relative)
@@ -112,6 +114,10 @@ export class Ground {
     this.water = new Map();
     /** @type {Deck[]} */
     this.decks = [];
+    /** @type {Deck[]} terraces (#108): stretches of road held up by a retaining wall */
+    this.terraces = [];
+    /** @type {Map<string, Deck[]>} terraces by the tiles their box touches */
+    this.terracesByTile = new Map();
     /** tile range [i0, j0, i1, j1] of the loaded tiles */
     this.range = [Infinity, Infinity, -Infinity, -Infinity];
     for (const [key, tile] of tiles) {
@@ -136,7 +142,39 @@ export class Ground {
       const ox = index.x0 + i * index.size,
         oy = index.y0 + j * index.size;
       for (const rec of tile.bridges) this.decks.push(deckFromRecord(rec, ox, oy));
+      for (const rec of tile.terraces ?? []) this.addTerrace(deckFromRecord(rec, ox, oy));
     }
+  }
+
+  /** @param {Deck} terrace */
+  addTerrace(terrace) {
+    this.terraces.push(terrace);
+    const ix = this.index,
+      [x0, y0, x1, y1] = terrace.box;
+    for (let j = Math.floor((y0 - ix.y0) / ix.size); j <= Math.floor((y1 - ix.y0) / ix.size); j++)
+      for (let i = Math.floor((x0 - ix.x0) / ix.size); i <= Math.floor((x1 - ix.x0) / ix.size); i++) {
+        const key = i + '_' + j,
+          list = this.terracesByTile.get(key);
+        if (list) list.push(terrace);
+        else this.terracesByTile.set(key, [terrace]);
+      }
+  }
+
+  /**
+   * Height of the terrace at (x, y), null outside every terrace.
+   * @param {number} x @param {number} y
+   */
+  terraceHeight(x, y) {
+    const ix = this.index;
+    const list = this.terracesByTile.get(
+      Math.floor((x - ix.x0) / ix.size) + '_' + Math.floor((y - ix.y0) / ix.size),
+    );
+    if (!list) return null;
+    for (const terrace of list) {
+      const z = deckHeight(terrace, x, y);
+      if (z !== null) return z;
+    }
+    return null;
   }
 
   /**
@@ -247,10 +285,18 @@ export class Ground {
   }
 
   /**
-   * Ground height (m), ignoring bridge decks.
+   * Ground height (m), ignoring bridge decks: the terrace height on a terrace, else the ground grid.
    * @param {number} x @param {number} y
    */
   h(x, y) {
+    return this.terraceHeight(x, y) ?? this.gridHeight(x, y);
+  }
+
+  /**
+   * Height of the ground grid (m), below the terraces.
+   * @param {number} x @param {number} y
+   */
+  gridHeight(x, y) {
     return this.sample(this.grids, x, y) ?? this.natural.h(x, y);
   }
 

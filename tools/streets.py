@@ -72,6 +72,9 @@ class RoadEdge:
     flags: frozenset[str]
     coords: list[Point]
     cls: str = 'minor'
+    # ends where another edge carries on straight from it, when known from a longer road this edge is a part
+    # of (terraces, #108); else counted from the graph (straight_ends)
+    through: int | None = None
 
     @property
     def level(self) -> str:
@@ -266,7 +269,9 @@ class RoadChooser:
         self.tree = STRtree(self.lines)
         self.reach = np.array([edges[k].width / 2 + SIDEWALK for k in self.indices])
         ground = [edges[k] for k in self.indices]
-        through = straight_ends(ground)
+        through = [
+            t if e.through is None else e.through for e, t in zip(ground, straight_ends(ground), strict=True)
+        ]
         self.rank = np.array(
             [
                 CLASS_RANK.get(e.cls, 1) * 1000 + t * 100 + round(e.width * 2)

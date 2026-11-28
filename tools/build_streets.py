@@ -10,6 +10,8 @@ Geometry: see tools/streets.py and ADR 0003. All coordinates in decimetres.
                       "road": [[ring, hole, ...], ...]   (carriageway cut along the ground triangles;
                                                          rings [x, y, ...] relative to the tile origin),
                       "bridges": [[width, x, y, z, x, y, z, ...], ...] (x, y relative to the tile origin),
+                      "terraces": [[width, x, y, z, ...], ...]   (roads held up by a retaining wall above a
+                                  lower road, like "bridges"; see tools/terraces.py),
                       "sidewalks": [[ring, ...], ...]   (like "road"),
                       "kerbs": [[x, y, ...], ...]   (carriageway outline along sidewalks),
                       "centre_lines": [[x, y, ...], ...]   (dashed, stopped before junctions),
@@ -39,10 +41,10 @@ from typing import Any
 import numpy as np
 from geo import Point
 from lines import corridor, read_lines, routes_xy, tiles_in
-from shapely import LineString, MultiPolygon, Polygon, box, union_all
+from shapely import LineString, MultiLineString, MultiPoint, MultiPolygon, Polygon, box, union_all
 from shapely import Point as ShapelyPoint
 from shapely.geometry.base import BaseGeometry
-from shapes import clip, coordinates, interpolate
+from shapes import FloatArray, clip, coordinates, distances, interpolate, points, polygon_parts
 from sources import CACHE, ROOT, read_json, write_json
 from streets import (
     BUILDING_CLEARANCE,
@@ -75,6 +77,7 @@ from streets import (
     sidewalk_zone,
     tunnel_portals,
 )
+from terraces import BELOW_REACH, footprint, split_edges, terrace_record, terrace_runs, terraced_ground
 from water import shore_lines, water_area, water_cut, water_level
 
 DATA = os.path.join(ROOT, 'data', 'grenoble')
@@ -86,6 +89,8 @@ TREE_SEED = 5
 # superelevation in bends (SETRA, ARP 1994), so a steeper triangle under a road is a defect (#76)
 CROSS_SLOPE_MAX = 0.07
 JUNCTION_MARGIN = 10.0  # m around a junction where the slope of a side street is no cross slope
+ROUTE_REACH = 6.0  # m from the route of a line: the triangle is under the bus
+TERRACE_JUNCTION_MARGIN = 2.0  # m around a junction surface kept free of terraces (#108)
 
 
 def dm(v: float) -> int:
@@ -170,12 +175,89 @@ def buildings_and_trees(
     return buildings, over, by_tile
 
 
-def report_cross_slopes(slopes: list[tuple[float, float, float]]) -> None:
-    """Build check (#76): the road triangles steeper across the road than CROSS_SLOPE_MAX."""
+def split_pieces(
+    zone: Polygon | MultiPolygon, terraces: BaseGeometry, ox: float, oy: float, n: int
+) -> list[Polygon]:
+    """Pieces of a zone cut along the ground triangles and along the edges of the terraces, so that no piece
+    lies both on a terrace and on the ground below it."""
+    inside = MultiPolygon(polygon_parts(zone.intersection(terraces)))
+    if inside.is_empty:
+        return road_pieces(zone, ox, oy, n, STEP)
+    outside = MultiPolygon(polygon_parts(zone.difference(terraces)))
+    return road_pieces(outside, ox, oy, n, STEP) + road_pieces(inside, ox, oy, n, STEP)
+
+
+def report_cross_slopes(slopes: list[tuple[float, float, float]], routes: BaseGeometry) -> None:
+    """Build check (#76, #108): the road triangles steeper across the road than CROSS_SLOPE_MAX, and those on
+    the routes of the lines."""
     steep = sorted((s for s in slopes if s[2] > CROSS_SLOPE_MAX), key=lambda s: -s[2])
     print(f'devers : {len(steep)} triangles de chaussee sur {len(slopes)} au-dela de {CROSS_SLOPE_MAX:.0%}')
     for x, y, slope in steep[:10]:
         print(f'    ({x:7.0f}, {y:7.0f}) {slope:.0%}')
+    on_routes = [s for s in steep if routes.distance(ShapelyPoint(s[0], s[1])) < ROUTE_REACH]
+    print(f'  dont {len(on_routes)} sur le trajet des lignes')
+    for x, y, slope in on_routes[:10]:
+        print(f'    ({x:7.0f}, {y:7.0f}) {slope:.0%}')
+
+
+def tile_grid(ox: float, oy: float, n: int) -> tuple[FloatArray, FloatArray]:
+    """x and y of the n x n ground vertices of the tile at (ox, oy), row by row from the south."""
+    gx, gy = np.meshgrid(ox + np.arange(n) * STEP, oy + np.arange(n) * STEP)
+    return gx.ravel().astype(np.float64), gy.ravel().astype(np.float64)
+
+
+def near_tile(ox: float, oy: float) -> Polygon:
+    """The tile at (ox, oy) and 30 m around it (the roads that shape its ground)."""
+    return box(ox - 30, oy - 30, ox + TILE + 30, oy + TILE + 30)
+
+
+class TerracedRoads:
+    """The terraces of the roads (#108) and what shapes the ground without them."""
+
+    def __init__(
+        self,
+        edges: list[RoadEdge],
+        profiles: list[Profile],
+        surface: Polygon | MultiPolygon,
+        junction_surfaces: BaseGeometry,
+        defects: BaseGeometry,
+    ) -> None:
+        runs = terrace_runs(edges, profiles, junction_surfaces, defects)
+        ground_edges, ground_profiles, self.edges, self.profiles = split_edges(edges, profiles, runs)
+        self.area = footprint(self.edges)
+        self.ground_surface = MultiPolygon(polygon_parts(surface.difference(self.area)))
+        self.ground_heights = RoadHeights(ground_edges, ground_profiles)
+        self.heights = RoadHeights(self.edges, self.profiles) if self.edges else None
+        print(f'  {len(self.edges)} terrasses, {sum(float(p.s[-1]) for p in self.profiles):.0f} m de murs')
+
+    def ground(
+        self, xs: FloatArray, ys: FloatArray, shaped: FloatArray, natural: FloatArray, near: Polygon
+    ) -> tuple[FloatArray, Polygon | MultiPolygon]:
+        """Ground of a tile with its terraces, and the carriageway that lies on the ground there."""
+        area = clip(self.area, near)
+        local = MultiPolygon(polygon_parts(clip(self.ground_surface, near)))
+        if area.is_empty or self.heights is None:
+            return shaped, local
+        ox, oy = float(xs.min()), float(ys.min())
+        n = round(math.sqrt(len(xs)))
+        flat = flat_vertices(local, ox, oy, n, STEP)
+        without = shaped_ground(xs, ys, natural, local, self.ground_heights, flat)
+        pts = points(xs, ys)
+        to_roads = np.where(flat, 0.0, distances(local, pts))
+        to_terraces = distances(area, pts)
+        close = to_terraces < BELOW_REACH
+        terrace_z = np.full(len(xs), np.inf)
+        terrace_z[close] = self.heights.heights(xs[close], ys[close])
+        return terraced_ground(shaped, without, to_roads, to_terraces, terrace_z), local
+
+    def records(self, ox: float, oy: float) -> list[list[int]]:
+        """Terrace records of the tile at (ox, oy) (by the centre of each terrace)."""
+        return [
+            terrace_record(e, p, ox, oy)
+            for e, p in zip(self.edges, self.profiles, strict=True)
+            if ox <= LineString(e.coords).centroid.x < ox + TILE
+            and oy <= LineString(e.coords).centroid.y < oy + TILE
+        ]
 
 
 def main() -> None:
@@ -213,7 +295,8 @@ def main() -> None:
     print(f'  {sum(len(v) for v in portals.values())} entrees de tunnel')
 
     nx, ny = math.ceil((bx1 - bx0) / TILE), math.ceil((by1 - by0) / TILE)
-    area = corridor([route for line in read_lines() for route in routes_xy(line)])
+    routes = [route for line in read_lines() for route in routes_xy(line)]
+    area = corridor(routes)
     kept = tiles_in(area, bx0, by0, nx, ny, TILE)
     print(f'{len(kept)} tuiles sur {nx * ny} dans le couloir des lignes')
     print('eau (niveau et rives)...')
@@ -224,21 +307,47 @@ def main() -> None:
     for old in glob.glob(os.path.join(OUT, 't_*.json')):
         os.remove(old)
     n = TILE // STEP + 1
+    print('sol des tuiles...')
+    shaped: dict[TileKey, tuple[FloatArray, FloatArray]] = {}
+    before: list[tuple[float, float, float]] = []
+    for i, j in kept:
+        xs, ys = tile_grid(bx0 + i * TILE, by0 + j * TILE, n)
+        local = clip(surface, near_tile(bx0 + i * TILE, by0 + j * TILE))
+        natural = terrain.heights(xs, ys)
+        ground = natural
+        if isinstance(local, Polygon | MultiPolygon) and not local.is_empty:
+            flat = flat_vertices(local, bx0 + i * TILE, by0 + j * TILE, n, STEP)
+            ground = shaped_ground(xs, ys, natural, local, heights, flat)
+            before += road_cross_slopes(
+                ground, bx0 + i * TILE, by0 + j * TILE, n, STEP, local, heights, junctions
+            )
+        shaped[(i, j)] = (ground, natural)
+    print('terrasses (murs de soutenement)...')
+    terraces = TerracedRoads(
+        edges,
+        profiles,
+        surface,
+        union_all([ShapelyPoint(ends[k]).buffer(r + TERRACE_JUNCTION_MARGIN) for k, r in radii.items()]),
+        MultiPoint([(x, y) for x, y, slope in before if slope > CROSS_SLOPE_MAX]),
+    )
+    print(f'  avant les terrasses : {sum(s[2] > CROSS_SLOPE_MAX for s in before)} triangles trop en devers')
     for i, j in kept:
         ox, oy = bx0 + i * TILE, by0 + j * TILE
-        gx, gy = np.meshgrid(ox + np.arange(n) * STEP, oy + np.arange(n) * STEP)
-        xs, ys = gx.ravel().astype(np.float64), gy.ravel().astype(np.float64)
-        local = clip(surface, box(ox - 30, oy - 30, ox + TILE + 30, oy + TILE + 30))
+        xs, ys = tile_grid(ox, oy, n)
+        near = near_tile(ox, oy)
+        local = clip(surface, near)
+        ground, natural = shaped[(i, j)]
         if isinstance(local, Polygon | MultiPolygon) and not local.is_empty:
-            flat = flat_vertices(local, ox, oy, n, STEP)
-            ground = shaped_ground(xs, ys, terrain.heights(xs, ys), local, heights, flat)
-            slopes += road_cross_slopes(ground, ox, oy, n, STEP, local, heights, junctions)
-        else:
-            ground = terrain.heights(xs, ys)
+            ground, on_ground = terraces.ground(xs, ys, ground, natural, near)
+            slopes += road_cross_slopes(
+                ground, ox, oy, n, STEP, on_ground, terraces.ground_heights, junctions
+            )
         road = local if isinstance(local, Polygon | MultiPolygon) else Polygon()
-        pieces = road_pieces(road, ox, oy, n, STEP)
+        pieces = split_pieces(road, terraces.area, ox, oy, n)
         walk = clip(sidewalks, box(ox, oy, ox + TILE, oy + TILE))
-        walk_pieces = road_pieces(walk, ox, oy, n, STEP) if isinstance(walk, Polygon | MultiPolygon) else []
+        walk_pieces = (
+            split_pieces(walk, terraces.area, ox, oy, n) if isinstance(walk, Polygon | MultiPolygon) else []
+        )
         wet, wet_pieces, dry_pieces = water_cut(water, ox, oy, n, STEP)
         tile_level = level[j * cells : j * cells + n, i * cells : i * cells + n].ravel()
         tile_bridges = [
@@ -253,6 +362,7 @@ def main() -> None:
                 'ground': [dm(float(z)) for z in ground],
                 'road': rings_of(MultiPolygon(pieces), ox, oy) if pieces else [],
                 'bridges': tile_bridges,
+                'terraces': terraces.records(ox, oy),
                 'sidewalks': rings_of(MultiPolygon(walk_pieces), ox, oy) if walk_pieces else [],
                 'kerbs': [flat_dm(line, ox, oy) for line in kerbs.get((i, j), [])],
                 'centre_lines': [flat_dm(line, ox, oy) for line in marks.get((i, j), [])],
@@ -281,7 +391,7 @@ def main() -> None:
                 'banks': [flat_dm(line, ox, oy) for line in shore_lines(water, ox, oy, TILE)] if wet else [],
             },
         )
-    report_cross_slopes(slopes)
+    report_cross_slopes(slopes, MultiLineString(routes))
     write_json(
         os.path.join(OUT, 'index.json'),
         {
