@@ -12,7 +12,7 @@ banks, and roads along the quays are shaped into the same ground grid.
 
 - `tools/water.py` precomputes, in the street tiles (`tools/build_streets.py`):
   - the union of the OSM water areas of at least 20 m²;
-  - a water level per node of the 10 m grid: the terrain under the water smoothed over
+  - a water level per node of the ground grid (5 m): the terrain under the water smoothed over
     60 m (from the points at least 15 m from a bank), kept 3 m below the lowest bank
     within 60 m (quays);
   - the ground triangles that touch the water (`wet`), the water cut along them

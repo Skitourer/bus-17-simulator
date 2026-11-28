@@ -1,7 +1,7 @@
 // @ts-check
 /**
  * World tiles in the scene (#12): every tile has a light ground, always drawn when its detailed layers are
- * not; the detailed layers (10 m ground, streets, trees, buildings) are built as the bus comes near, a few
+ * not; the detailed layers (5 m ground, streets, trees, buildings) are built as the bus comes near, a few
  * milliseconds per frame, shown by distance and freed once the bus is far (tiling.js).
  */
 import * as THREE from 'three';

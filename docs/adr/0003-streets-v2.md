@@ -16,7 +16,7 @@ each read a terrain that did not match what was drawn.
     at every junction; bridges straight between their ends; tunnels left out (a concrete
     mouth is drawn where they meet an open road; building passages are streets, the building
     part above them drawn from 4.5 m, #14);
-  - a 10 m ground grid set to the road height on the carriageway and 2.5 m beside it,
+  - a 5 m ground grid (10 m until #92) set to the road height on the carriageway and 2.5 m beside it,
     then blended back to the natural terrain over 8 m (banks); every corner of a triangle
     touching the carriageway is at the road height, so the road is flat across (#76), and the
     build lists the road triangles still steeper than 7 % across (roads closer than the grid
@@ -41,8 +41,11 @@ each read a terrain that did not match what was drawn.
 
 - Flat road cross-sections, clean junctions, bridges above the water, and objects sitting
   on what is drawn.
-- About 20 MB of generated data in the repository, rebuilt by the script after any change
-  to roads or terrain.
+- About 70 MB of generated tiles in the repository (19 MB compressed as served), rebuilt by
+  the script after any change to roads or terrain. The 5 m grid (#92, 2026-11-28) doubled
+  them and the ground triangles drawn near the bus (1.5 to 2 times), and cut the area of
+  road steeper than 7 % across by about 60 %; what remains is where two legs of a hairpin or
+  two stacked roads are closer than the width of a road, which a finer grid cannot separate.
 
 ## Rejected alternatives
 

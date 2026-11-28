@@ -3,7 +3,7 @@
 Usage:  uv run python tools/build_streets.py      (after build_terrain.py and build_roads.py)
 Geometry: see tools/streets.py and ADR 0003. All coordinates in decimetres.
 
-  tiles/index.json  { "x0", "y0", "size": 500, "step": 10, "nx", "ny", "tiles": ["i_j", ...] }   tile (i, j)
+  tiles/index.json  { "x0", "y0", "size": 500, "step": 5, "nx", "ny", "tiles": ["i_j", ...] }   tile (i, j)
                     covers [x0 + i size, x0 + (i+1) size] x [y0 + j size, y0 + (j+1) size]; only the tiles
                     of the corridor around the lines exist (tools/lines.py, ADR 0010)
   tiles/t_i_j.json  { "ground": [z, ...]          (n x n heights, row by row from south, n = size/step + 1),
@@ -79,7 +79,7 @@ from water import shore_lines, water_area, water_cut, water_level
 DATA = os.path.join(ROOT, 'data', 'grenoble')
 OUT = os.path.join(DATA, 'tiles')
 TILE = 500  # m (keeps every tile file under the 1 MB pre-commit limit)
-STEP = 10  # m between ground heights
+STEP = 5  # m between ground heights (#92: closer than the hairpins and stacked roads of the hillsides)
 TREE_SEED = 5
 # m/m: the cross slope reported by the build check; French roads have a 2.5 % cross fall, up to 7 % of
 # superelevation in bends (SETRA, ARP 1994), so a steeper triangle under a road is a defect (#76)

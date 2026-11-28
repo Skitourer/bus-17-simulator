@@ -11,7 +11,7 @@ and again for the shadows, whatever the camera saw (#12).
 ## Decision
 
 - The data tiles (500 m, `data/grenoble/tiles/`) are also the drawing tiles. Each tile
-  has a light ground (one point out of five of its 10 m grid) built for all tiles at
+  has a light ground (one point out of ten of its 5 m grid) built for all tiles at
   start-up, and detailed layers: fine ground, streets, trees, buildings.
 - The detailed layers are built when the bus comes within `tiles.loadRadius`, nearest
   first and a few milliseconds per frame (`tiles.buildBudget`), and freed beyond
