@@ -2,47 +2,17 @@
 /**
  * Drawing of the ambient traffic (#49): cars and bikes as a few instanced low-poly models (body, cabin,
  * head and tail lights; frame and rider), the nearest ones to the camera only. The lights glow at night
- * with the buses' (`glowAtNight`).
+ * with the buses' (`glowAtNight`); a braking car shows its three brake lights (#87).
  */
 import * as THREE from 'three';
-import { ModelPool } from './instances.js';
-import { glowAtNight } from './bus3d.js';
+import { ModelPool, boxes } from './instances.js';
+import { brakeMaterial, glowAtNight, tailGlow } from './bus3d.js';
 import { groundPose } from './traffic.js';
 
 /** Car body colours, picked by the vehicle's look. */
 const CAR_COLOURS = ['#c8ccd2', '#2b2f36', '#a8322c', '#2f5d9a', '#e8e4da', '#6b7a5a', '#d9a440', '#7a7f88'];
 /** Shirt colours of the cyclists. */
 const RIDER_COLOURS = ['#d04a3a', '#3a6fd0', '#e0c040', '#40a060', '#e8e8e8', '#303030'];
-
-/**
- * Boxes merged into one geometry, origin on the ground at the middle of the vehicle, +X forward.
- * @param {...number[]} list [length, height, width, x, y, z] of each box (y: bottom)
- */
-function boxes(...list) {
-  const parts = list.map(([l, h, w, x, y, z]) => new THREE.BoxGeometry(l, h, w).translate(x, y + h / 2, z));
-  const merged = mergeBoxes(parts);
-  for (const part of parts) part.dispose();
-  return merged;
-}
-
-/** @param {THREE.BoxGeometry[]} parts */
-function mergeBoxes(parts) {
-  const positions = [],
-    normals = [],
-    indices = [];
-  let offset = 0;
-  for (const part of parts) {
-    positions.push(...part.attributes.position.array);
-    normals.push(...part.attributes.normal.array);
-    for (const i of /** @type {THREE.BufferAttribute} */ (part.index).array) indices.push(i + offset);
-    offset += part.attributes.position.count;
-  }
-  const geometry = new THREE.BufferGeometry();
-  geometry.setAttribute('position', new THREE.Float32BufferAttribute(positions, 3));
-  geometry.setAttribute('normal', new THREE.Float32BufferAttribute(normals, 3));
-  geometry.setIndex(indices);
-  return geometry;
-}
 
 /**
  * Pool of light thrown on the road by the headlights: bright near the car, widening and fading ahead.
@@ -81,9 +51,10 @@ function material(colour, glow) {
 export class TrafficLook {
   /**
    * @param {THREE.Scene} scene @param {import('../settings/settings.js').Settings['traffic']} p
-   * @param {number} capacity most vehicles drawn
+   * @param {import('../settings/settings.js').Settings['lights']} lights @param {number} capacity most
+   * vehicles drawn
    */
-  constructor(scene, p, capacity) {
+  constructor(scene, p, lights, capacity) {
     this.p = p;
     const L = p.carLength,
       W = p.carWidth;
@@ -106,9 +77,18 @@ export class TrafficLook {
       ),
       back: pool(
         boxes([0.06, lamp, 0.3, -L / 2, 0.75, W / 2 - 0.25], [0.06, lamp, 0.3, -L / 2, 0.75, -W / 2 + 0.25]),
-        material('#8a1c16', '#ff2a1a'),
+        material('#8a1c16', tailGlow(lights)),
       ),
     };
+    // over the tail lights, a little larger, and the third one at the top of the rear window (UN ECE R48)
+    this.brakes = pool(
+      boxes(
+        [0.08, lamp + 0.04, 0.34, -L / 2 - 0.01, 0.73, W / 2 - 0.25],
+        [0.08, lamp + 0.04, 0.34, -L / 2 - 0.01, 0.73, -W / 2 + 0.25],
+        [0.06, 0.07, 0.45, -L * 0.31 - 0.03, 1.48, 0],
+      ),
+      brakeMaterial(lights),
+    );
     const B = p.bikeLength;
     this.bikes = {
       frame: pool(
@@ -168,7 +148,8 @@ export class TrafficLook {
       .sort((a, b) => a.d - b.d)
       .slice(0, this.cars.body.capacity);
     let cars = 0,
-      bikes = 0;
+      bikes = 0,
+      braking = 0;
     for (const { v } of near) {
       // on the slope of the road under the wheels (#93)
       const { z, pitch, roll } = groundPose(v, v.length * this.p.wheelbaseShare, heightAt);
@@ -182,12 +163,14 @@ export class TrafficLook {
       } else {
         for (const part of Object.values(this.cars)) part.set(cars, v.x, v.y, z, v.h, pitch, roll);
         this.beam.set(cars, v.x, v.y, z, v.h, pitch, roll);
+        if (v.braking) this.brakes.set(braking++, v.x, v.y, z, v.h, pitch, roll);
         this.cars.body.mesh.setColorAt(cars, this.colour.set(CAR_COLOURS[v.variant % CAR_COLOURS.length]));
         cars++;
       }
     }
     for (const part of Object.values(this.cars)) part.show(cars);
     this.beam.show(this.beamMaterial.visible ? cars : 0);
+    this.brakes.show(braking);
     for (const part of Object.values(this.bikes)) part.show(bikes);
     for (const mesh of [this.cars.body.mesh, this.bikes.rider.mesh])
       if (mesh.instanceColor) mesh.instanceColor.needsUpdate = true;

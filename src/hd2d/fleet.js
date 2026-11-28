@@ -88,6 +88,7 @@ function wrapAngle(a) {
  * @property {number} dir direction index @property {number} dep departure (s since midnight)
  * @property {number} s front door position along its route (m) @property {number} v speed (m/s)
  * @property {boolean} dwelling
+ * @property {boolean} braking slowing down or standing: its brake lights are on (#87)
  * @property {number} x @property {number} y @property {number} z @property {number} h centre of the bus (z: route
  *   altitude, on the deck over a bridge) and heading
  */
@@ -177,7 +178,8 @@ export class Fleet {
         if (!previous && Math.hypot(pos.x - player.x, pos.y - player.y) < room) continue;
         const dwelling = target.dwelling && Math.abs(target.s - s) < 1;
         const v = previous && dt > 0 ? (s - previous.s) / dt : 0;
-        next.set(key, { dir, dep, s, v, dwelling, x: pos.x, y: pos.y, z: pos.z, h: pos.h });
+        const braking = v < this.p.brakeSpeed || (previous !== undefined && v < previous.v - 1e-6);
+        next.set(key, { dir, dep, s, v, dwelling, braking, x: pos.x, y: pos.y, z: pos.z, h: pos.h });
         blockers.push(s + setback - this.bus.bodyLength);
       }
     });

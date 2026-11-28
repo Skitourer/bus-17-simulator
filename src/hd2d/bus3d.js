@@ -7,6 +7,7 @@
 import * as THREE from 'three';
 import { digits } from './sprites.js';
 import { makeInterior } from './interior.js';
+import { boxes } from './instances.js';
 
 /** @typedef {import('./trailer.js').BusGeometry} BusSettings */
 const C = {
@@ -147,6 +148,58 @@ function tailLights(g, w, colour) {
   g.fillRect(w - 5, 36, 4, 9);
 }
 
+/** Emissive colour of the tail lights, set by makeBus: dimmer than the brake lights (#87). */
+let tailColour = C.redHi;
+
+/**
+ * Emissive colour of the tail lights at night: a share of the brake light red (#87).
+ * @param {import('../settings/settings.js').Settings['lights']} lights
+ */
+export function tailGlow(lights) {
+  return '#' + new THREE.Color('#ff2a1a').multiplyScalar(lights.tailLightGlow).getHexString();
+}
+
+/** @type {THREE.MeshBasicMaterial | null} */
+let brakeLamps = null;
+/**
+ * Lit red of the brake lights (#87), the same day and night, brighter than any tail light.
+ * @param {import('../settings/settings.js').Settings['lights']} lights
+ */
+export function brakeMaterial(lights) {
+  brakeLamps ??= new THREE.MeshBasicMaterial({
+    color: new THREE.Color('#ff2a1a').multiplyScalar(lights.brakeLightGlow),
+  });
+  return brakeLamps;
+}
+
+/**
+ * Three brake lights on the back of a bus (#87): two at the corners, over the upper part of the tail lights,
+ * and a third high in the middle (centre high-mounted stop lamp, UN ECE Regulation 48). Origin: middle of
+ * the back face on the road, the lights standing out behind it (-X). Places from the rear texture.
+ * @param {BusSettings} bus
+ */
+export function brakeLampGeometry(bus) {
+  const PPM = bus.texturePixelsPerMetre;
+  const w = Math.round(bus.bodyWidth * PPM) * 2,
+    h = Math.round(bus.bodyHeight * PPM) * 2;
+  const face = bus.bodyHeight - 0.35;
+  /** @param {number} py texture row */
+  const y = (py) => 0.35 + face * (1 - py / h);
+  /** @param {number} px texture column */
+  const z = (px) => bus.bodyWidth * (px / w - 0.5);
+  const depth = 0.05;
+  /** @param {number} left @param {number} right @param {number} top @param {number} bottom texture pixels */
+  const lamp = (left, right, top, bottom) => [
+    depth,
+    y(top) - y(bottom),
+    z(right) - z(left),
+    -depth / 2,
+    y(bottom),
+    (z(left) + z(right)) / 2,
+  ];
+  return boxes(lamp(1, 5, 36, 40), lamp(w - 5, w - 1, 36, 40), lamp(w / 2 - 7, w / 2 + 7, 10, 12));
+}
+
 /**
  * What glows at night on the front or the back (#55): black but for the lights and the destination sign.
  * @param {BusSettings} bus @param {boolean} back
@@ -158,7 +211,7 @@ function glow(bus, back) {
     g.fillRect(0, 0, w, h);
     if (back) {
       rearSign(g, w);
-      tailLights(g, w, C.redHi);
+      tailLights(g, w, tailColour);
     } else {
       frontSign(g, w);
       headlights(g, w, '#ffffff');
@@ -197,17 +250,8 @@ export function glowAtNight(material) {
  * @param {number} level
  */
 export function setBusLights(level) {
-  lightLevel = level;
-  for (const material of glowing)
-    material.emissiveIntensity = braking.has(material) ? Math.max(level, brakeGlow) : level;
+  for (const material of glowing) material.emissiveIntensity = level;
 }
-
-/** Light level of the last setBusLights call. */
-let lightLevel = 0;
-/** Brightness of the brake lights, set by makeBus. */
-let brakeGlow = 1;
-/** Back faces whose brake lights are on. @type {Set<THREE.MeshLambertMaterial>} */
-const braking = new Set();
 
 /** @param {BusSettings} bus */
 function front(bus) {
@@ -235,8 +279,8 @@ function front(bus) {
   });
 }
 
-/** @param {BusSettings} bus @param {boolean} brake */
-function rear(bus, brake) {
+/** @param {BusSettings} bus */
+function rear(bus) {
   const PPM = bus.texturePixelsPerMetre;
   return tex(Math.round(bus.bodyWidth * PPM) * 2, Math.round(bus.bodyHeight * PPM) * 2, (g, w, h) => {
     g.fillStyle = C.white;
@@ -250,7 +294,7 @@ function rear(bus, brake) {
     g.fillRect(0, 30, w, 5);
     g.fillStyle = C.shade;
     for (let i = 0; i < 4; i++) g.fillRect(14, 38 + i * 2, w - 28, 1);
-    tailLights(g, w, brake ? C.redHi : C.red);
+    tailLights(g, w, C.red);
     g.fillStyle = C.amber;
     g.fillRect(1, 33, 4, 2);
     g.fillRect(w - 5, 33, 4, 2);
@@ -266,7 +310,7 @@ function rear(bus, brake) {
  * @param {import('../settings/settings.js').Settings['lights']} lights
  */
 export function makeBus(bus, lights) {
-  brakeGlow = lights.brakeLightGlow;
+  tailColour = tailGlow(lights);
   const PPM = bus.texturePixelsPerMetre;
   const grp = new THREE.Group();
   const body = new THREE.Group(); // caisse (inclinee selon le relief et le roulis)
@@ -281,11 +325,9 @@ export function makeBus(bus, lights) {
     g.fillStyle = '#c9ccd2';
     g.fillRect(8, 4, 14, h - 8); // moteur/batteries
   });
-  const rearN = rear(bus, false),
-    rearB = rear(bus, true);
   const arches = [bus.rearOverhang, bus.rearOverhang + bus.wheelbase];
   const doors = bus.trailer ? FRONT_BODY_DOORS : STANDARD_DOORS;
-  const rearMat = lightedFace(rearN, glow(bus, true));
+  const rearMat = lightedFace(rear(bus), glow(bus, true));
   const joint = new THREE.MeshLambertMaterial({ color: C.bumper });
   const mats = [
     lightedFace(front(bus), glow(bus, false)), // +X avant
@@ -300,6 +342,9 @@ export function makeBus(bus, lights) {
   box.position.set(bus.bodyLength / 2 - bus.rearOverhang, 0.35 + (bus.bodyHeight - 0.35) / 2, 0);
   box.castShadow = true;
   body.add(box);
+  // brake lights at the back, lit while braking (on the rear body of an articulated bus)
+  const brakes = new THREE.Mesh(brakeLampGeometry(bus), brakeMaterial(lights));
+  brakes.visible = false;
   // roues
   const wg = new THREE.CylinderGeometry(0.5, 0.5, 0.35, 10);
   wg.rotateX(Math.PI / 2);
@@ -313,18 +358,23 @@ export function makeBus(bus, lights) {
       grp.add(w);
       wheels.push(w);
     }
+  const trailer = bus.trailer ? makeRearBody(bus, bus.trailer, rearMat, joint, wg, wm) : null;
+  if (trailer) {
+    brakes.position.x = trailer.back;
+    trailer.body.add(brakes);
+  } else {
+    brakes.position.x = -bus.rearOverhang;
+    body.add(brakes);
+  }
   return {
     group: grp,
     body,
     interior,
     wheels,
-    trailer: bus.trailer ? makeRearBody(bus, bus.trailer, rearMat, joint, wg, wm) : null,
+    trailer,
     /** @param {boolean} on */
     setBrake(on) {
-      rearMat.map = on ? rearB : rearN;
-      if (on) braking.add(rearMat);
-      else braking.delete(rearMat);
-      rearMat.emissiveIntensity = on ? Math.max(lightLevel, brakeGlow) : lightLevel;
+      brakes.visible = on;
     },
   };
 }
@@ -384,7 +434,7 @@ function makeRearBody(bus, t, rearMat, joint, wheelGeometry, wheelMaterial) {
     group.add(wheel);
     return wheel;
   });
-  return { group, body, wheels };
+  return { group, body, wheels, back: -t.bellowsLength / 2 - length };
 }
 
 /**
@@ -406,7 +456,7 @@ export function busLook(bus, open) {
   );
   const materials = [
     lightedFace(front(bus), glow(bus, false)),
-    lightedFace(rear(bus, false), glow(bus, true)),
+    lightedFace(rear(bus), glow(bus, true)),
     new THREE.MeshLambertMaterial({ map: roof }),
     new THREE.MeshLambertMaterial({ color: '#222' }),
     new THREE.MeshLambertMaterial({

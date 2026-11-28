@@ -4,21 +4,29 @@
  * doors open (dwelling at a stop), the nearest buses within the drawing distance only (#47).
  */
 import { ModelPool } from './instances.js';
-import { busLook } from './bus3d.js';
+import { brakeLampGeometry, brakeMaterial, busLook } from './bus3d.js';
 import { lodOf, nearestWithin } from './budget.js';
 
 export class OtherBuses {
   /**
    * @param {import('three').Scene} scene @param {import('./trailer.js').BusGeometry} bus standard bus
    * @param {import('../settings/settings.js').Settings['budget']} budget
+   * @param {import('../settings/settings.js').Settings['lights']} lights
    */
-  constructor(scene, bus, budget) {
+  constructor(scene, bus, budget, lights) {
     this.budget = budget;
     const shut = busLook(bus, false),
       open = busLook(bus, true);
     this.shut = new ModelPool(shut.geometry, shut.materials, budget.capacity);
     this.open = new ModelPool(open.geometry, open.materials, budget.capacity);
-    scene.add(this.shut.mesh, this.open.mesh);
+    // brake lights of the buses that brake or stand (#87)
+    this.brakes = new ModelPool(
+      brakeLampGeometry(bus).translate(-bus.bodyLength / 2, 0, 0),
+      brakeMaterial(lights),
+      budget.capacity,
+    );
+    this.brakes.mesh.castShadow = false;
+    scene.add(this.shut.mesh, this.open.mesh, this.brakes.mesh);
     this.shown = 0;
   }
 
@@ -29,13 +37,16 @@ export class OtherBuses {
    */
   draw(buses, x, y) {
     let shut = 0,
-      open = 0;
+      open = 0,
+      braking = 0;
     for (const i of nearestWithin(buses, x, y, this.budget.spriteDistance, this.budget.capacity)) {
       const b = buses[i];
       if (lodOf(Math.hypot(b.x - x, b.y - y), this.budget) === 'hidden') continue;
       if (b.dwelling) this.open.set(open++, b.x, b.y, b.z, b.h);
       else this.shut.set(shut++, b.x, b.y, b.z, b.h);
+      if (b.braking) this.brakes.set(braking++, b.x, b.y, b.z, b.h);
     }
+    this.brakes.show(braking);
     this.shut.show(shut);
     this.open.show(open);
     this.shown = shut + open;

@@ -116,8 +116,13 @@ describe('Fleet', () => {
     const waiting = fleet.buses[0];
     expect(waiting.s + bus.frontDoorSetback).toBeCloseTo(600, 0);
     expect(waiting.v).toBeCloseTo(0);
+    // standing at the line: brake lights on (#87)
+    expect(waiting.braking).toBe(true);
     light = 'green';
     fleet.update(200.1, 0.1, far);
     expect(fleet.buses[0].s).toBeGreaterThan(waiting.s);
+    // driving off: brake lights off
+    for (let t = 200.2; t < 203; t += 0.1) fleet.update(t, 0.1, far);
+    expect(fleet.buses[0].braking).toBe(false);
   });
 });

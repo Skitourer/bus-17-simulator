@@ -419,7 +419,7 @@ async function load() {
   const season = seasonLook(dayOfYear(gameDate), S.seasons);
   const streets = new BuiltUpStreets(roads, S.lights.lampReach);
   world = buildWorld(scene, hf, { map, tiles, stops: places, guide, line, streets }, track, S, season);
-  otherBuses = new OtherBuses(scene, busGeometry(S, 'std'), S.budget);
+  otherBuses = new OtherBuses(scene, busGeometry(S, 'std'), S.budget, S.lights);
   redLights = new RedLightWatch(signals, S.signals.redMinSpeed, S.signals.redLineMargin);
   traffic = new Traffic(network, S.traffic, Math.random, signals);
   const walkways = new Walkways(roads, S.traffic.speeds);
@@ -430,7 +430,7 @@ async function load() {
   walkers = new Pedestrians(walkways, S.pedestrians, S.passengers.looks, Math.random);
   walkerSprites = new BillboardPool(peopleAtlas(S.passengers.looks), S.passengers.looks, S.budget.capacity);
   scene.add(walkerSprites.mesh);
-  trafficLook = new TrafficLook(scene, S.traffic, S.budget.capacity);
+  trafficLook = new TrafficLook(scene, S.traffic, S.lights, S.budget.capacity);
   signalLook = new SignalLook(scene, signals, (x, y) => hf.h(x, y), S.signals);
   solid = { hit: (x, y) => world.index.hit(x, y) || fleet.hit(x, y) || traffic.hit(x, y) };
   bus = makeBus(B, S.lights);
