@@ -23,7 +23,7 @@ import { mustStop } from './signals.js';
  * @property {number} length @property {number} width width of the road (m) @property {boolean} twoWay
  * @property {boolean} roundabout @property {number} speed speed limit (m/s)
  * @property {boolean} builtUp in a town, village or hamlet (#94); every lane when the data has no such flag
- * @property {boolean} bridge on a bridge deck (#75)
+ * @property {boolean} bridge on a bridge deck (#75) @property {boolean} tunnel in an underpass (#86)
  */
 
 /**
@@ -73,8 +73,12 @@ export function classSpeed(name, speeds) {
 
 /** Lanes of the road graph that cars and bikes drive on. */
 export class RoadNetwork {
-  /** @param {RoadsData} roads @param {TrafficSettings['speeds']} speeds */
-  constructor(roads, speeds) {
+  /**
+   * @param {RoadsData} roads @param {TrafficSettings['speeds']} speeds
+   * @param {Set<number>} [openTunnels] tunnel edges driven through (underpasses with a floor, #86); the other
+   * tunnels are left out
+   */
+  constructor(roads, speeds, openTunnels = new Set()) {
     /** @param {string} name */
     const flag = (name) => {
       const bit = roads.flags.indexOf(name);
@@ -97,7 +101,7 @@ export class RoadNetwork {
     roads.edges.forEach((edge, index) => {
       const [a, b, cls, widthDm, , mask] = edge;
       const speed = classSpeed(roads.classes[cls], speeds);
-      if (!speed || mask & tunnel) return;
+      if (!speed || (mask & tunnel && !openTunnels.has(index))) return;
       const pts = edge.slice(6).map((v) => v / 10);
       const twoWay = !(mask & (oneway | reverse));
       const common = {
@@ -108,6 +112,7 @@ export class RoadNetwork {
         speed,
         builtUp: !builtUp || Boolean(mask & builtUp),
         bridge: Boolean(mask & bridge),
+        tunnel: Boolean(mask & tunnel),
       };
       if (!(mask & reverse)) this.add({ ...common, from: a, to: b }, pts);
       if (!(mask & oneway)) this.add({ ...common, from: b, to: a }, reversed(pts));
@@ -284,9 +289,9 @@ export class Traffic {
     this.nextId = 1;
     this.started = false;
     /**
-     * Height of the road at a point of a lane, on its bridge deck for a lane on a bridge (#75); null: no
-     * heights, every vehicle and obstacle on one level.
-     * @type {((x: number, y: number, bridge: boolean) => number) | null}
+     * Height of the road at a point of a lane, on its bridge deck or underpass floor for a lane on a bridge or
+     * in an underpass (#75, #86); null: no heights, every vehicle and obstacle on one level.
+     * @type {((x: number, y: number, lane: Lane) => number) | null}
      */
     this.heightAt = null;
     /** @type {Obstacle[]} obstacles of the last step */
@@ -636,7 +641,7 @@ export class Traffic {
       Math.hypot(front.x - rear.x, front.y - rear.y) > 0.1
         ? Math.atan2(front.y - rear.y, front.x - rear.x)
         : front.h;
-    if (this.heightAt) v.z = this.heightAt(v.x, v.y, this.network.lanes[v.lane].bridge);
+    if (this.heightAt) v.z = this.heightAt(v.x, v.y, this.network.lanes[v.lane]);
   }
 
   /**

@@ -10,6 +10,8 @@ Geometry: see tools/streets.py and ADR 0003. All coordinates in decimetres.
                       "road": [[ring, hole, ...], ...]   (carriageway cut along the ground triangles;
                                                          rings [x, y, ...] relative to the tile origin),
                       "bridges": [[width, x, y, z, x, y, z, ...], ...] (x, y relative to the tile origin),
+                      "tunnels": [[edge, width, x, y, z, ...], ...]   (floors of the underpasses: their
+                                 edge in roads.json, then like "bridges"; see tools/overpasses.py),
                       "terraces": [[width, x, y, z, ...], ...]   (roads held up by a retaining wall above a
                                   lower road, like "bridges"; see tools/terraces.py),
                       "sidewalks": [[ring, ...], ...]   (like "road"),
@@ -42,7 +44,7 @@ import numpy as np
 from geo import Point
 from lines import corridor, read_lines, routes_xy, tiles_in
 from overpasses import crossings as bridge_crossings
-from overpasses import separate_levels
+from overpasses import dig_underpasses, separate_levels, underpass_crossings
 from shapely import LineString, MultiLineString, MultiPoint, MultiPolygon, Polygon, box, union_all
 from shapely import Point as ShapelyPoint
 from shapely.geometry.base import BaseGeometry
@@ -272,6 +274,10 @@ def main() -> None:
     profiles = road_profiles(edges, terrain)
     found = bridge_crossings(edges, profiles)
     profiles = separate_levels(edges, profiles)
+    under = underpass_crossings(edges, profiles)
+    profiles = dig_underpasses(edges, profiles)
+    underpasses = sorted({c.road for c in under})
+    print(f'  {len(underpasses)} passages inferieurs sous {len(under)} routes')
     print(f'  {len(found)} croisements sous un pont, {sum(c.missing > 0 for c in found)} sans hauteur libre')
     print('chaussee (union des troncons)...')
     surface = carriageway(edges)
@@ -361,6 +367,12 @@ def main() -> None:
             if ox <= LineString(e.coords).centroid.x < ox + TILE
             and oy <= LineString(e.coords).centroid.y < oy + TILE
         ]
+        tile_tunnels = [
+            [k, *bridge_record(edges[k], profiles[k], ox, oy)]
+            for k in underpasses
+            if ox <= LineString(edges[k].coords).centroid.x < ox + TILE
+            and oy <= LineString(edges[k].coords).centroid.y < oy + TILE
+        ]
         write_json(
             os.path.join(OUT, f't_{i}_{j}.json'),
             {
@@ -368,6 +380,7 @@ def main() -> None:
                 'road': rings_of(MultiPolygon(pieces), ox, oy) if pieces else [],
                 'bridges': tile_bridges,
                 'terraces': terraces.records(ox, oy),
+                'tunnels': tile_tunnels,
                 'sidewalks': rings_of(MultiPolygon(walk_pieces), ox, oy) if walk_pieces else [],
                 'kerbs': [flat_dm(line, ox, oy) for line in kerbs.get((i, j), [])],
                 'centre_lines': [flat_dm(line, ox, oy) for line in marks.get((i, j), [])],

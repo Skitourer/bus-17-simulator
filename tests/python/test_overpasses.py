@@ -9,8 +9,10 @@ from overpasses import (
     approach_edges,
     bridge_groups,
     crossings,
+    dig_underpasses,
     plateau,
     separate_levels,
+    underpass_crossings,
 )
 from streets import Profile, RoadEdge
 
@@ -85,3 +87,35 @@ def test_plateau() -> None:
     d = np.array([0.0, 5.0, 10.0, 30.0])
     assert plateau(d, 5.0, 2.0, 0.1).tolist() == pytest.approx([2.0, 2.0, 1.5, 0.0])
     assert plateau(d, 5.0, 0.0, 0.1).tolist() == [0.0] * 4
+
+
+def underpass() -> tuple[list[RoadEdge], list[Profile]]:
+    """A street along x at 100 m over a 30 m tunnel along y, its two ramps, and a street beyond a ramp."""
+    edges = [
+        RoadEdge(1, 2, 10.0, frozenset(), [(-200.0, 0.0), (200.0, 0.0)]),
+        RoadEdge(3, 4, 8.0, frozenset({'tunnel'}), [(0.0, -15.0), (0.0, 15.0)]),
+        RoadEdge(5, 3, 8.0, frozenset(), [(0.0, -100.0), (0.0, -15.0)]),
+        RoadEdge(4, 6, 8.0, frozenset(), [(0.0, 15.0), (0.0, 100.0)]),
+        RoadEdge(6, 7, 8.0, frozenset(), [(0.0, 100.0), (0.0, 300.0)]),
+    ]
+    return edges, [flat(e, 100.0) for e in edges]
+
+
+def test_underpasses_dig_the_tunnel_and_its_ramps_and_keep_the_road_above() -> None:
+    edges, profiles = underpass()
+    [c] = underpass_crossings(edges, profiles)
+    assert (c.bridge, c.road, c.missing) == (0, 1, pytest.approx(CLEARANCE))
+    above, tunnel, ramp_in, ramp_out, beyond = dig_underpasses(edges, profiles)
+    assert above is profiles[0]
+    assert above.at(200.0) - tunnel.at(15.0) == pytest.approx(CLEARANCE)
+    assert ramp_in.z[0] == pytest.approx(100.0)
+    assert ramp_out.at(0.0) == pytest.approx(tunnel.z[-1])
+    assert np.max(np.abs(np.diff(ramp_in.z) / np.diff(ramp_in.s))) <= CUT_GRADE + 1e-9
+    assert beyond is profiles[4]
+
+
+def test_deep_enough_underpasses_stay_as_they_are() -> None:
+    edges, profiles = underpass()
+    deep = [profiles[0], Profile(profiles[1].s, profiles[1].z - 10), *profiles[2:]]
+    assert underpass_crossings(edges, deep)[0].missing == 0.0
+    assert dig_underpasses(edges, deep) == deep

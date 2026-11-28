@@ -24,6 +24,8 @@ import { Heightfield } from './heightfield.js';
  * @property {number[]} ground n x n heights (dm), row by row from the south
  * @property {number[][][]} road carriageway polygons: rings [x, y, ...] (dm, relative to the tile origin)
  * @property {number[][]} bridges [width, x, y, z, x, y, z, ...] (dm, x and y relative to the tile origin)
+ * @property {number[][]} [tunnels] floors of the underpasses (#86): [edge, width, x, y, z, ...], the road edge
+ * of roads.json then like `bridges`
  * @property {number[][]} [terraces] roads held up by a retaining wall above a lower road (#108), like `bridges`:
  * inside them the ground height is the terrace height
  * @property {number[][][]} sidewalks sidewalk polygons, like `road`
@@ -114,6 +116,10 @@ export class Ground {
     this.water = new Map();
     /** @type {Deck[]} */
     this.decks = [];
+    /** @type {Deck[]} floors of the underpasses (#86), driven like decks: by vehicles near their height */
+    this.tunnels = [];
+    /** @type {Set<number>} road edges (roads.json) of the underpasses */
+    this.tunnelEdges = new Set();
     /** @type {Deck[]} terraces (#108): stretches of road held up by a retaining wall */
     this.terraces = [];
     /** @type {Map<string, Deck[]>} terraces by the tiles their box touches */
@@ -143,6 +149,10 @@ export class Ground {
         oy = index.y0 + j * index.size;
       for (const rec of tile.bridges) this.decks.push(deckFromRecord(rec, ox, oy));
       for (const rec of tile.terraces ?? []) this.addTerrace(deckFromRecord(rec, ox, oy));
+      for (const [edge, ...rec] of tile.tunnels ?? []) {
+        this.tunnels.push(deckFromRecord(rec, ox, oy));
+        this.tunnelEdges.add(edge);
+      }
     }
   }
 
@@ -241,6 +251,20 @@ export class Ground {
       const z = deckHeight(deck, x, y, margin);
       return z !== null && Math.abs(z - zRef) < this.deckCatch;
     });
+  }
+
+  /**
+   * Height of the lowest underpass floor at (x, y), null when there is none.
+   * @param {number} x @param {number} y
+   */
+  tunnelAt(x, y) {
+    /** @type {number | null} */
+    let best = null;
+    for (const floor of this.tunnels) {
+      const z = deckHeight(floor, x, y);
+      if (z !== null && (best === null || z < best)) best = z;
+    }
+    return best;
   }
 
   /**
@@ -349,8 +373,8 @@ export class Ground {
   }
 
   /**
-   * Drivable surface height (m): a bridge deck when `zRef` (current height of the vehicle) is close to it,
-   * else the ground.
+   * Drivable surface height (m): a bridge deck or an underpass floor when `zRef` (current height of the
+   * vehicle) is close to it, else the ground.
    * @param {number} x @param {number} y @param {number} zRef
    */
   surface(x, y, zRef) {
@@ -358,7 +382,7 @@ export class Ground {
     // slopes down gently towards the river and would otherwise pull the vehicle off the deck
     /** @type {number | null} */
     let best = null;
-    for (const deck of this.decks) {
+    for (const deck of [...this.decks, ...this.tunnels]) {
       const z = deckHeight(deck, x, y);
       if (
         z !== null &&

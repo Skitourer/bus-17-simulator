@@ -398,7 +398,7 @@ describe('Traffic on two levels (#75)', () => {
   function bridged() {
     const n = new RoadNetwork(crossroads(8), P.speeds);
     const traffic = quiet(n);
-    traffic.heightAt = (_x, _y, bridge) => (bridge ? 106 : 100);
+    traffic.heightAt = (_x, _y, lane) => (lane.bridge ? 106 : 100);
     return { n, traffic };
   }
 
@@ -420,6 +420,15 @@ describe('Traffic on two levels (#75)', () => {
     traffic.vehicles = [d];
     run(traffic, 20, [{ ...bus, z: 100.5 }]);
     expect(d.x).toBeLessThan(80);
+  });
+
+  it('drives through the underpasses that have a floor, not through the other tunnels (#86)', () => {
+    const closed = new RoadNetwork(crossroads(), P.speeds);
+    const open = new RoadNetwork(crossroads(), P.speeds, new Set([4]));
+    expect(closed.lanes.some((lane) => lane.edge === 4)).toBe(false);
+    const lane = open.lanes.find((l) => l.edge === 4);
+    expect(lane?.tunnel).toBe(true);
+    expect(lane?.bridge).toBe(false);
   });
 
   it('is neither hit nor pushed by the bus on another level', () => {

@@ -714,7 +714,7 @@ function routeStrip(hf, track, guide) {
 
 /**
  * Tunnel mouths (#14): a concrete box over the first metres of each tunnel, open towards the road, dark
- * inside. The ground is not dug: the road disappears into the box.
+ * inside, except at the underpasses (#86), whose floor goes on inside.
  * @param {Ground} hf @param {string} key tile @param {number[][]} portals [x, y, heading (mrad), width] (dm)
  */
 function tunnelMouths(hf, key, portals) {
@@ -755,8 +755,10 @@ function tunnelMouths(hf, key, portals) {
       new THREE.BoxGeometry(depth, wall, w + 2 * wall).translate(depth / 2, clearance + wall / 2, 0),
       concrete,
     );
-    // the dark inside, a little behind the mouth
-    add(new THREE.PlaneGeometry(w, clearance).rotateY(-Math.PI / 2).translate(0.3, clearance / 2, 0), dark);
+    // the dark inside, a little behind the mouth, where no underpass floor goes on
+    const inside = hf.tunnelAt(x + Math.cos(mrad / 1000) * 2, y + Math.sin(mrad / 1000) * 2);
+    if (inside === null)
+      add(new THREE.PlaneGeometry(w, clearance).rotateY(-Math.PI / 2).translate(0.3, clearance / 2, 0), dark);
   }
   const geo = new THREE.BufferGeometry();
   geo.setAttribute('position', new THREE.Float32BufferAttribute(P, 3));
@@ -764,6 +766,56 @@ function tunnelMouths(hf, key, portals) {
   geo.computeVertexNormals();
   const mesh = new THREE.Mesh(geo, new THREE.MeshLambertMaterial({ vertexColors: true }));
   mesh.castShadow = true;
+  mesh.receiveShadow = true;
+  return mesh;
+}
+
+/**
+ * Underpasses (#86): the road floor, the walls and the ceiling of the covered part, under the ground of the
+ * roads above; seen through the mouths and from inside.
+ * @param {Ground} hf @param {string} key tile @param {number[][]} records [edge, width, x, y, z, ...] (dm)
+ */
+function underpasses(hf, key, records) {
+  const [ox, oy] = tileOrigin(hf, key);
+  /** @type {number[]} */
+  const P = [];
+  /** @type {number[]} */
+  const C = [];
+  const road = new THREE.Color('#4b4c51'),
+    concrete = new THREE.Color('#8d897f');
+  // the clearance of the tunnel mouths
+  const clearance = 4.5;
+  /** @param {number[][]} q quad corners @param {THREE.Color} col */
+  const quad = (q, col) => {
+    P.push(...q[0], ...q[1], ...q[2], ...q[0], ...q[2], ...q[3]);
+    for (let k = 0; k < 6; k++) C.push(col.r, col.g, col.b);
+  };
+  for (const [, ...rec] of records) {
+    const t = deckFromRecord(rec, ox, oy),
+      w = t.halfWidth + 0.5;
+    for (let i = 0; i + 1 < t.x.length; i++) {
+      const dx = t.x[i + 1] - t.x[i],
+        dy = t.y[i + 1] - t.y[i];
+      const L = Math.hypot(dx, dy) || 1;
+      /** @param {number} k @param {number} side @param {number} dz */
+      const p = (k, side, dz) => [t.x[k] + (dy / L) * w * side, t.z[k] + dz, -(t.y[k] - (dx / L) * w * side)];
+      quad([p(i, -1, 0.05), p(i, 1, 0.05), p(i + 1, 1, 0.05), p(i + 1, -1, 0.05)], road);
+      quad(
+        [p(i, -1, clearance), p(i + 1, -1, clearance), p(i + 1, 1, clearance), p(i, 1, clearance)],
+        concrete,
+      );
+      for (const side of [-1, 1])
+        quad([p(i, side, 0), p(i + 1, side, 0), p(i + 1, side, clearance), p(i, side, clearance)], concrete);
+    }
+  }
+  const geo = new THREE.BufferGeometry();
+  geo.setAttribute('position', new THREE.Float32BufferAttribute(P, 3));
+  geo.setAttribute('color', new THREE.Float32BufferAttribute(C, 3));
+  geo.computeVertexNormals();
+  const mesh = new THREE.Mesh(
+    geo,
+    new THREE.MeshLambertMaterial({ vertexColors: true, side: THREE.DoubleSide }),
+  );
   mesh.receiveShadow = true;
   return mesh;
 }
@@ -1576,6 +1628,7 @@ export function buildWorld(scene, hf, data, track, settings, season) {
         block.add(above.walls, above.roofs);
       }
       if (tile.portals?.length) streets.add(tunnelMouths(hf, key, tile.portals));
+      if (tile.tunnels?.length) streets.add(underpasses(hf, key, tile.tunnels));
       if (tile.terraces?.length) streets.add(retainingWalls(hf, key, tile.terraces, street));
       return {
         fineGround: terrainTile(hf, key, tile, groundMaterial),

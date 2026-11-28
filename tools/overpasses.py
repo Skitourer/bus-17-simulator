@@ -1,9 +1,12 @@
-"""Grade separation (#75): headroom under the bridges that cross a road.
+"""Grade separation (#75, #86): headroom under the bridges that cross a road, and underpasses dug below the
+roads they pass under.
 
 The terrain model is too coarse to hold the embankments and cuttings of the road crossings: a bridge deck,
 straight between its ends, often lay at the height of the road below it, and the two levels met. Where a
 bridge crosses a ground-level road, the deck rises in a gentle hump and the road below dips in a cutting until
-the deck stands CLEARANCE above it. Pure functions; coordinates in metres.
+the deck stands CLEARANCE above it. Where a road passes under another one in a tunnel (an underpass), the
+tunnel and the ramps leading to it dip in a trench until the road above stands CLEARANCE over it. Pure
+functions; coordinates in metres.
 """
 
 from collections.abc import Sequence
@@ -130,6 +133,61 @@ def separate_levels(edges: Sequence[RoadEdge], profiles: Sequence[Profile]) -> l
             depth = np.maximum(depth, plateau(near, deck.width / 2 + MARGIN, cut, CUT_GRADE))
         if depth.any():
             out[k] = Profile(profiles[k].s, out[k].z - depth)
+    return out
+
+
+def underpass_crossings(edges: Sequence[RoadEdge], profiles: Sequence[Profile]) -> list[Crossing]:
+    """Every place where a tunnel passes under a ground-level road that does not join it, with the height
+    missing to CLEARANCE (`bridge` is the road above, `road` the tunnel)."""
+    lines = [LineString(e.coords) for e in edges]
+    tree = STRtree(lines)
+    out: list[Crossing] = []
+    for t, tunnel in enumerate(edges):
+        if tunnel.level != 'tunnel':
+            continue
+        hits: list[int] = [int(v) for v in tree.query(lines[t], predicate='intersects')]
+        for r in hits:
+            above = edges[r]
+            if above.level != 'ground' or {above.a, above.b} & {tunnel.a, tunnel.b}:
+                continue
+            for point in points_of(lines[r].intersection(lines[t])):
+                s_above, s_tunnel = lines[r].project(point), lines[t].project(point)
+                gap = profiles[r].at(s_above) - profiles[t].at(s_tunnel)
+                out.append(Crossing(r, t, point.x, point.y, s_above, s_tunnel, max(0.0, CLEARANCE - gap)))
+    return out
+
+
+def dig_underpasses(edges: Sequence[RoadEdge], profiles: Sequence[Profile]) -> list[Profile]:
+    """Profiles with every underpass dug: the tunnel dips around each crossing by the missing height, at
+    CUT_GRADE at most; each ramp (a ground-level edge joined to a tunnel end) climbs from the tunnel back to
+    its other end, at CUT_GRADE or steeper when it is too short. The roads above and the streets beyond the
+    ramps stay put."""
+    found = [c for c in underpass_crossings(edges, profiles) if c.missing > 0]
+    out = list(profiles)
+    if not found:
+        return out
+    tunnel_depth: dict[int, FloatArray] = {}
+    for c in found:
+        line = LineString(edges[c.road].coords)
+        xs, ys = coordinates(interpolate(line, profiles[c.road].s))
+        flat = edges[c.bridge].width / 2 + MARGIN
+        dip = plateau(np.hypot(xs - c.x, ys - c.y), flat, c.missing, CUT_GRADE)
+        tunnel_depth[c.road] = np.maximum(tunnel_depth.get(c.road, 0.0), dip)
+    ramp_depth: dict[int, FloatArray] = {}
+    for t, dip in tunnel_depth.items():
+        out[t] = Profile(profiles[t].s, profiles[t].z - dip)
+        tunnel = edges[t]
+        for node, portal in ((tunnel.a, float(dip[0])), (tunnel.b, float(dip[-1]))):
+            for k, e in enumerate(edges):
+                if e.level != 'ground' or node not in (e.a, e.b):
+                    continue
+                s = profiles[k].s
+                along = s if e.a == node else s[-1] - s
+                climb = min(float(s[-1]), portal / CUT_GRADE)
+                ramp = portal * np.clip(1 - along / climb, 0.0, 1.0)
+                ramp_depth[k] = np.maximum(ramp_depth.get(k, 0.0), ramp)
+    for k, dip in ramp_depth.items():
+        out[k] = Profile(profiles[k].s, profiles[k].z - dip)
     return out
 
 
