@@ -28,6 +28,7 @@ Fait
     La circulation ne bloque jamais le bus : priorité au bus, voitures qui reculent ou s'effacent (#95)
     Pas de piétons ni de vélos à la campagne, moins de voitures, densité selon les zones bâties (#94)
     Moins de lampadaires, cône de lumière vers le bas, aucun en zone rurale (#89)
+    Voitures et vélos qui suivent la pente de la route (#93)
 
 À faire
     Optimisation : ne pas afficher ni simuler tous les objets mobiles de la carte (#47, #12, #19)

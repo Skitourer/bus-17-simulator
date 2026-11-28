@@ -7,6 +7,7 @@
 import * as THREE from 'three';
 import { ModelPool } from './instances.js';
 import { glowAtNight } from './bus3d.js';
+import { groundPose } from './traffic.js';
 
 /** Car body colours, picked by the vehicle's look. */
 const CAR_COLOURS = ['#c8ccd2', '#2b2f36', '#a8322c', '#2f5d9a', '#e8e4da', '#6b7a5a', '#d9a440', '#7a7f88'];
@@ -169,17 +170,18 @@ export class TrafficLook {
     let cars = 0,
       bikes = 0;
     for (const { v } of near) {
-      const z = heightAt(v.x, v.y);
+      // on the slope of the road under the wheels (#93)
+      const { z, pitch, roll } = groundPose(v, v.length * this.p.wheelbaseShare, heightAt);
       if (v.bike) {
-        for (const part of Object.values(this.bikes)) part.set(bikes, v.x, v.y, z, v.h);
+        for (const part of Object.values(this.bikes)) part.set(bikes, v.x, v.y, z, v.h, pitch, roll);
         this.bikes.rider.mesh.setColorAt(
           bikes,
           this.colour.set(RIDER_COLOURS[v.variant % RIDER_COLOURS.length]),
         );
         bikes++;
       } else {
-        for (const part of Object.values(this.cars)) part.set(cars, v.x, v.y, z, v.h);
-        this.beam.set(cars, v.x, v.y, z, v.h);
+        for (const part of Object.values(this.cars)) part.set(cars, v.x, v.y, z, v.h, pitch, roll);
+        this.beam.set(cars, v.x, v.y, z, v.h, pitch, roll);
         this.cars.body.mesh.setColorAt(cars, this.colour.set(CAR_COLOURS[v.variant % CAR_COLOURS.length]));
         cars++;
       }
