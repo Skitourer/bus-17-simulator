@@ -59,11 +59,13 @@ describe('Drive (HD-2D free driving)', () => {
     expect(drive.delta).toBeCloseTo(0);
   });
 
-  it('brakes to a stop, then reverses', () => {
+  it('brakes to a stop and holds it while the key stays down, then reverses on a new press', () => {
     const drive = new Drive(SETTINGS.drive, SETTINGS.bus);
     drive.v = 8;
-    run(drive, (dt) => drive.update({ ...NO_INPUT, down: true }, dt, flat, noWalls), 2.5);
-    expect(drive.braking || drive.v <= 0).toBe(true);
+    run(drive, (dt) => drive.update({ ...NO_INPUT, down: true }, dt, flat, noWalls), 6);
+    expect(drive.v).toBe(0);
+    expect(drive.braking).toBe(true);
+    run(drive, (dt) => drive.update(NO_INPUT, dt, flat, noWalls), 0.1);
     run(drive, (dt) => drive.update({ ...NO_INPUT, down: true }, dt, flat, noWalls), 4);
     expect(drive.v).toBeLessThan(0);
     run(drive, (dt) => drive.update(NO_INPUT, dt, flat, noWalls), 10);

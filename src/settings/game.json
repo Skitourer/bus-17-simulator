@@ -151,25 +151,25 @@
       "unit": "m/s²",
       "min": 0.1,
       "max": 5,
-      "doc": "Acceleration in reverse (brake key held at standstill)."
+      "doc": "Acceleration in reverse: brake key pressed again at standstill. A press that stopped the bus holds it stopped until released."
     },
     "brakingStart": {
-      "value": 2,
+      "value": 3.5,
       "unit": "m/s²",
       "min": 0.5,
       "max": 10,
       "doc": "Deceleration as soon as the brake key is pressed; it grows up to `braking` while the key is held."
     },
     "braking": {
-      "value": 6,
+      "value": 7.5,
       "unit": "m/s²",
       "min": 0.5,
       "max": 10,
-      "doc": "Largest deceleration of the service brake, reached after `brakeRampTime` with the brake key held.",
+      "doc": "Largest deceleration of the service brake, reached after `brakeRampTime` with the brake key held. Firmer than a real city bus so that the game feels responsive, like `acceleration`.",
       "source": "Emergency braking of a city bus, about 6 m/s² (UNECE Regulation 13, category M3: at least 5 m/s²)"
     },
     "brakeRampTime": {
-      "value": 1.2,
+      "value": 0.8,
       "unit": "s",
       "min": 0,
       "max": 5,

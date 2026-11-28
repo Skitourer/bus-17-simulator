@@ -28,6 +28,8 @@ export class Drive {
     this.delta = 0;
     this.braking = false;
     this.brakeHeld = 0; // time the brake key has been held while moving forward (s)
+    // the brake stopped the bus and its key is still held: stay stopped, reverse only on a new press
+    this.stopHeld = false;
     this.bump = 0; // temps depuis le dernier accrochage
   }
 
@@ -49,6 +51,7 @@ export class Drive {
     this.v = 0;
     this.delta = 0;
     this.brakeHeld = 0;
+    this.stopHeld = false;
     this.trailer?.align(x, y, h);
   }
 
@@ -132,6 +135,7 @@ export class Drive {
       vmax = this.maxSpeed;
     let a = 0;
     this.braking = false;
+    if (!inp.down) this.stopHeld = false;
     if (inp.up) a += v >= -0.05 ? p.acceleration * (1 - (v / vmax) ** 2) : p.braking;
     if (inp.down && v > 0.15) {
       this.brakeHeld += dt;
@@ -139,14 +143,17 @@ export class Drive {
       this.braking = true;
     } else {
       this.brakeHeld = 0;
-      if (inp.down) a -= p.reverseAcceleration;
+      if (this.stopHeld) this.braking = true;
+      else if (inp.down) a -= p.reverseAcceleration;
     }
     if (!inp.up && !inp.down)
       a -= Math.sign(v) * Math.min(Math.abs(v) / dt, p.rollingDeceleration + p.airDrag * v * v);
     const c = this.center;
     a -= 9.81 * hf.slope(c.x, c.y, this.h) * p.slopeFactor;
     let nv = v + a * dt;
-    if (inp.down && v > 0 && nv < 0) nv = 0;
+    if (inp.down && v > 0 && nv <= 0.15) this.stopHeld = true;
+    if (this.stopHeld) nv = 0;
+    else if (inp.down && v > 0 && nv < 0) nv = 0;
     if (inp.up && v < 0 && nv > 0) nv = 0;
     if (!inp.up && !inp.down && Math.abs(nv) < 0.05) nv = 0;
     this.v = Math.max(-this.reverseMaxSpeed, Math.min(vmax, nv));

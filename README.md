@@ -25,7 +25,7 @@ python -m http.server 8017
 ```
 
 Then open <http://localhost:8017/>, pick a line, a direction, a day and a departure, and drive.
-Keys: Z/↑ accelerate · S/↓ brake then reverse · Q D/← → steer · M map · P pause.
+Keys: Z/↑ accelerate · S/↓ brake, press again at a stop to reverse · Q D/← → steer · M map · P pause.
 
 ## Development
 

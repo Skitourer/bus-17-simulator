@@ -33,7 +33,7 @@
     "otherDate": "ou une date précise :",
     "noDeparture": "Aucun départ ce jour-là.",
     "start": "Prendre le service ▶",
-    "helpKeys": "<b>{keyAccelerate}</b> accélérer · <b>{keyBrake}</b> freiner, puis reculer à l'arrêt · <b>{keySteer}</b> tourner · <b>{keyMap}</b> carte · <b>molette sur la carte</b> zoom · <b>glisser</b> déplacer la carte · <b>{keyPause} / {keyMenu}</b> pause",
+    "helpKeys": "<b>{keyAccelerate}</b> accélérer · <b>{keyBrake}</b> freiner, puis rappuyer à l'arrêt pour reculer · <b>{keySteer}</b> tourner · <b>{keyMap}</b> carte · <b>molette sur la carte</b> zoom · <b>glisser</b> déplacer la carte · <b>{keyPause} / {keyMenu}</b> pause",
     "helpCamera": "<b>molette</b> rapprocher / éloigner la caméra · <b>glisser sur la vue</b> tourner autour du bus · <b>{keyResetView}</b> revenir à la vue · <b>{keyCamera}</b> changer de caméra · <b>{keyReplace}</b> replacer le bus sur le parcours. Suis le tracé vert de la ligne : si tu t'en écartes, le jeu te le signale.",
     "helpStops": "Pour desservir un arrêt : arrête-toi le long du trottoir, la porte avant à hauteur de l'abri. Les portes s'ouvrent toutes seules.",
     "credits": "Tracé, arrêts, horaires : GTFS M réso (SMMAG, ODbL). Fond de carte, bâtiments, arbres : © contributeurs OpenStreetMap (ODbL). Altitude : IGN RGE ALTI.",
