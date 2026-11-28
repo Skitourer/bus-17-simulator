@@ -13,6 +13,7 @@ from streets import (
     STRIPE,
     TREE_CLEARANCE,
     TREE_DENSITY,
+    Profile,
     RoadEdge,
     RoadHeights,
     TerrainGrid,
@@ -38,6 +39,7 @@ from streets import (
     shaped_ground,
     sidewalk_zone,
     smoothstep,
+    straight_ends,
     triangle_gradients,
     trimmed,
     tunnel_portals,
@@ -84,6 +86,69 @@ def test_terrain_grid_interpolates_and_clamps() -> None:
 def test_sample_positions_include_both_ends() -> None:
     assert list(sample_positions(12.0, 5.0)) == pytest.approx([0, 4, 8, 12])
     assert list(sample_positions(0.0, 5.0)) == [0.0, 0.0]
+
+
+def test_dual_carriageways_share_their_height_across() -> None:
+    # two one-way carriageways 10 m apart on a 15 % side slope: 1.5 m apart in height on the natural
+    # ground, they meet at the same height so the ground between them is flat across (#92)
+    terrain = tilted(0.0, 0.15)
+    oneway = frozenset({'oneway'})
+    east = edge(1, 2, [(-100.0, 0.0), (100.0, 0.0)], oneway, 7.0)
+    west = edge(3, 4, [(100.0, 10.0), (-100.0, 10.0)], oneway, 7.0)
+    pe, pw = road_profiles([east, west], terrain)
+    assert pe.at(100) == pytest.approx(pw.at(100), abs=0.05)
+    assert pe.at(100) == pytest.approx(200.75, abs=0.05)
+
+
+def test_hairpin_legs_and_distant_roads_keep_their_heights() -> None:
+    terrain = tilted(0.0, 0.15)
+    # two-way roads side by side (legs of a hairpin), and one-way roads with a wide median
+    legs = [edge(1, 2, [(-100.0, 0.0), (100.0, 0.0)]), edge(3, 4, [(100.0, 10.0), (-100.0, 10.0)])]
+    oneway = frozenset({'oneway'})
+    apart = [
+        edge(1, 2, [(-100.0, 0.0), (100.0, 0.0)], oneway, 7.0),
+        edge(3, 4, [(100.0, 30.0), (-100.0, 30.0)], oneway, 7.0),
+    ]
+    for roads, gap in ((legs, 10.0), (apart, 30.0)):
+        low, high = road_profiles(roads, terrain)
+        assert high.at(100) - low.at(100) == pytest.approx(0.15 * gap, abs=0.05)
+
+
+def side_street() -> tuple[list[RoadEdge], list[Profile]]:
+    """A main road along x and a side street towards +y from (0, 0), both climbing at 10 %."""
+    terrain = tilted(0.1, 0.1)
+    roads = [
+        RoadEdge(1, 2, 10.0, frozenset(), [(-100.0, 0.0), (0.0, 0.0)], 'primary'),
+        RoadEdge(2, 3, 10.0, frozenset(), [(0.0, 0.0), (100.0, 0.0)], 'primary'),
+        RoadEdge(2, 4, 6.0, frozenset(), [(0.0, 0.0), (0.0, 100.0)], 'minor'),
+    ]
+    return roads, road_profiles(roads, terrain)
+
+
+def test_a_side_street_meets_the_main_road_on_its_surface() -> None:
+    roads, profiles = side_street()
+    west, east, side = profiles
+    # the main road keeps its slope; the side street starts on the main road surface, then climbs on its own
+    assert east.at(50) - west.at(50) == pytest.approx(10, abs=0.5)
+    assert side.at(5) == pytest.approx(side.at(0), abs=0.05)
+    assert side.at(60) == pytest.approx(206, abs=0.2)
+    # beside the side street but on the main road, the ground follows the main road
+    heights = RoadHeights(roads, profiles)
+    z = heights.heights(np.array([4.0, 4.0]), np.array([6.0, 30.0]))
+    assert z[0] == pytest.approx(east.at(4), abs=0.05)
+    assert z[1] == pytest.approx(side.at(30), abs=0.05)
+
+
+def test_a_side_street_of_the_same_class_meets_the_through_road_on_its_surface() -> None:
+    terrain = tilted(0.1, 0.1)
+    roads = [
+        edge(1, 2, [(-100.0, 0.0), (0.0, 0.0)]),
+        edge(2, 3, [(0.0, 0.0), (100.0, 0.0)]),
+        edge(2, 4, [(0.0, 0.0), (0.0, 100.0)]),
+    ]
+    assert straight_ends(roads) == [1, 1, 0]
+    side = road_profiles(roads, terrain)[2]
+    assert side.at(4) == pytest.approx(side.at(0), abs=0.05)
 
 
 def test_profiles_follow_the_slope_and_share_node_heights() -> None:

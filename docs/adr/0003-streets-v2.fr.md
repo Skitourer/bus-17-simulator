@@ -14,7 +14,10 @@ correspondait pas à ce qui était dessiné.
 - `tools/build_streets.py` précalcule, avec shapely, des tuiles de 500 m (chaque fichier sous 1 Mo) dans
   `data/grenoble/tiles/` :
   - la hauteur des routes : le relief naturel lissé le long de chaque route, raccordé à
-    une hauteur commune à chaque carrefour ; les ponts droits entre leurs extrémités ; les
+    une hauteur commune à chaque carrefour, les deux chaussées d'une route à chaussées séparées à
+    leur hauteur moyenne, et une rue latérale qui part de la surface de la route qu'elle rejoint
+    (classe supérieure, puis route qui continue tout droit, puis plus large) avant de retrouver son
+    propre profil sur 15 m (#92) ; les ponts droits entre leurs extrémités ; les
     tunnels laissés de côté (une entrée en béton est dessinée où ils rejoignent une route à
     l'air libre ; les passages sous immeuble sont des rues, la partie du bâtiment au-dessus
     dessinée à partir de 4,5 m, #14) ;
@@ -50,7 +53,9 @@ correspondait pas à ce qui était dessiné.
   reconstruites par le script après tout changement des routes ou du relief. La grille de
   5 m (#92, 28/11/2026) les a doublées, ainsi que les triangles de sol dessinés près du bus
   (1,5 à 2 fois), et a réduit d'environ 60 % la surface de chaussée inclinée de plus de 7 %
-  en travers ; il reste les endroits où deux branches d'un lacet ou deux routes superposées
+  en travers ; les chaussées séparées à la même hauteur et les rues latérales qui partent de la
+  route principale (#92) l'ont encore divisée par deux (824 triangles, et environ moitié moins
+  dans les carrefours) ; il reste les endroits où deux branches d'un lacet ou deux routes superposées
   sont plus proches que la largeur d'une route, qu'une grille plus fine ne sépare pas.
 
 ## Alternatives rejetées

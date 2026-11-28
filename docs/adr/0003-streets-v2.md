@@ -13,7 +13,10 @@ each read a terrain that did not match what was drawn.
 - `tools/build_streets.py` precomputes, with shapely, 500 m tiles (each file under 1 MB) in
   `data/grenoble/tiles/`:
   - road heights: the natural terrain smoothed along each road, tied to a common height
-    at every junction; bridges straight between their ends; tunnels left out (a concrete
+    at every junction, the two carriageways of a dual road at their mean height, and a side street
+    starting on the surface of the road it joins (higher class, then the road carrying on straight, then
+    the wider) before easing into its own profile over 15 m (#92); bridges straight between their ends;
+    tunnels left out (a concrete
     mouth is drawn where they meet an open road; building passages are streets, the building
     part above them drawn from 4.5 m, #14);
   - a 5 m ground grid (10 m until #92) set to the road height on the carriageway and 2.5 m beside it,
@@ -44,7 +47,9 @@ each read a terrain that did not match what was drawn.
 - About 70 MB of generated tiles in the repository (19 MB compressed as served), rebuilt by
   the script after any change to roads or terrain. The 5 m grid (#92, 2026-11-28) doubled
   them and the ground triangles drawn near the bus (1.5 to 2 times), and cut the area of
-  road steeper than 7 % across by about 60 %; what remains is where two legs of a hairpin or
+  road steeper than 7 % across by about 60 %; dual carriageways at a common height and side streets
+  starting on the main road (#92) halved it again (824 triangles, about half of the junction ones
+  too); what remains is where two legs of a hairpin or
   two stacked roads are closer than the width of a road, which a finer grid cannot separate.
 
 ## Rejected alternatives

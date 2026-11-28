@@ -10,6 +10,7 @@ from dataclasses import dataclass
 from typing import Any
 
 import numpy as np
+import numpy.typing as npt
 import shapely
 from geo import Point, gauss_smooth
 from shapely import (
@@ -36,6 +37,7 @@ from shapes import (
     intersections,
     intersects,
     locate,
+    pair_distances,
     points,
     polygon_parts,
     polygons,
@@ -45,6 +47,18 @@ PROFILE_STEP = 5.0  # m between height samples along a road
 PROFILE_SMOOTH = 2.0  # gaussian sigma in samples (10 m): removes the 40 m terrain grid facets
 SIDEWALK = 2.5  # m of flat ground kept beside the carriageway (future sidewalks)
 BANK = 8.0  # m over which the ground blends from the road height back to the natural terrain
+# two one-way carriageways of the same road (#92): at most this gap between their edges (central reserve,
+# tram tracks), heading the same way or opposite within about 37 degrees
+DUAL_MEDIAN = 8.0  # m
+DUAL_PARALLEL = 0.8  # cosine of the angle between the two carriageways
+# at a junction the road of the higher class keeps its surface and the others start on it (#92), then ease
+# into their own profile over this length
+APPROACH = 15.0  # m
+CLASS_RANK = {'service': 0, 'busway': 1, 'minor': 1, 'secondary': 2, 'primary': 3}
+STRAIGHT_ON = (
+    0.85  # cosine: a road leaving a node within about 30 degrees of straight on carries on through it
+)
+BEYOND_END = 1.0  # m past the end of a road where a point no longer lies beside it
 
 
 @dataclass(frozen=True)
@@ -140,9 +154,67 @@ def node_heights(edges: Sequence[RoadEdge], profiles: Sequence[Profile]) -> dict
     return {n: sum(v) / len(v) for n, v in ends.items()}
 
 
+def sample_frames(
+    edges: Sequence[RoadEdge], profiles: Sequence[Profile]
+) -> tuple[FloatArray, FloatArray, FloatArray, FloatArray]:
+    """Position (x, y) and unit direction (tx, ty) of every profile sample, edge after edge."""
+    xs: list[FloatArray] = []
+    ys: list[FloatArray] = []
+    txs: list[FloatArray] = []
+    tys: list[FloatArray] = []
+    for e, p in zip(edges, profiles, strict=True):
+        line = LineString(e.coords)
+        x, y = coordinates(interpolate(line, p.s))
+        ax, ay = coordinates(interpolate(line, np.maximum(p.s - 1.0, 0.0)))
+        bx, by = coordinates(interpolate(line, p.s + 1.0))
+        norm = np.maximum(np.hypot(bx - ax, by - ay), 1e-9)
+        xs.append(x)
+        ys.append(y)
+        txs.append((bx - ax) / norm)
+        tys.append((by - ay) / norm)
+    return np.concatenate(xs), np.concatenate(ys), np.concatenate(txs), np.concatenate(tys)
+
+
+def dual_carriageways(edges: Sequence[RoadEdge], profiles: Sequence[Profile]) -> list[Profile]:
+    """Profiles where the two one-way carriageways of a road run side by side (#92) take the mean height of
+    both, facing sample by facing sample: each was the natural ground under its own centre line, so on a side
+    slope the ground triangles between them were tilted across the road. The correction is smoothed along
+    each edge so that the road eases into it."""
+    kept = [k for k, e in enumerate(edges) if e.level == 'ground' and 'oneway' in e.flags]
+    out = list(profiles)
+    if len(kept) < 2:
+        return out
+    xs, ys, tx, ty = sample_frames([edges[k] for k in kept], [profiles[k] for k in kept])
+    z = np.concatenate([profiles[k].z for k in kept])
+    owner = np.concatenate([np.full(len(profiles[k].s), n) for n, k in enumerate(kept)])
+    half = np.array([edges[k].width / 2 for k in kept])[owner]
+    tree = STRtree(points(xs, ys))
+    reach = 2 * float(half.max()) + DUAL_MEDIAN
+    i, j = tree.query(points(xs, ys), predicate='dwithin', distance=reach)
+    dx, dy = xs[j] - xs[i], ys[j] - ys[i]
+    facing = (
+        (owner[i] != owner[j])
+        & (np.abs(dx * tx[i] + dy * ty[i]) <= PROFILE_STEP / 2)
+        & (np.abs(dx * -ty[i] + dy * tx[i]) <= half[i] + half[j] + DUAL_MEDIAN)
+        & (np.abs(tx[i] * tx[j] + ty[i] * ty[j]) >= DUAL_PARALLEL)
+    )
+    i, j = i[facing], j[facing]
+    total = np.bincount(i, weights=z[j], minlength=len(z))
+    count = np.bincount(i, minlength=len(z))
+    correction = np.where(count > 0, (total / np.maximum(count, 1) - z) / 2, 0.0)
+    start = 0
+    for k in kept:
+        size = len(profiles[k].s)
+        smooth = np.asarray(gauss_smooth(correction[start : start + size].tolist(), PROFILE_SMOOTH))
+        out[k] = Profile(profiles[k].s, profiles[k].z + smooth)
+        start += size
+    return out
+
+
 def road_profiles(edges: Sequence[RoadEdge], terrain: TerrainGrid) -> list[Profile]:
-    """Road heights: natural profiles tied to shared node heights; bridges straight between their ends."""
-    natural = natural_profiles(edges, terrain)
+    """Road heights: natural profiles, dual carriageways at a common height, tied to shared node heights;
+    bridges straight between their ends."""
+    natural = dual_carriageways(edges, natural_profiles(edges, terrain))
     nodes = node_heights(edges, natural)
     out: list[Profile] = []
     for e, p in zip(edges, natural, strict=True):
@@ -153,7 +225,7 @@ def road_profiles(edges: Sequence[RoadEdge], terrain: TerrainGrid) -> list[Profi
         tied = p.z + (za - p.z[0]) * (1 - t) + (zb - p.z[-1]) * t
         z = straight if e.level == 'bridge' else tied
         out.append(Profile(p.s, z))
-    return out
+    return junction_approaches(edges, out)
 
 
 def carriageway(edges: Sequence[RoadEdge]) -> Polygon | MultiPolygon:
@@ -165,28 +237,123 @@ def carriageway(edges: Sequence[RoadEdge]) -> Polygon | MultiPolygon:
     return union
 
 
+def straight_ends(edges: Sequence[RoadEdge]) -> list[int]:
+    """Number of ends (0 to 2) of every edge where another edge carries on straight from it."""
+    leaving: defaultdict[int, list[tuple[int, float, float]]] = defaultdict(list)
+    for k, e in enumerate(edges):
+        for node, (x0, y0), (x1, y1) in ((e.a, e.coords[0], e.coords[1]), (e.b, e.coords[-1], e.coords[-2])):
+            norm = max(math.hypot(x1 - x0, y1 - y0), 1e-9)
+            leaving[node].append((k, (x1 - x0) / norm, (y1 - y0) / norm))
+    count = [0] * len(edges)
+    for out in leaving.values():
+        for k, dx, dy in out:
+            if any(m != k and dx * ex + dy * ey <= -STRAIGHT_ON for m, ex, ey in out):
+                count[k] += 1
+    return count
+
+
+class RoadChooser:
+    """The ground-level edge that gives its height to a point: among the edges whose carriageway and
+    sidewalk hold the point, the one of the highest rank (the nearest of them on a tie), so that a side
+    street meets a main road on the main road's surface (#92); elsewhere the nearest edge. Rank: class,
+    then roads that carry on straight through their junctions, then width."""
+
+    def __init__(self, edges: Sequence[RoadEdge]) -> None:
+        self.indices = [k for k, e in enumerate(edges) if e.level == 'ground']
+        self.lines = [LineString(edges[k].coords) for k in self.indices]
+        self.line_array = np.asarray(self.lines, dtype=object)
+        self.tree = STRtree(self.lines)
+        self.reach = np.array([edges[k].width / 2 + SIDEWALK for k in self.indices])
+        ground = [edges[k] for k in self.indices]
+        through = straight_ends(ground)
+        self.rank = np.array(
+            [
+                CLASS_RANK.get(e.cls, 1) * 1000 + t * 100 + round(e.width * 2)
+                for e, t in zip(ground, through, strict=True)
+            ]
+        )
+        self.length = np.array([line.length for line in self.lines])
+
+    def choose(self, pts: GeometryArray) -> tuple[npt.NDArray[np.int64], FloatArray]:
+        """Chosen edge (index among the ground-level edges) and distance along it for every point."""
+        chosen = np.asarray(self.tree.query_nearest(pts, all_matches=False)[1], dtype=np.int64)
+        if len(self.lines) and len(pts):
+            i, j = self.tree.query(pts, predicate='dwithin', distance=float(self.reach.max()))
+            lines = self.line_array[j]
+            beside = pair_distances(lines, pts[i]) <= self.reach[j]
+            beside &= self.beyond_end(lines, j, pts[i]) < BEYOND_END
+            i, j = i[beside], j[beside]
+            if not len(i):
+                return chosen, locate(self.line_array[chosen], pts)
+            distance = pair_distances(self.line_array[j], pts[i])
+            # best last: highest class, then nearest
+            order = np.lexsort((-distance, self.rank[j], i))
+            last = np.r_[i[order][1:] != i[order][:-1], True]
+            chosen[i[order][last]] = j[order][last]
+        return chosen, locate(self.line_array[chosen], pts)
+
+    def beyond_end(self, lines: GeometryArray, j: npt.NDArray[np.int64], pts: GeometryArray) -> FloatArray:
+        """How far each point lies past the end of its line, along the line (0 beside it): a road that
+        carries on from another one is not beside it."""
+        s = locate(lines, pts)
+        at_start = s <= 1e-6
+        at_end = s >= self.length[j] - 1e-6
+        px, py = coordinates(pts)
+        ex, ey = coordinates(interpolate(lines, s))
+        ix, iy = coordinates(interpolate(lines, np.where(at_start, 1.0, s - 1.0)))
+        dx, dy = np.where(at_start, ix - ex, ex - ix), np.where(at_start, iy - ey, ey - iy)
+        norm = np.maximum(np.hypot(dx, dy), 1e-9)
+        past = ((px - ex) * dx + (py - ey) * dy) / norm
+        result: FloatArray = np.where(at_start, -past, np.where(at_end, past, 0.0))
+        return result
+
+
+def junction_approaches(edges: Sequence[RoadEdge], profiles: Sequence[Profile]) -> list[Profile]:
+    """Profiles where a road enters the carriageway of a road of a higher class: there it takes the height
+    of that road, then eases back into its own profile over APPROACH metres (#92). Without it, the corner of a
+    junction on a slope was tilted between the two profiles."""
+    chooser = RoadChooser(edges)
+    out = list(profiles)
+    for n, k in enumerate(chooser.indices):
+        p = profiles[k]
+        x, y = coordinates(interpolate(chooser.lines[n], p.s))
+        chosen, along = chooser.choose(points(x, y))
+        inside = np.flatnonzero((chosen != n) & (chooser.rank[chosen] > chooser.rank[n]))
+        if not len(inside):
+            continue
+        target = np.array(
+            [
+                profiles[chooser.indices[int(c)]].at(float(a))
+                for c, a in zip(chosen[inside].tolist(), along[inside].tolist(), strict=True)
+            ],
+            dtype=np.float64,
+        )
+        gap = np.abs(p.s[:, None] - p.s[inside][None, :])
+        weight = np.clip(1 - gap / APPROACH, 0.0, 1.0)
+        nearest = np.argmax(weight, axis=1)
+        correction = (target - p.z[inside])[nearest] * weight[np.arange(len(p.s)), nearest]
+        out[k] = Profile(p.s, p.z + correction)
+    return out
+
+
 class RoadHeights:
-    """Road height at any point: height of the nearest ground-level edge at the projected distance."""
+    """Road height at any point: height of the edge chosen by RoadChooser at the projected distance."""
 
     def __init__(self, edges: Sequence[RoadEdge], profiles: Sequence[Profile]) -> None:
-        kept = [(e, p) for e, p in zip(edges, profiles, strict=True) if e.level == 'ground']
-        self.lines = [LineString(e.coords) for e, _ in kept]
-        self.profiles = [p for _, p in kept]
-        self.tree = STRtree(self.lines)
-        self.line_array = np.asarray(self.lines, dtype=object)
+        self.chooser = RoadChooser(edges)
+        self.lines = self.chooser.lines
+        self.profiles = [profiles[k] for k in self.chooser.indices]
+        self.tree = self.chooser.tree
+        self.line_array = self.chooser.line_array
 
     def heights(self, xs: FloatArray, ys: FloatArray) -> FloatArray:
-        pts = points(xs, ys)
-        nearest = np.asarray(self.tree.query_nearest(pts, all_matches=False)[1], dtype=np.int64)
-        s = locate(self.line_array[nearest], pts)
-        return np.array([self.profiles[int(k)].at(float(si)) for k, si in zip(nearest, s, strict=True)])
+        chosen, s = self.chooser.choose(points(xs, ys))
+        return np.array([self.profiles[int(k)].at(float(si)) for k, si in zip(chosen, s, strict=True)])
 
     def directions(self, xs: FloatArray, ys: FloatArray) -> tuple[FloatArray, FloatArray]:
-        """Unit direction (tx, ty) of the nearest ground-level edge at each point."""
-        pts = points(xs, ys)
-        nearest = np.asarray(self.tree.query_nearest(pts, all_matches=False)[1], dtype=np.int64)
-        lines = self.line_array[nearest]
-        s = locate(lines, pts)
+        """Unit direction (tx, ty) of the chosen ground-level edge at each point."""
+        chosen, s = self.chooser.choose(points(xs, ys))
+        lines = self.line_array[chosen]
         ax, ay = coordinates(interpolate(lines, np.maximum(s - 1.0, 0.0)))
         bx, by = coordinates(interpolate(lines, s + 1.0))
         dx, dy = bx - ax, by - ay
