@@ -1877,6 +1877,134 @@
       "doc": "Depth of the quay walls below the water surface."
     }
   },
+  "audio": {
+    "volumeLow": {
+      "value": 0.25,
+      "unit": "ratio",
+      "min": 0,
+      "max": 1,
+      "doc": "Master gain of the low volume of the settings screen."
+    },
+    "volumeMedium": {
+      "value": 0.5,
+      "unit": "ratio",
+      "min": 0,
+      "max": 1,
+      "doc": "Master gain of the medium volume (the default)."
+    },
+    "volumeHigh": {
+      "value": 0.9,
+      "unit": "ratio",
+      "min": 0,
+      "max": 1,
+      "doc": "Master gain of the high volume."
+    },
+    "engineIdleHz": {
+      "value": 38,
+      "unit": "Hz",
+      "min": 15,
+      "max": 120,
+      "doc": "Pitch of the engine at a standstill: a diesel bus idles at about 600 to 800 rpm, a hum around 40 Hz."
+    },
+    "engineTopHz": {
+      "value": 95,
+      "unit": "Hz",
+      "min": 30,
+      "max": 300,
+      "doc": "Pitch of the engine at engineTopSpeed."
+    },
+    "engineTopSpeed": {
+      "value": 15,
+      "unit": "m/s",
+      "min": 1,
+      "max": 40,
+      "doc": "Speed at which the engine pitch stops rising (54 km/h, town speed limit 50 km/h)."
+    },
+    "engineIdleGain": {
+      "value": 0.12,
+      "unit": "ratio",
+      "min": 0,
+      "max": 1,
+      "doc": "Loudness of the idling engine."
+    },
+    "engineLoadGain": {
+      "value": 0.3,
+      "unit": "ratio",
+      "min": 0,
+      "max": 1,
+      "doc": "Loudness of the engine under full throttle."
+    },
+    "engineCutoffHz": {
+      "value": 420,
+      "unit": "Hz",
+      "min": 50,
+      "max": 5000,
+      "doc": "Low-pass filter of the engine hum when idling; doubled under full throttle (a brighter, rougher sound)."
+    },
+    "engineGlide": {
+      "value": 0.15,
+      "unit": "s",
+      "min": 0.01,
+      "max": 2,
+      "doc": "Time constant of the changes of engine pitch and loudness."
+    },
+    "doorBeepHz": {
+      "value": 1800,
+      "unit": "Hz",
+      "min": 200,
+      "max": 5000,
+      "doc": "Pitch of the three warning beeps before the doors close."
+    },
+    "doorBeepGain": {
+      "value": 0.12,
+      "unit": "ratio",
+      "min": 0,
+      "max": 1,
+      "doc": "Loudness of the door warning beeps."
+    },
+    "doorHissHz": {
+      "value": 2500,
+      "unit": "Hz",
+      "min": 200,
+      "max": 10000,
+      "doc": "Centre of the band of the air hiss of the doors."
+    },
+    "doorHissGain": {
+      "value": 0.35,
+      "unit": "ratio",
+      "min": 0,
+      "max": 1,
+      "doc": "Loudness of the air hiss of the doors."
+    },
+    "doorHissTime": {
+      "value": 0.8,
+      "unit": "s",
+      "min": 0.1,
+      "max": 3,
+      "doc": "Length of the air hiss of the doors."
+    },
+    "bellHz": {
+      "value": 880,
+      "unit": "Hz",
+      "min": 200,
+      "max": 4000,
+      "doc": "Pitch of the first note of the stop request bell; the second is a fifth higher."
+    },
+    "bellGain": {
+      "value": 0.15,
+      "unit": "ratio",
+      "min": 0,
+      "max": 1,
+      "doc": "Loudness of the stop request bell."
+    },
+    "announceRate": {
+      "value": 1.0,
+      "unit": "ratio",
+      "min": 0.5,
+      "max": 2,
+      "doc": "Speaking rate of the announcement of the next stop (1 is the normal rate of the voice)."
+    }
+  },
   "debug": {
     "stressSpacing": {
       "value": 15,

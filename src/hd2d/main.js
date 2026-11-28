@@ -58,6 +58,8 @@ import { LANGUAGES, initI18n, t } from '../i18n/i18n.js';
 import { isAction } from '../common/keys.js';
 import { loadSettings } from '../settings/settings.js';
 import { applyPreferences, bindingsWith, loadPreferences, savePreferences } from '../settings/preferences.js';
+import { SoundPlayer } from './audio.js';
+import { doorSound, masterGain, stopBell } from './sounds.js';
 
 /** @param {string} id */
 const $ = (id) => /** @type {HTMLElement} */ (document.getElementById(id));
@@ -69,6 +71,16 @@ const bindings = bindingsWith(preferences.keys);
 let debug = P.debug || preferences.debug;
 const S = await boot();
 const B = busGeometry(S, P.bus);
+// sounds start at the first key press or click on the page (browser rule)
+const sound = new SoundPlayer(S.audio, masterGain(preferences.volume, S.audio), {
+  announce: preferences.announcements,
+  language: document.documentElement.lang || 'fr',
+});
+for (const type of ['keydown', 'pointerdown']) addEventListener(type, () => sound.wake());
+/** state of the doors and people asking for the next stop at the last step, for their sounds */
+let soundDoors = 'closed',
+  soundAlight = 0,
+  throttle = 0;
 
 // ------------------------------------------------------------------ rendu
 const canvas = /** @type {HTMLCanvasElement} */ ($('view'));
@@ -615,6 +627,13 @@ function update(dt) {
   const wasClosed = doors.closed;
   doors.update(dt);
   if (!wasClosed && doors.closed) announceNextStop();
+  const doorNoise = doorSound(soundDoors, doors.state);
+  if (doorNoise) sound.doors(doorNoise);
+  soundDoors = doors.state;
+  throttle = doors.closed && inp.up ? 1 : 0;
+  const alight = service.request.alight;
+  if (stopBell(soundAlight, alight)) sound.bell();
+  soundAlight = alight;
   const walls = obstacles(solid, hf, () => busZ, ghost);
   // the bus stands still until the doors are closed again (brake on, even on a slope)
   /** @type {'bump' | null} */
@@ -745,6 +764,7 @@ function announceNextStop() {
   const st = track.stops[service.next];
   if (st) toast(t('toast.nextStop', { stop: st.name }), 'info');
   else toast(t('toast.endOfService'), 'good');
+  sound.say(st ? t('speech.nextStop', { stop: st.name }) : t('speech.terminus'));
 }
 
 // ------------------------------------------------------------------ rendu
@@ -1171,6 +1191,7 @@ function frame(t) {
       acc -= STEP;
     }
   }
+  sound.setEngine(drive.v, throttle, paused);
   render(el);
 }
 requestAnimationFrame(frame);

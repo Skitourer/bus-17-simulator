@@ -1,7 +1,7 @@
 // @ts-check
 /**
  * Player preferences (#46): language, graphics quality, view distance, difficulty, traffic (#49),
- * pedestrians (#50), key
+ * pedestrians (#50), sound volume and announcements, key
  * bindings and the debug mode (#67), chosen
  * in the settings screen and kept in the browser. They are applied on top of the game.json values: a
  * preset replaces some parameters, the middle choice of each keeps game.json as is.
@@ -16,6 +16,7 @@ export const CHOICES = Object.freeze(
     difficulty: ['easy', 'normal', 'hard'],
     traffic: ['none', 'low', 'medium', 'high'],
     pedestrians: ['none', 'low', 'medium', 'high'],
+    volume: ['off', 'low', 'medium', 'high'],
   }),
 );
 
@@ -44,6 +45,8 @@ export const REMAPPABLE = Object.freeze(
  * @property {'easy' | 'normal' | 'hard'} difficulty
  * @property {'none' | 'low' | 'medium' | 'high'} traffic density of the cars and bikes (#49)
  * @property {'none' | 'low' | 'medium' | 'high'} pedestrians people walking in the streets (#50)
+ * @property {'off' | 'low' | 'medium' | 'high'} volume of the sounds
+ * @property {boolean} announcements spoken announcement of the next stop
  * @property {Partial<Record<import('../common/keys.js').Action, string>>} keys main key of an action, when changed
  * @property {boolean} debug debug mode, for development (#67)
  */
@@ -56,6 +59,8 @@ export const DEFAULT_PREFERENCES = Object.freeze({
   difficulty: 'normal',
   traffic: 'medium',
   pedestrians: 'medium',
+  volume: 'medium',
+  announcements: true,
   keys: {},
   debug: false,
 });
@@ -90,6 +95,8 @@ export function parsePreferences(raw, languages) {
     difficulty: pick(CHOICES.difficulty, data.difficulty, DEFAULT_PREFERENCES.difficulty),
     traffic: pick(CHOICES.traffic, data.traffic, DEFAULT_PREFERENCES.traffic),
     pedestrians: pick(CHOICES.pedestrians, data.pedestrians, DEFAULT_PREFERENCES.pedestrians),
+    volume: pick(CHOICES.volume, data.volume, DEFAULT_PREFERENCES.volume),
+    announcements: data.announcements !== false,
     keys,
     debug: data.debug === true,
   };

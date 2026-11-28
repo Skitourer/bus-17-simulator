@@ -32,9 +32,18 @@ describe('parsePreferences', () => {
       difficulty: 'hard',
       traffic: 'medium',
       pedestrians: 'medium',
+      volume: 'medium',
+      announcements: true,
       keys: { accelerate: 'KeyI' },
       debug: false,
     });
+  });
+
+  it('keeps a valid volume and turns the announcements off only for a stored false', () => {
+    expect(parsePreferences({ volume: 'off' }, ['fr']).volume).toBe('off');
+    expect(parsePreferences({ volume: 'loud' }, ['fr']).volume).toBe('medium');
+    expect(parsePreferences({ announcements: false }, ['fr']).announcements).toBe(false);
+    expect(parsePreferences({ announcements: 'no' }, ['fr']).announcements).toBe(true);
   });
 
   it('turns the debug mode on only for a stored true', () => {
