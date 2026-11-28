@@ -443,6 +443,43 @@ describe('Traffic on two levels (#75)', () => {
   });
 });
 
+describe('Turn signals of the cars (#119)', () => {
+  it('signals a turn before the junction and stops a little after it', () => {
+    const n = new RoadNetwork(crossroads(), P.speeds);
+    const traffic = quiet(n);
+    traffic.indicators = SETTINGS.indicators;
+    const I = SETTINGS.indicators;
+    // west road then north: a left turn at node 1
+    const c = car(traffic, laneOf(n, 0, 1), 200 - I.carSignalDistance - 20, { v: 6, next: laneOf(n, 1, 2) });
+    expect(n.turn(laneOf(n, 0, 1), laneOf(n, 1, 2), I)).toBe('left');
+    expect(n.turn(laneOf(n, 0, 1), laneOf(n, 1, 3), I)).toBeNull();
+    expect(n.turn(laneOf(n, 2, 1), laneOf(n, 1, 3), I)).toBe('left');
+    expect(n.turn(laneOf(n, 2, 1), laneOf(n, 1, 0), I)).toBe('right');
+    const seen = new Set();
+    for (let k = 0; k < 20 * 30 && c.lane !== laneOf(n, 1, 2); k++) {
+      run(traffic, 0.05);
+      seen.add(c.signal);
+    }
+    expect(seen.has(null)).toBe(true);
+    expect(seen.has('left')).toBe(true);
+    expect(c.signal).toBe('left');
+    run(traffic, 5);
+    expect(c.signal).toBeNull();
+  });
+
+  it('never signals without indicator settings or on a bike', () => {
+    const n = new RoadNetwork(crossroads(), P.speeds);
+    const traffic = quiet(n);
+    const c = car(traffic, laneOf(n, 0, 1), 190, { next: laneOf(n, 1, 2) });
+    run(traffic, 0.1);
+    expect(c.signal).toBeNull();
+    traffic.indicators = SETTINGS.indicators;
+    const b = car(traffic, laneOf(n, 0, 1), 190, { bike: true, next: laneOf(n, 1, 2) });
+    run(traffic, 0.1);
+    expect(b.signal).toBeNull();
+  });
+});
+
 describe('Traffic in built-up areas and in the countryside (#94)', () => {
   /** The crossroads with the west road in a village; the other roads in the countryside. */
   function village() {

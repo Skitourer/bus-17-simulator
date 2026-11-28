@@ -173,6 +173,34 @@ export function brakeMaterial(lights) {
   return brakeLamps;
 }
 
+/** @type {THREE.MeshBasicMaterial | null} */
+let indicatorLamps = null;
+/**
+ * Lit turn signal lamps (#119), shared by the buses and the cars.
+ * @param {import('../settings/settings.js').Settings['indicators']} p
+ */
+export function indicatorMaterial(p) {
+  indicatorLamps ??= new THREE.MeshBasicMaterial({ color: new THREE.Color(p.color).multiplyScalar(p.glow) });
+  return indicatorLamps;
+}
+
+/**
+ * Turn signal lamps of one side of a bus (#119), +Z being its right: at the `front` a corner lamp under the
+ * windscreen and a repeater on the side behind the front wheel (origin on the rear axle, like the body); at
+ * the `rear` a corner lamp above the tail lights (origin in the middle of the back face, like the brakes).
+ * @param {BusSettings} bus @param {'left' | 'right'} side @param {'front' | 'rear'} end
+ */
+export function indicatorGeometry(bus, side, end) {
+  const z = side === 'right' ? 1 : -1,
+    edge = bus.bodyWidth / 2;
+  if (end === 'rear') return boxes([0.06, 0.16, 0.22, -0.03, 1.45, z * (edge - 0.16)]);
+  const front = bus.bodyLength - bus.rearOverhang;
+  return boxes(
+    [0.06, 0.12, 0.26, front + 0.02, 0.6, z * (edge - 0.2)],
+    [0.3, 0.08, 0.04, bus.wheelbase - 1.2, 1.0, z * (edge + 0.02)],
+  );
+}
+
 /**
  * Three brake lights on the back of a bus (#87): two at the corners, over the upper part of the tail lights,
  * and a third high in the middle (centre high-mounted stop lamp, UN ECE Regulation 48). Origin: middle of
@@ -310,8 +338,9 @@ function rear(bus) {
  * @param {BusSettings} bus
  * @param {import('../settings/settings.js').Settings['lights']} lights
  * @param {import('../settings/settings.js').Settings['camera']} camera driver's eye and dashboard (#42)
+ * @param {import('../settings/settings.js').Settings['indicators']} indicators turn signals (#119)
  */
-export function makeBus(bus, lights, camera) {
+export function makeBus(bus, lights, camera, indicators) {
   tailColour = tailGlow(lights);
   const PPM = bus.texturePixelsPerMetre;
   const grp = new THREE.Group();
@@ -368,6 +397,19 @@ export function makeBus(bus, lights, camera) {
     brakes.position.x = -bus.rearOverhang;
     body.add(brakes);
   }
+  // turn signals (#119): at the front of the body, at the back of the last body
+  const amber = indicatorMaterial(indicators);
+  /** @type {Record<'left' | 'right', THREE.Mesh[]>} */
+  const signals = { left: [], right: [] };
+  for (const side of /** @type {const} */ (['left', 'right'])) {
+    const front = new THREE.Mesh(indicatorGeometry(bus, side, 'front'), amber);
+    const back = new THREE.Mesh(indicatorGeometry(bus, side, 'rear'), amber);
+    back.position.x = trailer ? trailer.back : -bus.rearOverhang;
+    body.add(front);
+    (trailer ? trailer.body : body).add(back);
+    for (const m of [front, back]) m.visible = false;
+    signals[side].push(front, back);
+  }
   return {
     group: grp,
     body,
@@ -377,6 +419,14 @@ export function makeBus(bus, lights, camera) {
     /** @param {boolean} on */
     setBrake(on) {
       brakes.visible = on;
+    },
+    /**
+     * Turn signal lamps lit this frame (#119).
+     * @param {boolean} left @param {boolean} right
+     */
+    setIndicators(left, right) {
+      for (const m of signals.left) m.visible = left;
+      for (const m of signals.right) m.visible = right;
     },
   };
 }

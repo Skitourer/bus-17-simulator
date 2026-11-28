@@ -11,6 +11,7 @@
  * in radians.
  */
 
+import { carSignal, turnSide } from './indicators.js';
 import { mustStop } from './signals.js';
 
 /** @typedef {import('../settings/settings.js').Settings['traffic']} TrafficSettings */
@@ -40,6 +41,8 @@ import { mustStop } from './signals.js';
  * @property {number} [backOffs] times it backed off
  * @property {number} [pushed] time the player's bus has been pushing against it (s)
  * @property {number} [z] height of the road under it (m), when the simulation knows the heights (#75)
+ * @property {'left' | 'right' | null} [signal] indicator on (#119)
+ * @property {'left' | 'right' | null} [turned] side of the turn it has just taken
  * @property {boolean} [braking] slowing down or standing: its brake lights are on (#87)
  */
 
@@ -131,6 +134,19 @@ export class RoadNetwork {
         else this.cells.set(key, [id]);
       }
     });
+  }
+
+  /**
+   * Side of the turn from the end of lane `a` into lane `b`, null when going about straight on.
+   * @param {number} a @param {number} b @param {import('./indicators.js').IndicatorSettings} p
+   */
+  turn(a, b, p) {
+    const from = this.lanes[a].pts,
+      to = this.lanes[b].pts;
+    const n = from.length;
+    const before = Math.atan2(from[n - 1] - from[n - 3], from[n - 2] - from[n - 4]);
+    const after = Math.atan2(to[3] - to[1], to[2] - to[0]);
+    return turnSide(before, after, p);
   }
 
   /** @param {number} x @param {number} y */
@@ -294,6 +310,11 @@ export class Traffic {
      * @type {((x: number, y: number, lane: Lane) => number) | null}
      */
     this.heightAt = null;
+    /**
+     * Turn signals of the cars (#119); null: no indicators.
+     * @type {import('./indicators.js').IndicatorSettings | null}
+     */
+    this.indicators = null;
     /** @type {Obstacle[]} obstacles of the last step */
     this.lastObstacles = [];
     /** @type {{key: string, count: number} | null} vehicles wanted around the cell of the bus */
@@ -512,8 +533,10 @@ export class Traffic {
       lane = this.network.lanes[v.lane];
       v.next = this.network.nextLane(v.lane, this.random, v.bike);
       v.desired = this.desired(v.bike, lane);
+      v.turned = this.indicators ? this.network.turn(v.previous, v.lane, this.indicators) : null;
     }
     v.s = Math.min(v.s, lane.length);
+    this.signal(v, lane);
     // the road leaves the map: the vehicle leaves with it, another one appears elsewhere
     if (v.next < 0 && v.s >= lane.length - v.length / 2 - this.p.minGap - 0.5) v.gone = true;
     // the junction is free once the whole vehicle has crossed it
@@ -642,6 +665,20 @@ export class Traffic {
         ? Math.atan2(front.y - rear.y, front.x - rear.x)
         : front.h;
     if (this.heightAt) v.z = this.heightAt(v.x, v.y, this.network.lanes[v.lane]);
+  }
+
+  /**
+   * Indicator of a car (#119): the side of its next turn near the junction, of its last one just after.
+   * @param {Vehicle} v @param {Lane} lane
+   */
+  signal(v, lane) {
+    const p = this.indicators;
+    if (!p || v.bike) {
+      v.signal = null;
+      return;
+    }
+    const next = v.next >= 0 ? this.network.turn(v.lane, v.next, p) : null;
+    v.signal = carSignal(lane.length - v.s, next, v.s, v.turned ?? null, p);
   }
 
   /**

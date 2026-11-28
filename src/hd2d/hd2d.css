@@ -217,6 +217,23 @@ body {
 #speed .u {
   color: var(--muted);
 }
+/* turn signals (#119): grey arrows, green while the lamps are lit */
+#speed .blinkers {
+  grid-column: 1 / -1;
+  display: flex;
+  justify-content: space-between;
+  font-size: 16px;
+  color: #3a3f47;
+}
+#speed .blinkers .on,
+#cabin .blinker.on {
+  color: #3ddc5a;
+}
+#cabin .blinker {
+  align-self: center;
+  font-size: 26px;
+  color: #3a3f47;
+}
 #speed .alt {
   grid-column: 1 / -1;
   display: flex;
