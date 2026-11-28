@@ -23,6 +23,7 @@ import { mustStop } from './signals.js';
  * @property {number} length @property {number} width width of the road (m) @property {boolean} twoWay
  * @property {boolean} roundabout @property {number} speed speed limit (m/s)
  * @property {boolean} builtUp in a town, village or hamlet (#94); every lane when the data has no such flag
+ * @property {boolean} bridge on a bridge deck (#75)
  */
 
 /**
@@ -38,12 +39,14 @@ import { mustStop } from './signals.js';
  * @property {number} [backing] distance still to back off (m)
  * @property {number} [backOffs] times it backed off
  * @property {number} [pushed] time the player's bus has been pushing against it (s)
+ * @property {number} [z] height of the road under it (m), when the simulation knows the heights (#75)
  * @property {boolean} [braking] slowing down or standing: its brake lights are on (#87)
  */
 
 /**
- * @typedef {{x: number, y: number, r: number, v: number, h: number, priority?: boolean}} Obstacle a disc, its speed
- * and heading; `priority` for the player's bus
+ * @typedef {{x: number, y: number, r: number, v: number, h: number, priority?: boolean, z?: number}} Obstacle a
+ * disc, its speed and heading; `priority` for the player's bus; `z` its height, when known: a vehicle on another
+ * level (on a bridge above it, on the road below) ignores it (#75)
  */
 
 /**
@@ -81,6 +84,7 @@ export class RoadNetwork {
       reverse = flag('oneway_reverse'),
       roundabout = flag('roundabout'),
       tunnel = flag('tunnel'),
+      bridge = flag('bridge'),
       builtUp = flag('built_up');
     /** @type {Lane[]} */
     this.lanes = [];
@@ -103,6 +107,7 @@ export class RoadNetwork {
         roundabout: Boolean(mask & roundabout),
         speed,
         builtUp: !builtUp || Boolean(mask & builtUp),
+        bridge: Boolean(mask & bridge),
       };
       if (!(mask & reverse)) this.add({ ...common, from: a, to: b }, pts);
       if (!(mask & oneway)) this.add({ ...common, from: b, to: a }, reversed(pts));
@@ -278,6 +283,12 @@ export class Traffic {
     this.time = 0;
     this.nextId = 1;
     this.started = false;
+    /**
+     * Height of the road at a point of a lane, on its bridge deck for a lane on a bridge (#75); null: no
+     * heights, every vehicle and obstacle on one level.
+     * @type {((x: number, y: number, bridge: boolean) => number) | null}
+     */
+    this.heightAt = null;
     /** @type {Obstacle[]} obstacles of the last step */
     this.lastObstacles = [];
     /** @type {{key: string, count: number} | null} vehicles wanted around the cell of the bus */
@@ -473,6 +484,7 @@ export class Traffic {
    * @param {Vehicle} v @param {number} dt @param {Map<number, Vehicle[]>} byLane @param {Obstacle[]} obstacles
    */
   drive(v, dt, byLane, obstacles) {
+    obstacles = obstacles.filter((o) => this.sameLevel(v, o.z));
     if (v.backing) {
       this.reverse(v, dt);
       return;
@@ -576,11 +588,13 @@ export class Traffic {
    * @param {{x: number, y: number}[]} outline points of the outline and the middle line of the bus
    * @param {number} heading of the bus
    * @param {number} dt
+   * @param {number} [z] height of the bus: vehicles on another level are not pushed
    */
-  pushedBy(outline, heading, dt) {
+  pushedBy(outline, heading, dt, z = undefined) {
     const byLane = this.sortByLane();
     const follow = Math.cos((this.p.followAngle * Math.PI) / 180);
     for (const v of this.vehicles) {
+      if (!this.sameLevel(v, z)) continue;
       const touching = outline.filter((p) => this.touches(v, p.x, p.y, this.p.contactMargin));
       // behind the car (not alongside it): the bus drives into its back
       const rear = (/** @type {{x: number, y: number}} */ p) => {
@@ -622,6 +636,16 @@ export class Traffic {
       Math.hypot(front.x - rear.x, front.y - rear.y) > 0.1
         ? Math.atan2(front.y - rear.y, front.x - rear.x)
         : front.h;
+    if (this.heightAt) v.z = this.heightAt(v.x, v.y, this.network.lanes[v.lane].bridge);
+  }
+
+  /**
+   * Whether something at height `z` is on the level of a vehicle: not on a bridge above it or on the road
+   * below (#75). Without heights, everything is on one level.
+   * @param {Vehicle} v @param {number | undefined} z
+   */
+  sameLevel(v, z) {
+    return z === undefined || v.z === undefined || Math.abs(z - v.z) < this.p.levelGap;
   }
 
   /**
@@ -748,11 +772,11 @@ export class Traffic {
   }
 
   /**
-   * Whether a point is inside a vehicle (for the collisions of the player's bus).
-   * @param {number} x @param {number} y
+   * Whether a point is inside a vehicle (for the collisions of the player's bus), on the level of `z` if given.
+   * @param {number} x @param {number} y @param {number} [z]
    */
-  hit(x, y) {
-    return this.vehicles.some((v) => this.touches(v, x, y, 0));
+  hit(x, y, z = undefined) {
+    return this.vehicles.some((v) => this.sameLevel(v, z) && this.touches(v, x, y, 0));
   }
 
   /**

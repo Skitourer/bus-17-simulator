@@ -2372,6 +2372,13 @@
       "integer": true,
       "doc": "Places tried per simulation step to add the missing vehicles."
     },
+    "levelGap": {
+      "value": 3,
+      "unit": "m",
+      "min": 0.5,
+      "max": 10,
+      "doc": "A car and an obstacle (the bus) farther apart in height are on two levels, a bridge and the road below it, and ignore each other (#75)."
+    },
     "busGap": {
       "value": 3,
       "unit": "m",

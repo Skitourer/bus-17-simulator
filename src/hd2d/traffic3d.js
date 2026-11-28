@@ -139,7 +139,8 @@ export class TrafficLook {
   /**
    * Draw the vehicles nearest to the camera.
    * @param {import('./traffic.js').Vehicle[]} vehicles @param {number} x @param {number} y camera (m)
-   * @param {(x: number, y: number) => number} heightAt drivable surface height
+   * @param {(x: number, y: number, zRef: number | undefined) => number} heightAt drivable surface height near
+   * the height of a vehicle's road (`zRef`, unknown without heights)
    */
   draw(vehicles, x, y, heightAt) {
     const near = vehicles
@@ -152,7 +153,9 @@ export class TrafficLook {
       braking = 0;
     for (const { v } of near) {
       // on the slope of the road under the wheels (#93)
-      const { z, pitch, roll } = groundPose(v, v.length * this.p.wheelbaseShare, heightAt);
+      const { z, pitch, roll } = groundPose(v, v.length * this.p.wheelbaseShare, (px, py) =>
+        heightAt(px, py, v.z),
+      );
       if (v.bike) {
         for (const part of Object.values(this.bikes)) part.set(bikes, v.x, v.y, z, v.h, pitch, roll);
         this.bikes.rider.mesh.setColorAt(

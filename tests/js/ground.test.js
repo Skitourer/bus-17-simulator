@@ -91,6 +91,15 @@ describe('Ground', () => {
     expect(ground.surface(10, 18, 0.2)).toBeCloseTo(0); // beside the deck
   });
 
+  it('gives the highest deck at a point, none beside the decks', () => {
+    const low = [40, 0, 100, 10, 200, 100, 10],
+      high = [40, 100, 0, 60, 100, 200, 60];
+    const ground = oneTile([0, 0, 0, 0, 0, 0, 0, 0, 0], [low, high]);
+    expect(ground.deckAt(10, 10)).toBeCloseTo(6);
+    expect(ground.deckAt(2, 10)).toBeCloseTo(1);
+    expect(ground.deckAt(2, 2)).toBeNull();
+  });
+
   it('gives the terrace height on a terrace and the ground grid beside and below it (#108)', () => {
     // terrace 4 m wide along y = 10, from 3 m at x = 0 to 5 m at x = 20, over flat ground at 0 m
     const tile = oneTile([0, 0, 0, 0, 0, 0, 0, 0, 0]);

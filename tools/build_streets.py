@@ -41,6 +41,8 @@ from typing import Any
 import numpy as np
 from geo import Point
 from lines import corridor, read_lines, routes_xy, tiles_in
+from overpasses import crossings as bridge_crossings
+from overpasses import separate_levels
 from shapely import LineString, MultiLineString, MultiPoint, MultiPolygon, Polygon, box, union_all
 from shapely import Point as ShapelyPoint
 from shapely.geometry.base import BaseGeometry
@@ -268,6 +270,9 @@ def main() -> None:
     edges = load_edges(read_json(os.path.join(DATA, 'roads.json')))
     print(f'{len(edges)} troncons : profils en long...')
     profiles = road_profiles(edges, terrain)
+    found = bridge_crossings(edges, profiles)
+    profiles = separate_levels(edges, profiles)
+    print(f'  {len(found)} croisements sous un pont, {sum(c.missing > 0 for c in found)} sans hauteur libre')
     print('chaussee (union des troncons)...')
     surface = carriageway(edges)
     heights = RoadHeights(edges, profiles)

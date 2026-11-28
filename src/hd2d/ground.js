@@ -244,6 +244,20 @@ export class Ground {
   }
 
   /**
+   * Height of the highest bridge deck at (x, y), null when there is none.
+   * @param {number} x @param {number} y
+   */
+  deckAt(x, y) {
+    /** @type {number | null} */
+    let best = null;
+    for (const deck of this.decks) {
+      const z = deckHeight(deck, x, y);
+      if (z !== null && (best === null || z > best)) best = z;
+    }
+    return best;
+  }
+
+  /**
    * Whether the water stops a vehicle at height `zRef` at (x, y): water, and no bridge deck at that height.
    * @param {number} x @param {number} y @param {number} zRef
    */

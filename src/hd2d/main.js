@@ -425,6 +425,8 @@ async function load() {
   otherBuses = new OtherBuses(scene, busGeometry(S, 'std'), S.budget, S.lights);
   redLights = new RedLightWatch(signals, S.signals.redMinSpeed, S.signals.redLineMargin);
   traffic = new Traffic(network, S.traffic, Math.random, signals);
+  // cars on a bridge drive on its deck, the others on the ground below it (#75)
+  traffic.heightAt = (x, y, bridge) => (bridge ? hf.deckAt(x, y) : null) ?? hf.h(x, y);
   const walkways = new Walkways(roads, S.traffic.speeds);
   walkways.addCrossings(
     crossingCentres(tiles, tileIndex, S.pedestrians.crossingGather),
@@ -435,7 +437,7 @@ async function load() {
   scene.add(walkerSprites.mesh);
   trafficLook = new TrafficLook(scene, S.traffic, S.lights, S.budget.capacity);
   signalLook = new SignalLook(scene, signals, (x, y) => hf.h(x, y), S.signals);
-  solid = { hit: (x, y) => world.index.hit(x, y) || fleet.hit(x, y) || traffic.hit(x, y) };
+  solid = { hit: (x, y) => world.index.hit(x, y) || fleet.hit(x, y) || traffic.hit(x, y, busZ) };
   bus = makeBus(B, S.lights, S.camera);
   scene.add(bus.group);
   // headlights at the front corners of the bus, aimed at the road ahead
@@ -534,13 +536,13 @@ function trafficObstacles(centre) {
   const out = [];
   /**
    * @param {number} x @param {number} y @param {number} h @param {number} length @param {number} v centre
-   * @param {boolean} priority the player's bus (#95)
+   * @param {boolean} priority the player's bus (#95) @param {number} [z] height, to tell the levels apart (#75)
    */
-  const discs = (x, y, h, length, v, priority) => {
+  const discs = (x, y, h, length, v, priority, z = undefined) => {
     const count = Math.max(2, Math.ceil(length / r));
     for (let k = 0; k < count; k++) {
       const along = -length / 2 + r / 2 + ((length - r) * k) / (count - 1);
-      out.push({ x: x + Math.cos(h) * along, y: y + Math.sin(h) * along, r, v, h, priority });
+      out.push({ x: x + Math.cos(h) * along, y: y + Math.sin(h) * along, r, v, h, priority, z });
     }
   };
   // the player's bus: from its front back over its whole length, rear body included (taken straight)
@@ -552,6 +554,7 @@ function trafficObstacles(centre) {
     playerLength,
     Math.max(0, drive.v),
     true,
+    busZ,
   );
   // and the room just before its nose, where a crossing car would stop it (#95)
   const claim = B.bodyLength / 2 + r;
@@ -562,6 +565,7 @@ function trafficObstacles(centre) {
     v: Math.max(0, drive.v),
     h: drive.h,
     priority: true,
+    z: busZ,
   });
   for (const b of fleet.buses)
     if (Math.hypot(b.x - centre.x, b.y - centre.y) < S.traffic.despawnRadius)
@@ -632,7 +636,7 @@ function update(dt) {
     const body = [];
     for (let f = -B.rearOverhang; f <= B.bodyLength - B.rearOverhang; f += 1.5)
       for (const side of [-1, 0, 1]) body.push(drive.point(f, (side * B.bodyWidth) / 2));
-    traffic.pushedBy([...drive.probes(), ...ahead, ...body], drive.h, dt);
+    traffic.pushedBy([...drive.probes(), ...ahead, ...body], drive.h, dt, busZ);
   }
   walkers.update(dt, centre, {
     vehicleComing: (x, y, impatient) =>
@@ -812,8 +816,8 @@ function render(dt) {
   otherBuses.draw(fleet.buses, camera.position.x, -camera.position.z, (x, y, zRef) => hf.surface(x, y, zRef));
   drawWalkers(camera.position.x, -camera.position.z);
   signalLook.update();
-  trafficLook.draw(traffic.vehicles, camera.position.x, -camera.position.z, (x, y) =>
-    hf.surface(x, y, hf.h(x, y)),
+  trafficLook.draw(traffic.vehicles, camera.position.x, -camera.position.z, (x, y, zRef) =>
+    hf.surface(x, y, zRef ?? hf.h(x, y)),
   );
   if (stress) {
     stress.update(dt, { x: c.x, y: c.y, h: drive.h });
