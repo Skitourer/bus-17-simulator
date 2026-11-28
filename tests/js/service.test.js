@@ -143,7 +143,15 @@ describe('readParams', () => {
       stop: 'saint-laurent',
       stress: 200,
       at: { x: -2990, y: -1332.5, h: Math.PI / 2 },
+      eye: null,
     });
+  });
+
+  it('reads a camera place and ignores a malformed one', () => {
+    vi.stubGlobal('location', { search: '?eye=1,2,30,90,45' });
+    expect(readParams().eye).toEqual({ x: 1, y: 2, height: 30, yaw: Math.PI / 2, pitch: Math.PI / 4 });
+    vi.stubGlobal('location', { search: '?eye=1,2,30' });
+    expect(readParams().eye).toBeNull();
   });
 
   it('reads a place without heading and ignores a malformed one', () => {

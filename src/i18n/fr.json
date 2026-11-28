@@ -176,7 +176,7 @@
   "debug": {
     "panel": "x {x} · y {y} · s {s} m · sol {ground} m · eau {water} · {fps} i/s · {calls} appels · {triangles} k triangles · {models} modèles · {sprites} sprites · {buses} autres bus en service · {tiles} tuiles détaillées · soleil {sun}° · {traffic} véhicules · {walkers} piétons",
     "noWater": "—",
-    "keys": "<b>DEBUG</b> · <b>{keyTurbo}</b> turbo · <b>{keyNextStop} / {keyPreviousStop}</b> arrêt suivant/précédent · <b>clic carte</b> téléporter n'importe où · <b>&stress=200</b> dans l'adresse : 200 véhicules de test · <b>&at=x,y,cap</b> : départ à un point (coordonnées du panneau) · <b>{keyGhost}</b> collisions · <b>{keyFly}</b> vol libre (<b>{keyMove}</b>, <b>{keyFlyUp} / {keyFlyDown}</b> monter/descendre, <b>souris</b> regarder, <b>{keyLand}</b> poser le bus) · <b>{keyEarlierLight} / {keyLaterLight}</b> lumière plus tôt / plus tard · <b>{keyDebug}</b> quitter le debug",
+    "keys": "<b>DEBUG</b> · <b>{keyTurbo}</b> turbo · <b>{keyNextStop} / {keyPreviousStop}</b> arrêt suivant/précédent · <b>clic carte</b> téléporter n'importe où · <b>&stress=200</b> dans l'adresse : 200 véhicules de test · <b>&at=x,y,cap</b> : départ à un point (coordonnées du panneau) · <b>&eye=x,y,hauteur,cap,plongée</b> : vol libre depuis un point de vue · <b>{keyGhost}</b> collisions · <b>{keyFly}</b> vol libre (<b>{keyMove}</b>, <b>{keyFlyUp} / {keyFlyDown}</b> monter/descendre, <b>souris</b> regarder, <b>{keyLand}</b> poser le bus) · <b>{keyEarlierLight} / {keyLaterLight}</b> lumière plus tôt / plus tard · <b>{keyDebug}</b> quitter le debug",
     "on": "Mode debug",
     "off": "Mode debug désactivé",
     "lightTime": "Lumière de {time}",

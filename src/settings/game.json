@@ -1954,6 +1954,143 @@
       "doc": "Loudness of the relay tick of the bus indicator."
     }
   },
+  "landmarks": {
+    "towerHeight": {
+      "value": 90,
+      "unit": "m",
+      "min": 20,
+      "max": 150,
+      "doc": "Height of the Tour Perret to the top of its spire (90 m, City of Grenoble 2022; sources give 80 to 95 m)."
+    },
+    "towerPlatform": {
+      "value": 60,
+      "unit": "m",
+      "min": 10,
+      "max": 140,
+      "doc": "Height of the observation platform of the Tour Perret, where its shaft ends and its lantern starts (City of Grenoble)."
+    },
+    "towerLantern": {
+      "value": 80,
+      "unit": "m",
+      "min": 10,
+      "max": 140,
+      "doc": "Height of the top of the lantern of the Tour Perret (the summit open to guided visits, City of Grenoble)."
+    },
+    "towerTaper": {
+      "value": 0.8,
+      "unit": "ratio",
+      "min": 0.3,
+      "max": 1,
+      "doc": "Width of the Tour Perret at the platform as a share of its base."
+    },
+    "towerColor": {
+      "value": "#cfc7b6",
+      "unit": "colour",
+      "doc": "Concrete of the Tour Perret."
+    },
+    "wallHeight": {
+      "value": 7,
+      "unit": "m",
+      "min": 1,
+      "max": 20,
+      "doc": "Height of the walls of the Bastille fortifications above the ground."
+    },
+    "wallThickness": {
+      "value": 2.5,
+      "unit": "m",
+      "min": 0.5,
+      "max": 6,
+      "doc": "Thickness of the walls of the Bastille fortifications."
+    },
+    "wallColor": {
+      "value": "#b3a891",
+      "unit": "colour",
+      "doc": "Limestone of the Bastille fortifications."
+    },
+    "cableSpeed": {
+      "value": 6,
+      "unit": "m/s",
+      "min": 1,
+      "max": 12,
+      "doc": "Speed of the cabins of the Bastille cable car (6 m/s, technical sheets)."
+    },
+    "cableDwell": {
+      "value": 30,
+      "unit": "s",
+      "min": 5,
+      "max": 120,
+      "doc": "Time the cabins stand in the stations."
+    },
+    "cableSag": {
+      "value": 0.03,
+      "unit": "ratio",
+      "min": 0,
+      "max": 0.1,
+      "doc": "Sag of the cable at the middle of a span, as a share of the span."
+    },
+    "trackGap": {
+      "value": 7,
+      "unit": "m",
+      "min": 2,
+      "max": 20,
+      "doc": "Distance between the two tracks of the cable car (one carrying cable per train)."
+    },
+    "lowerStationHeight": {
+      "value": 9,
+      "unit": "m",
+      "min": 2,
+      "max": 30,
+      "doc": "Height of the cable above the ground at the lower station (quai Stéphane Jay)."
+    },
+    "upperStationHeight": {
+      "value": 7,
+      "unit": "m",
+      "min": 2,
+      "max": 30,
+      "doc": "Height of the cable above the ground at the upper station (Bastille)."
+    },
+    "pylonHeight": {
+      "value": 28,
+      "unit": "m",
+      "min": 5,
+      "max": 80,
+      "doc": "Height of the pylon of the cable car above the ground."
+    },
+    "cabinsPerTrain": {
+      "value": 5,
+      "unit": "count",
+      "min": 1,
+      "max": 10,
+      "doc": "Cabins of each train (\"TPHP 5x6\": trains of five cabins for six people).",
+      "integer": true
+    },
+    "cabinRadius": {
+      "value": 1.25,
+      "unit": "m",
+      "min": 0.5,
+      "max": 3,
+      "doc": "Radius of the spherical cabins, the \"bulles\"."
+    },
+    "cabinSpacing": {
+      "value": 3.2,
+      "unit": "m",
+      "min": 1,
+      "max": 10,
+      "doc": "Distance between two cabins of a train along the cable."
+    },
+    "cabinHang": {
+      "value": 2.2,
+      "unit": "m",
+      "min": 0.5,
+      "max": 6,
+      "doc": "Distance from the cable down to the centre of a cabin."
+    },
+    "cabinColor": {
+      "value": "#8fc7dc",
+      "unit": "colour",
+      "doc": "Tinted glass of the cabins."
+    }
+  },
   "audio": {
     "volumeLow": {
       "value": 0.25,
