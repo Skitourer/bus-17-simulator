@@ -133,7 +133,7 @@ function groundTexture(map, b, season) {
 }
 
 /**
- * Fine ground of a tile (10 m grid shaped by the roads), triangles split like Ground.h().
+ * Fine ground of a tile (5 m grid shaped by the roads), triangles split like Ground.h().
  * @param {Ground} ground @param {string} key @param {TileData} tile @param {THREE.Material} material
  */
 function terrainTile(ground, key, tile, material) {

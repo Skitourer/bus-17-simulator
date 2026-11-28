@@ -1,6 +1,6 @@
 // @ts-check
 /**
- * Ground and drivable surface (ADR 0003): 1 km tiles of ground shaped by the roads (10 m grid), bridge decks
+ * Ground and drivable surface (ADR 0003): 1 km tiles of ground shaped by the roads (5 m grid, #92), bridge decks
  * above them, and the coarse IGN grid outside the tiles. Local frame in metres: x east, y north.
  *
  * Heights inside a tile cell use the same two triangles as the rendered mesh (diagonal from the south-west

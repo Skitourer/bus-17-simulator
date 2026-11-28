@@ -11,7 +11,7 @@ dessinés à chaque image, puis de nouveau pour les ombres, quoi que voie la cam
 ## Décision
 
 - Les tuiles de données (500 m, `data/grenoble/tiles/`) sont aussi les tuiles de dessin.
-  Chaque tuile a un sol léger (un point sur cinq de sa grille de 10 m) construit pour
+  Chaque tuile a un sol léger (un point sur dix de sa grille de 5 m) construit pour
   toutes les tuiles au démarrage, et des couches détaillées : sol fin, rues, arbres,
   bâtiments.
 - Les couches détaillées sont construites quand le bus arrive à moins de

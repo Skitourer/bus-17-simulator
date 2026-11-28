@@ -2490,7 +2490,7 @@
       "unit": "m",
       "min": 300,
       "max": 10000,
-      "doc": "The detailed layers of a tile (10 m ground, streets, trees, buildings) are built when the bus comes this close to the tile; the buildings are drawn as long as they are built."
+      "doc": "The detailed layers of a tile (5 m ground, streets, trees, buildings) are built when the bus comes this close to the tile; the buildings are drawn as long as they are built."
     },
     "unloadRadius": {
       "value": 2400,
@@ -2521,12 +2521,12 @@
       "doc": "The trees of a tile are drawn within this distance of the bus."
     },
     "lightGroundStep": {
-      "value": 5,
+      "value": 10,
       "unit": "grid points",
       "min": 1,
-      "max": 25,
+      "max": 50,
       "integer": true,
-      "doc": "The light ground of a far tile keeps one point out of this many of the 10 m grid (50 m cells): 25 times fewer triangles."
+      "doc": "The light ground of a far tile keeps one point out of this many of the 5 m grid (50 m cells): 100 times fewer triangles."
     },
     "buildBudget": {
       "value": 6,

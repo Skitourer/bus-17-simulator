@@ -18,7 +18,7 @@ correspondait pas à ce qui était dessiné.
     tunnels laissés de côté (une entrée en béton est dessinée où ils rejoignent une route à
     l'air libre ; les passages sous immeuble sont des rues, la partie du bâtiment au-dessus
     dessinée à partir de 4,5 m, #14) ;
-  - une grille de sol de 10 m mise à la hauteur de la route sur la chaussée et 2,5 m à
+  - une grille de sol de 5 m (10 m avant #92) mise à la hauteur de la route sur la chaussée et 2,5 m à
     côté, puis raccordée au relief naturel sur 8 m (talus) ; tous les coins d'un triangle
     qui touche la chaussée sont à la hauteur de la route, qui est donc plate en travers (#76),
     et la construction liste les triangles de chaussée encore inclinés de plus de 7 % en
@@ -46,8 +46,12 @@ correspondait pas à ce qui était dessiné.
 
 - Chaussées plates en travers, carrefours propres, ponts au-dessus de l'eau, et objets
   posés sur ce qui est dessiné.
-- Environ 20 Mo de données générées dans le dépôt, reconstruites par le script après tout
-  changement des routes ou du relief.
+- Environ 70 Mo de tuiles générées dans le dépôt (19 Mo compressés tels que servis),
+  reconstruites par le script après tout changement des routes ou du relief. La grille de
+  5 m (#92, 28/11/2026) les a doublées, ainsi que les triangles de sol dessinés près du bus
+  (1,5 à 2 fois), et a réduit d'environ 60 % la surface de chaussée inclinée de plus de 7 %
+  en travers ; il reste les endroits où deux branches d'un lacet ou deux routes superposées
+  sont plus proches que la largeur d'une route, qu'une grille plus fine ne sépare pas.
 
 ## Alternatives rejetées
 

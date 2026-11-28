@@ -22,7 +22,7 @@ export function rectDistance(rect, x, y) {
  * @typedef {object} TileLevels
  * @property {boolean} keep the detailed layers stay built (not freed yet)
  * @property {boolean} want the detailed layers should be built
- * @property {boolean} fineGround the 10 m ground grid is drawn (else the light one)
+ * @property {boolean} fineGround the 5 m ground grid is drawn (else the light one)
  * @property {boolean} streets carriageway, sidewalks, kerbs and markings are drawn
  * @property {boolean} trees
  */

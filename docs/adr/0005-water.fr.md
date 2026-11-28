@@ -12,7 +12,7 @@ rivière et ses berges, et les routes des quais sont façonnées dans la même g
 
 - `tools/water.py` précalcule, dans les tuiles de rues (`tools/build_streets.py`) :
   - l'union des surfaces d'eau OSM d'au moins 20 m² ;
-  - un niveau d'eau par nœud de la grille de 10 m : le relief sous l'eau lissé sur 60 m
+  - un niveau d'eau par nœud de la grille du sol (5 m) : le relief sous l'eau lissé sur 60 m
     (à partir des points à au moins 15 m d'une berge), maintenu 3 m sous la berge la plus
     basse dans un rayon de 60 m (quais) ;
   - les triangles du sol qui touchent l'eau (`wet`), l'eau découpée selon eux (`water`),
