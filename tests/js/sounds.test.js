@@ -1,6 +1,6 @@
 // @ts-check
 import { describe, expect, it } from 'vitest';
-import { doorSound, engineTone, masterGain, stopBell } from '../../src/hd2d/sounds.js';
+import { doorSound, engineHarmonics, engineTone, masterGain, stopBell } from '../../src/hd2d/sounds.js';
 import { SETTINGS } from './fixtures.js';
 
 const A = SETTINGS.audio;
@@ -43,5 +43,17 @@ describe('door and bell events', () => {
     expect(stopBell(0, 1)).toBe(true);
     expect(stopBell(1, 2)).toBe(false);
     expect(stopBell(2, 0)).toBe(false);
+  });
+});
+
+describe('engineHarmonics', () => {
+  it('falls with the rank, the odd harmonics stronger, no offset', () => {
+    const { real, imag } = engineHarmonics(8);
+    expect(real.every((v) => v === 0)).toBe(true);
+    expect(imag[0]).toBe(0);
+    expect(imag[1]).toBe(1);
+    expect(imag[5]).toBeGreaterThan(imag[4]);
+    expect(imag[3]).toBeLessThan(imag[1]);
+    expect(imag.length).toBe(9);
   });
 });
