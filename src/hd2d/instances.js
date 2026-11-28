@@ -122,15 +122,17 @@ export class ModelPool {
     this.rotation = new THREE.Quaternion();
     this.position = new THREE.Vector3();
     this.unit = new THREE.Vector3(1, 1, 1);
-    this.up = new THREE.Vector3(0, 1, 0);
+    this.euler = new THREE.Euler(0, 0, 0, 'YXZ');
   }
 
   /**
-   * Instance `i` at world (x, height z, y north), heading `h` (math angle, 0 = east).
+   * Instance `i` at world (x, height z, y north), heading `h` (math angle, 0 = east), tilted by `pitch`
+   * (nose up) and `roll` (left side up) like the player's bus.
    * @param {number} i @param {number} x @param {number} y @param {number} z @param {number} h
+   * @param {number} [pitch] @param {number} [roll]
    */
-  set(i, x, y, z, h) {
-    this.rotation.setFromAxisAngle(this.up, h);
+  set(i, x, y, z, h, pitch = 0, roll = 0) {
+    this.rotation.setFromEuler(this.euler.set(roll, h, pitch, 'YXZ'));
     this.matrix.compose(this.position.set(x, z, -y), this.rotation, this.unit);
     this.mesh.setMatrixAt(i, this.matrix);
   }

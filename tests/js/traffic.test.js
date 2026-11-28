@@ -1,6 +1,6 @@
 // @ts-check
 import { describe, expect, it } from 'vitest';
-import { RoadNetwork, Traffic, classSpeed, idmAcceleration } from '../../src/hd2d/traffic.js';
+import { RoadNetwork, Traffic, classSpeed, groundPose, idmAcceleration } from '../../src/hd2d/traffic.js';
 import { SETTINGS } from './fixtures.js';
 
 const P = SETTINGS.traffic;
@@ -418,5 +418,30 @@ describe('Traffic in built-up areas and in the countryside (#94)', () => {
     expect(traffic.vehicles.some((v) => !v.bike)).toBe(true);
     // at the crossroads, the only built-up way out of the village is back
     expect(n.nextLane(laneOf(n, 0, 1), seeded(1), true)).toBe(laneOf(n, 1, 0));
+  });
+});
+
+describe('groundPose (#93)', () => {
+  // a street climbing 10 % to the north and sloping 5 % down to the east
+  const heightAt = (/** @type {number} */ x, /** @type {number} */ y) => 100 + 0.1 * y - 0.05 * x;
+  const car = { x: 10, y: 20, h: Math.PI / 2, length: 4.4, width: 1.8, bike: false };
+
+  it('pitches a car up the street and rolls it across the slope, wheels on the ground', () => {
+    const pose = groundPose(car, 2.6, heightAt);
+    expect(pose.z).toBeCloseTo(heightAt(10, 20));
+    expect(pose.pitch).toBeCloseTo(Math.atan(0.1));
+    // heading north, its left side is to the west, higher
+    expect(pose.roll).toBeCloseTo(Math.atan(0.05));
+    expect(groundPose({ ...car, h: -Math.PI / 2 }, 2.6, heightAt).pitch).toBeCloseTo(-Math.atan(0.1));
+  });
+
+  it('keeps a bike upright, pitched only', () => {
+    const pose = groundPose({ ...car, bike: true }, 1, heightAt);
+    expect(pose.pitch).toBeCloseTo(Math.atan(0.1));
+    expect(pose.roll).toBe(0);
+  });
+
+  it('lies flat on flat ground', () => {
+    expect(groundPose(car, 2.6, () => 3)).toEqual({ z: 3, pitch: 0, roll: 0 });
   });
 });

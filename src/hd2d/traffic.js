@@ -222,6 +222,28 @@ function reversed(pts) {
 }
 
 /**
+ * Height and tilt of a vehicle on the ground under its wheels (#93): pitch from the heights under the front
+ * and rear axles, roll from those under its left and right sides (none for a bike, which rides upright).
+ * @param {{x: number, y: number, h: number, length: number, width: number, bike: boolean}} v
+ * @param {number} wheelbase distance between the axles (m) @param {(x: number, y: number) => number} heightAt
+ * @returns {{z: number, pitch: number, roll: number}} pitch > 0 nose up, roll > 0 left side up (radians)
+ */
+export function groundPose(v, wheelbase, heightAt) {
+  const c = Math.cos(v.h),
+    s = Math.sin(v.h);
+  const half = wheelbase / 2,
+    side = v.width / 2;
+  const front = heightAt(v.x + c * half, v.y + s * half),
+    rear = heightAt(v.x - c * half, v.y - s * half);
+  const pitch = Math.atan2(front - rear, wheelbase);
+  if (v.bike) return { z: (front + rear) / 2, pitch, roll: 0 };
+  // left of a heading h is (-sin h, cos h)
+  const left = heightAt(v.x - s * side, v.y + c * side),
+    right = heightAt(v.x + s * side, v.y - c * side);
+  return { z: (front + rear + left + right) / 4, pitch, roll: Math.atan2(left - right, v.width) };
+}
+
+/**
  * Acceleration of the Intelligent Driver Model.
  * @param {number} v speed @param {number} desired speed wanted on a free road @param {number} gap free distance to
  * the leader (Infinity without one) @param {number} leaderSpeed
