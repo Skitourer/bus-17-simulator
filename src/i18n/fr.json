@@ -75,6 +75,13 @@
     "pedestriansLow": "Peu",
     "pedestriansMedium": "Normal",
     "pedestriansHigh": "Beaucoup",
+    "volume": "Volume sonore",
+    "volumeOff": "Muet",
+    "volumeLow": "Bas",
+    "volumeMedium": "Moyen",
+    "volumeHigh": "Fort",
+    "announcements": "Annonces des arrêts",
+    "announcementsHelp": "Une voix annonce le prochain arrêt à la fermeture des portes (voix du navigateur).",
     "keys": "Touches",
     "keysHelp": "Clique sur une action puis appuie sur sa nouvelle touche. Les flèches restent toujours actives ; Échap ouvre toujours le menu.",
     "pressKey": "Appuie sur une touche… (Échap : annuler)",
@@ -152,6 +159,10 @@
     "busReplaced": "Bus replacé sur le parcours",
     "passedStop": "{stop} : personne à prendre ni à déposer",
     "doorsTooFast": "Arrête le bus avant d’ouvrir les portes"
+  },
+  "speech": {
+    "nextStop": "Prochain arrêt : {stop}.",
+    "terminus": "Terminus. Tout le monde descend."
   },
   "camera": {
     "hd2d": "HD-2D",

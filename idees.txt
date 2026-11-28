@@ -32,13 +32,15 @@ Fait
     Grille de sol de 5 m : routes moins inclinées en travers dans les lacets (#92, en partie)
     Trois feux stop, plus lumineux que les feux arrière (#87)
     Rétroviseur intérieur et tableau de bord 3D avec volant (#42)
+    Murs de soutènement entre les lacets (#108), socles teintés et façades plus variées,
+    toits à deux et quatre pans (#16), hauteur libre sous les ponts (#75), passages inférieurs (#86)
+    Son : moteur, portes, sonnette d'arrêt demandé, annonce vocale du prochain arrêt,
+    volume et annonces dans les réglages
 
 À faire
     Optimisation : ne pas afficher ni simuler tous les objets mobiles de la carte (#47, #12, #19)
     Bus des autres horaires, dans le même sens et en sens inverse (#48)
     Bâtiments plus riches et monuments dessinés à la main (#16)
     Mode deux joueurs en coopération, écran partagé verticalement ou horizontalement (#51)
-    Volume sonore dans les réglages, quand le jeu aura du son
-    Annonces sonores avec le nom du prochain arrêt
     Panneau d'information voyageur avec représentation linéaire du trajet
     (station précédente, prochaine station, station suivante)

@@ -378,6 +378,12 @@ function renderSettings() {
       medium: 'settings.pedestriansMedium',
       high: 'settings.pedestriansHigh',
     },
+    volume: {
+      off: 'settings.volumeOff',
+      low: 'settings.volumeLow',
+      medium: 'settings.volumeMedium',
+      high: 'settings.volumeHigh',
+    },
   };
   chips(
     $('qualityChips'),
@@ -408,6 +414,21 @@ function renderSettings() {
     CHOICES.pedestrians.map((value) => ({ value, label: t(labels.pedestrians[value]) })),
     preferences.pedestrians,
     (pedestrians) => changePreferences({ pedestrians }),
+  );
+  chips(
+    $('volumeChips'),
+    CHOICES.volume.map((value) => ({ value, label: t(labels.volume[value]) })),
+    preferences.volume,
+    (volume) => changePreferences({ volume }),
+  );
+  chips(
+    $('announcementChips'),
+    [
+      { value: false, label: t('settings.off') },
+      { value: true, label: t('settings.on') },
+    ],
+    preferences.announcements,
+    (announcements) => changePreferences({ announcements }),
   );
   chips(
     $('debugChips'),
