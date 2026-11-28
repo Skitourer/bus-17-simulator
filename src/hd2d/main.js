@@ -51,6 +51,7 @@ import { BillboardPool } from './instances.js';
 import { SegmentGrid, kerbSegments, laneOffsets, offsetAt, placeStops } from './kerb.js';
 import { drivingRoute, guidanceLanes, guidanceLine, offRoadStretches } from './guidance.js';
 import { Mirrors } from './mirrors.js';
+import { INTERIOR_LAYER } from './interior.js';
 import { eyePosition, lookTarget, steeringWheelAngle } from './views.js';
 /** @typedef {import('./stops.js').StopEvent} StopEvent */
 import { LANGUAGES, initI18n, t } from '../i18n/i18n.js';
@@ -126,6 +127,8 @@ const lampLights = Array.from({ length: S.lights.realLights }, () => {
 const headlights = [-1, 1].map(
   () => new THREE.SpotLight('#fff4dc', 0, S.lights.headlightDistance, S.lights.headlightAngle, 0.5),
 );
+// the interior mirror draws the inside of the bus in its own pass, lit by the same lights
+for (const light of [hemi, sun, ...lampLights]) light.layers.enable(INTERIOR_LAYER);
 sun.castShadow = true;
 sun.shadow.mapSize.set(S.render.shadowMapSize, S.render.shadowMapSize);
 const shadowRadius = S.render.shadowRadius;
@@ -824,9 +827,9 @@ function render(dt) {
   // no tilt-shift blur from inside the bus
   post.mat.uniforms.blur.value = inside ? 0 : m.blur;
   renderer.info.reset(); // counted over the whole frame (post-processing and mirrors draw several passes)
-  post.render(scene, camera);
+  post.render(scene, camera, inside ? bus.interior : null);
   if (inside === 'cabin') {
-    mirrors.render(scene, bus.body, innerWidth, innerHeight);
+    mirrors.render(scene, bus.body, bus.interior, innerWidth, innerHeight);
     const rects = mirrors.rects(innerWidth, innerHeight);
     placeFrame($('mirrorL'), rects.left);
     placeFrame($('mirrorR'), rects.right);

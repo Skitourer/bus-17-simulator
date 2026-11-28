@@ -7,6 +7,7 @@
  */
 import * as THREE from 'three';
 import { mirrorRects } from './views.js';
+import { renderFromInside } from './interior.js';
 
 /** @typedef {import('../settings/settings.js').Settings} Settings */
 
@@ -70,11 +71,13 @@ export class Mirrors {
    * Render one mirror into its pixels, then flipped into its rectangle of the screen.
    * @param {THREE.Scene} scene @param {THREE.Camera} camera @param {THREE.WebGLRenderTarget} target
    * @param {{x: number, y: number, w: number, h: number}} rect @param {number} height screen height
+   * @param {THREE.Object3D} [interior] inside of the bus, drawn over the world in a second pass
    */
-  draw(scene, camera, target, rect, height) {
+  draw(scene, camera, target, rect, height, interior) {
     const r = this.r;
     r.setRenderTarget(target);
-    r.render(scene, camera);
+    if (interior) renderFromInside(r, scene, camera, interior);
+    else r.render(scene, camera);
     r.setRenderTarget(null);
     // WebGL viewports start at the bottom left
     r.setViewport(rect.x, height - rect.y - rect.h, rect.w, rect.h);
@@ -88,9 +91,10 @@ export class Mirrors {
   /**
    * Render the three mirrors over the screen, after the main view.
    * @param {THREE.Scene} scene @param {THREE.Object3D} body bus body (mirrors move with it)
+   * @param {THREE.Object3D} interior inside of the bus, seen in the interior mirror
    * @param {number} width @param {number} height screen size (CSS pixels)
    */
-  render(scene, body, width, height) {
+  render(scene, body, interior, width, height) {
     const r = this.r,
       b = this.bus;
     const rects = this.rects(width, height);
@@ -112,7 +116,7 @@ export class Mirrors {
     const { camera, target } = this.inside;
     camera.position.copy(body.localToWorld(this.local.set(x, this.p.insideHeight, 0)));
     camera.lookAt(body.localToWorld(this.ahead.set(x - 10, this.p.insideHeight - this.p.insideDrop, 0)));
-    this.draw(scene, camera, target, rects.inside, height);
+    this.draw(scene, camera, target, rects.inside, height, interior);
     r.setViewport(0, 0, width, height);
     r.shadowMap.autoUpdate = true;
   }
