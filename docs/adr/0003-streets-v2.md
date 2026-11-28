@@ -44,7 +44,7 @@ each read a terrain that did not match what was drawn.
 
 - Flat road cross-sections, clean junctions, bridges above the water, and objects sitting
   on what is drawn.
-- About 70 MB of generated tiles in the repository (19 MB compressed as served), rebuilt by
+- About 75 MB of generated tiles in the repository (21 MB compressed as served), rebuilt by
   the script after any change to roads or terrain. The 5 m grid (#92, 2026-11-28) doubled
   them and the ground triangles drawn near the bus (1.5 to 2 times), and cut the area of
   road steeper than 7 % across by about 60 %; dual carriageways at a common height and side streets

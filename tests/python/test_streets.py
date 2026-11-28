@@ -31,6 +31,7 @@ from streets import (
     natural_profiles,
     node_heights,
     passage_zone,
+    rings_of,
     road_cross_slopes,
     road_pieces,
     road_profiles,
@@ -389,3 +390,13 @@ def test_cross_slopes_skip_the_junctions() -> None:
     slopes = road_cross_slopes(ground, -50, -50, 11, 10.0, surface, heights, junction)
     assert len(slopes) < 10
     assert all(abs(x) > 10 for x, _, _ in slopes)
+
+
+def test_rings_of_keeps_small_pieces_and_drops_flattened_ones() -> None:
+    small = Polygon([(10.0, 10.0), (11.0, 10.0), (10.0, 10.6)])  # 0.3 m², kept (#92)
+    flat = Polygon([(20.0, 20.0), (20.04, 20.0), (20.0, 23.0)])  # 0.06 m², flattened by the decimetres
+    holed = Polygon(
+        [(0.0, 0.0), (4.0, 0.0), (4.0, 4.0), (0.0, 4.0)], [[(1.0, 1.0), (1.02, 1.0), (1.0, 1.02)]]
+    )
+    assert rings_of(MultiPolygon([small, flat]), 0.0, 0.0) == [[[100, 100, 110, 100, 100, 106]]]
+    assert rings_of(holed, 0.0, 0.0) == [[[0, 0, 40, 0, 40, 40, 0, 40]]]
