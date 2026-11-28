@@ -1,4 +1,4 @@
-# ADR 0012 : Hauteur libre sous les ponts qui franchissent une route
+# ADR 0012 : Hauteur libre sous les ponts et passages inférieurs creusés
 
 _[English](0012-grade-separation.md)_ · Statut : acceptée · Date : 2026-11-28
 
@@ -17,14 +17,25 @@ le tablier, et le bus sur le tablier était bloqué par les voitures en dessous 
 - Le tablier monte en dos d'âne à 6 % au plus, ses extrémités inchangées pour que les rampes
   rejoignent toujours les rues ; la route basse, avec les routes autour sauf les rampes du pont,
   descend du reste en déblai à 8 % au plus. Le sol suit les deux profils comme d'habitude.
+- Passages inférieurs (#86) : là où un tunnel passe sous une route au sol qui ne le rejoint pas,
+  le tunnel descend autour du croisement jusqu'à ce que la route du dessus soit 5,55 m au-dessus,
+  à 8 % au plus, et chaque rampe reliée à une extrémité du tunnel remonte jusqu'à son autre
+  extrémité (plus raide si elle est courte). Le sol suit les rampes en tranchée aux talus raides ;
+  les rues au-delà des rampes et la route du dessus ne bougent pas. Les tuiles reçoivent les
+  planchers des tunnels (`tunnels` : tronçon, puis le format des ponts), dessinés avec murs et
+  plafond, et roulés comme des tabliers (`Ground.surface`).
 - Dans le jeu, les voies de circulation sur un pont roulent sur le tablier (`Ground.deckAt`),
-  les autres sur le sol ; les voitures ignorent les obstacles à plus de `traffic.levelGap` (3 m)
+  celles d'un passage inférieur sur son plancher (`Ground.tunnelAt`), les autres sur le sol ; les voitures ignorent les obstacles à plus de `traffic.levelGap` (3 m)
   au-dessus ou en dessous d'elles, et le bus ne heurte ni ne pousse les voitures d'un autre
   niveau.
 
 ## Conséquences
 
-- 51 croisements, aucun avec la hauteur libre avant. Plus de triangles de chaussée penchés avant
+- 51 croisements, aucun avec la hauteur libre avant ; 4 passages inférieurs sous 5 routes, tous
+  des voies de service ou secondaires (parkings, passages sous les quais) ; aucun sur le trajet des
+  lignes.
+- Les côtés des tranchées sont le sol raide de la grille de 5 m, pas des murs de soutènement
+  dessinés. Plus de triangles de chaussée penchés avant
   les terrasses (892 au lieu de 824) ; après elles, 218, dont 1 sur le trajet des lignes.
 
 ## Alternatives rejetées

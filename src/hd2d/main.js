@@ -364,7 +364,7 @@ async function load() {
   const guideParams = { ...S.guidance, bodyWidth: B.bodyWidth, kerbMargin: S.gameplay.kerbMargin };
   const guide = guidanceLine(track, roadLanes, lane, guideParams);
   // the buses drive the guidance line and stop at the traffic lights on their way (#85)
-  const network = new RoadNetwork(roads, S.traffic.speeds);
+  const network = new RoadNetwork(roads, S.traffic.speeds, hf.tunnelEdges);
   signals = new SignalMap(roads, network, S.signals);
   /** @param {import('./guidance.js').GuidanceLine} g */
   const stopLinesOf = (g) =>
@@ -426,7 +426,8 @@ async function load() {
   redLights = new RedLightWatch(signals, S.signals.redMinSpeed, S.signals.redLineMargin);
   traffic = new Traffic(network, S.traffic, Math.random, signals);
   // cars on a bridge drive on its deck, the others on the ground below it (#75)
-  traffic.heightAt = (x, y, bridge) => (bridge ? hf.deckAt(x, y) : null) ?? hf.h(x, y);
+  traffic.heightAt = (x, y, lane) =>
+    (lane.bridge ? hf.deckAt(x, y) : lane.tunnel ? hf.tunnelAt(x, y) : null) ?? hf.h(x, y);
   const walkways = new Walkways(roads, S.traffic.speeds);
   walkways.addCrossings(
     crossingCentres(tiles, tileIndex, S.pedestrians.crossingGather),

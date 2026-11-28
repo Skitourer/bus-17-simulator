@@ -118,6 +118,24 @@ describe('Ground', () => {
     expect(ground.terraceHeight(-50, 10)).toBeNull();
   });
 
+  it('drives an underpass floor near its height, the street above it otherwise (#86)', () => {
+    // floor 4 m wide along y = 10 at -6 m, under flat ground at 0 m
+    const tile = oneTile([0, 0, 0, 0, 0, 0, 0, 0, 0]);
+    const ground = new Ground(
+      tiltedTerrain(0),
+      tile.index,
+      new Map([['0_0', { ...tileData(tile), tunnels: [[7, 40, 0, 100, -60, 200, 100, -60]] }]]),
+      SETTINGS.world.deckCatch,
+      1,
+    );
+    expect([...ground.tunnelEdges]).toEqual([7]);
+    expect(ground.tunnelAt(10, 10)).toBeCloseTo(-6);
+    expect(ground.tunnelAt(10, 15)).toBeNull();
+    expect(ground.surface(10, 10, -5.5)).toBeCloseTo(-6);
+    expect(ground.surface(10, 10, 0)).toBeCloseTo(0);
+    expect(ground.h(10, 10)).toBeCloseTo(0);
+  });
+
   it('finds the water pieces by ground triangle', () => {
     // piece (0, 0) (10, 0) (10, 5) in the first triangle of cell 0, and the whole second triangle of cell 3
     const pieces = [[[0, 0, 100, 0, 100, 50]], [[100, 100, 200, 200, 100, 200]]];
