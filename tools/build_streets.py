@@ -16,9 +16,9 @@ Geometry: see tools/streets.py and ADR 0003. All coordinates in decimetres.
                       "kerbs": [[x, y, ...], ...]   (carriageway outline along sidewalks),
                       "centre_lines": [[x, y, ...], ...]   (dashed, stopped before junctions),
                       "crossings": [[x, y, x, y, x, y, x, y], ...]   (zebra stripes),
-                      "buildings": [[height, kind, style, roof_rise, x, y, ...], ...]   (see
+                      "buildings": [[height, kind, style, roof_rise, roof_shape, x, y, ...], ...]   (see
                                          build_buildings.py; clipped off the carriageway, CCW),
-                      "lintels": [[height, kind, style, 0, base, x, y, ...], ...]   (parts of buildings
+                      "lintels": [[height, kind, style, 0, 0, base, x, y, ...], ...]   (parts of buildings
                                   over a passage, drawn from `base` above the ground to `height`),
                       "portals": [[x, y, heading, width], ...]   (tunnel mouths; heading into the tunnel
                                                                   in milliradians),
@@ -151,12 +151,12 @@ def buildings_and_trees(
     clipped = 0
     for rec in data['b']:
         values = [int(v) for v in rec]
-        head, flat = values[:4], values[4:]  # height, kind, style, roof rise
+        head, flat = values[:5], values[5:]  # height, kind, style, roof rise, roof shape
         ring = [(flat[k] / 10, flat[k + 1] / 10) for k in range(0, len(flat), 2)]
         for part in lintels(ring, passages, head[0] / 10):
             c = Polygon(part).representative_point()
             # a flat top: the roof of the building does not fit the piece over the passage
-            over[tile_of(c.x, c.y, bx0, by0)].append(([*head[:3], 0], part))
+            over[tile_of(c.x, c.y, bx0, by0)].append(([*head[:3], 0, 0], part))
         parts = clip_building(ring, building_zone)
         clipped += parts != [ring]
         for part in parts:

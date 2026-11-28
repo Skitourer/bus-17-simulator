@@ -1686,6 +1686,13 @@
       "max": 1,
       "doc": "A footprint covering less of its smallest rectangle (L, U or T shapes) keeps a flat roof: one ridge would not fit it."
     },
+    "slateRoofShare": {
+      "value": 0.25,
+      "unit": "ratio",
+      "min": 0,
+      "max": 1,
+      "doc": "Share of the pitched roofs of the old-town blocks in slate or zinc instead of clay tiles."
+    },
     "plinthHeight": {
       "value": 0.2,
       "unit": "m",

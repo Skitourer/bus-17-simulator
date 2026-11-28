@@ -19,10 +19,13 @@ matériaux du toit et des murs et les points bas et haut du toit, sous Licence O
   prête ses tags (type, `roof:shape`).
 - `tools/buildings.py` (pur, testé) en déduit une famille de façade (vieille ville, grand
   ensemble, moderne, maison, hangar, édifice public) et la hauteur d'un toit en pente à partir
-  des points du toit (1,5 m ou plus, pas en béton, au plus environ 30°). Les enregistrements
-  deviennent `[hauteur, type, style, hauteur_toit, contour...]`.
+  des points du toit (1,5 m ou plus, pas en béton, au plus environ 30°), et une forme de toit
+  (#16) : `roof:shape` d'OSM quand il est connu, sinon un tirage stable entre quatre pans et
+  deux pans par famille de façade. Les enregistrements deviennent
+  `[hauteur, type, style, hauteur_toit, forme_toit, contour...]`.
 - Le jeu dessine les familles à partir d'un seul atlas de façades (un shader choisit la colonne)
-  et des toits à quatre pans selon le grand axe de chaque emprise (`src/hd2d/roofs.js`, testé).
+  et des toits à quatre ou deux pans selon le grand axe de chaque emprise (`src/hd2d/roofs.js`,
+  testé), aux couleurs de tuile, d'ardoise ou de zinc variées d'un bâtiment à l'autre.
 
 ## Conséquences
 
