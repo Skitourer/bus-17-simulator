@@ -1564,6 +1564,21 @@ function stops(hf, places, blocked, line) {
 }
 
 /**
+ * Mean of the corners of a building ring of a tile (dm, relative to the tile origin `ox`, `oy` in dm), in m.
+ * @param {number[]} ring @param {number} ox @param {number} oy @returns {[number, number]}
+ */
+function ringCentre(ring, ox, oy) {
+  let x = 0,
+    y = 0;
+  for (let k = 0; k + 1 < ring.length; k += 2) {
+    x += ring[k];
+    y += ring[k + 1];
+  }
+  const n = ring.length / 2;
+  return [(ox + x / n) / 10, (oy + y / n) / 10];
+}
+
+/**
  * Buildings (clipped off the carriageway) and trees (off roads and buildings) of all tiles, in the world
  * frame: buildings as BuildingsData records in decimetres, trees as flat [x, y, ...] in metres.
  * @param {Ground} ground @param {Map<string, TileData>} tiles
@@ -1585,7 +1600,7 @@ function tileObjects(ground, tiles, landmarks = null) {
       oy = (ix.y0 + tj * ix.size) * 10;
     for (const [h, kind, style, rise, roof, ...ring] of tile.buildings) {
       // a landmark drawn by hand replaces the building of the data (#16)
-      if (landmarks && skips(landmarks, (ox + ring[0]) / 10, (oy + ring[1]) / 10)) continue;
+      if (landmarks && skips(landmarks, ...ringCentre(ring, ox, oy))) continue;
       out.b.push([h, kind, style, rise, roof, ...ring.map((v, k) => v + (k % 2 ? oy : ox))]);
     }
     for (const [h, kind, style, rise, roof, base, ...ring] of tile.lintels ?? []) {
@@ -1665,7 +1680,9 @@ export function buildWorld(scene, hf, data, track, settings, season) {
   scene.add(route);
   // collisions need every building from the start, drawn or not: their outlines are light
   const footprints = footprintsOf(tileObjects(hf, data.tiles, data.landmarks).buildings);
-  const landmarks = data.landmarks ? buildLandmarks(scene, hf, data.landmarks, settings.landmarks) : null;
+  const landmarks = data.landmarks
+    ? buildLandmarks(scene, hf, data.landmarks, settings.landmarks, settings.monuments)
+    : null;
   const blocked = data.stops.map((place) => shelterBlocked(footprints, place));
   scene.add(stops(hf, data.stops, blocked, data.line));
   // every street light, for the few real lights that follow the bus at night

@@ -6,6 +6,7 @@
  */
 import * as THREE from 'three';
 import { cablePath, shuttle } from './cablecar.js';
+import { buildMonuments, insideMonument } from './monuments.js';
 
 /** @typedef {import('./ground.js').Ground} Ground */
 /** @typedef {import('../settings/settings.js').Settings['landmarks']} LandmarkSettings */
@@ -15,6 +16,7 @@ import { cablePath, shuttle } from './cablecar.js';
  * @property {{stations: number[][], pylons: number[][]}} cable_car stations (lower, upper) and pylons, [x, y]
  * @property {{name: string, x: number, y: number, radius: number}[]} towers centre and base radius (m)
  * @property {number[][][]} walls fortification walls, [[x, y], ...]
+ * @property {import('./monuments.js').Monument[]} [monuments] buildings drawn by hand
  */
 
 /**
@@ -22,15 +24,21 @@ import { cablePath, shuttle } from './cablecar.js';
  * @param {LandmarksData | null} data @param {number} x @param {number} y
  */
 export function skips(data, x, y) {
-  return !!data && data.towers.some((t) => Math.hypot(x - t.x, y - t.y) < t.radius + 3);
+  if (!data) return false;
+  return (
+    data.towers.some((t) => Math.hypot(x - t.x, y - t.y) < t.radius + 3) ||
+    insideMonument(data.monuments ?? [], x, y)
+  );
 }
 
 /**
  * Every landmark, added to the scene; `update(t)` moves the cabins.
  * @param {THREE.Scene} scene @param {Ground} ground @param {LandmarksData} data @param {LandmarkSettings} p
+ * @param {import('../settings/settings.js').Settings['monuments']} materials of the buildings drawn by hand
  */
-export function buildLandmarks(scene, ground, data, p) {
+export function buildLandmarks(scene, ground, data, p, materials) {
   for (const t of data.towers) scene.add(towerPerret(ground, t, p));
+  scene.add(buildMonuments(ground, data.monuments ?? [], materials));
   scene.add(walls(ground, data.walls, p));
   const cable = cableCar(ground, data.cable_car, p);
   scene.add(cable.group);

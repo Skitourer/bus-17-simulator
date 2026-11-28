@@ -2091,6 +2091,55 @@
       "doc": "Tinted glass of the cabins."
     }
   },
+  "monuments": {
+    "stone": {
+      "value": "#c9bea6",
+      "unit": "colour",
+      "doc": "Limestone of the churches and of the fort buildings drawn by hand."
+    },
+    "brick": {
+      "value": "#a8543a",
+      "unit": "colour",
+      "doc": "Brick of the Collégiale Saint-André and of the cathedral bell tower."
+    },
+    "concrete": {
+      "value": "#d4d2cb",
+      "unit": "colour",
+      "doc": "Concrete of the town hall."
+    },
+    "glass": {
+      "value": "#9fb4c0",
+      "unit": "colour",
+      "doc": "Glazing and steel of the cable car stations."
+    },
+    "render": {
+      "value": "#e8dcc4",
+      "unit": "colour",
+      "doc": "Render of the other buildings drawn by hand."
+    },
+    "slate": {
+      "value": "#5a6068",
+      "unit": "colour",
+      "doc": "Slate roofs of the stone churches."
+    },
+    "tile": {
+      "value": "#9a4a34",
+      "unit": "colour",
+      "doc": "Tile roofs of the brick churches."
+    },
+    "flatRoof": {
+      "value": "#8d8f93",
+      "unit": "colour",
+      "doc": "Flat roofs and spires of the buildings drawn by hand."
+    },
+    "textureMetres": {
+      "value": 4,
+      "unit": "m",
+      "min": 1,
+      "max": 20,
+      "doc": "Size of one repeat of the wall patterns (stone courses, bricks, windows)."
+    }
+  },
   "audio": {
     "volumeLow": {
       "value": 0.25,
