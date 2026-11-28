@@ -11,10 +11,14 @@ from overpasses import (
     covered_ground,
     crossings,
     dig_underpasses,
+    opened_triangles,
     plateau,
     separate_levels,
+    tunnel_openings,
     underpass_crossings,
 )
+from shapely import Polygon
+from shapes import polygons
 from streets import Profile, RoadEdge
 
 
@@ -134,3 +138,24 @@ def test_the_ground_covers_the_underpass_between_its_mouths() -> None:
     assert out[0] == pytest.approx(dug[1].at(20.0) + CLEARANCE)
     assert out[1] == pytest.approx(dug[1].at(1.0) + CLEARANCE)
     assert out[2:].tolist() == [97.0, 97.0]
+
+
+def test_the_ground_opens_over_the_tunnel_mouths_but_not_under_the_road_above() -> None:
+    edges, profiles = underpass()
+    dug = dig_underpasses(edges, profiles)
+    openings = tunnel_openings([edges[1]], [edges[0]], 2.5)
+    assert openings.contains(Polygon([(-1, -12), (1, -12), (1, -10), (-1, -10)]))
+    assert not openings.intersects(Polygon([(-1, -1), (1, -1), (1, 1), (-1, 1)]))
+    tris = polygons(
+        np.array(
+            [
+                [[-2.0, -14.0], [2.0, -14.0], [0.0, -11.0], [-2.0, -14.0]],
+                [[-2.0, -12.0], [2.0, -12.0], [0.0, -9.0], [-2.0, -12.0]],
+                [[50.0, 50.0], [52.0, 50.0], [51.0, 52.0], [50.0, 50.0]],
+            ]
+        )
+    )
+    cover = dug[1].at(3.0) + CLEARANCE
+    corners = np.array([[95.0, 95.0, cover], [cover, cover, cover], [95.0, 95.0, 95.0]])
+    assert opened_triangles(tris, corners, openings, [(edges[1], dug[1])]) == [0]
+    assert opened_triangles(tris, corners, Polygon(), [(edges[1], dug[1])]) == []

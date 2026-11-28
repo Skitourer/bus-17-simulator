@@ -14,8 +14,10 @@ from dataclasses import dataclass
 
 import numpy as np
 import numpy.typing as npt
-from shapely import LineString, Point, STRtree
-from shapes import FloatArray, coordinates, distances, interpolate, locate, points
+import shapely
+from shapely import LineString, Point, STRtree, union_all
+from shapely.geometry.base import BaseGeometry
+from shapes import FloatArray, GeometryArray, coordinates, distances, interpolate, intersects, locate, points
 from streets import Profile, RoadEdge
 
 # headroom of the French roads (4.75 m, ICTAAL / ARP gauge for new structures) plus the depth of a deck as
@@ -222,3 +224,39 @@ def covered_ground(
         k, along = near[inside], s[inside]
         out[k] = np.maximum(out[k], np.interp(along, p.s, p.z) + CLEARANCE)
     return out
+
+
+def tunnel_openings(tunnels: Sequence[RoadEdge], above: Sequence[RoadEdge], margin: float) -> BaseGeometry:
+    """Where the ground is cut open over the underpasses (#86): the tunnels and COVER_MARGIN beside them,
+    between their mouths, except under the roads above (`margin` beyond their carriageway). There the ground
+    triangles slope from the trench up to the cover and closed the mouth."""
+    holes = union_all(
+        [LineString(e.coords).buffer(e.width / 2 + COVER_MARGIN, cap_style='flat') for e in tunnels]
+    )
+    roads = union_all([LineString(e.coords).buffer(e.width / 2 + margin) for e in above])
+    return holes.difference(roads)
+
+
+def opened_triangles(
+    triangles: GeometryArray,
+    corners: FloatArray,
+    openings: BaseGeometry,
+    tunnels: Sequence[tuple[RoadEdge, Profile]],
+) -> list[int]:
+    """Ground triangles left out over the underpasses: those that touch an opening and do not lie wholly at
+    the height of the cover over the nearest tunnel (`corners`: the heights of their three corners)."""
+    if openings.is_empty or not tunnels:
+        return []
+    hit = np.flatnonzero(intersects(openings, triangles))
+    if not len(hit):
+        return []
+    lines = [LineString(e.coords) for e, _ in tunnels]
+    centres = points(*coordinates(shapely.centroid(triangles[hit])))
+    gaps = np.stack([distances(line, centres) for line in lines])
+    nearest = np.argmin(gaps, axis=0)
+    along = locate(np.asarray(lines, dtype=object)[nearest], centres)
+    profiles = [p for _, p in tunnels]
+    owner: list[int] = [int(t) for t in nearest]
+    tops = np.array([profiles[t].at(float(si)) + CLEARANCE for t, si in zip(owner, along, strict=True)])
+    low = corners[hit].min(axis=1) < tops - 0.3
+    return [int(k) for k in hit[low]]

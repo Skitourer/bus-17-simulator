@@ -126,7 +126,7 @@ describe('readParams', () => {
   it('reads the game parameters from the URL', () => {
     vi.stubGlobal('location', {
       search:
-        '?line=N62&route=3&date=20261224&dep=09:15&day=20261223&bus=art&s=150&auto&map=2&debug&stop=saint-laurent&stress=200',
+        '?line=N62&route=3&date=20261224&dep=09:15&day=20261223&bus=art&s=150&auto&map=2&debug&stop=saint-laurent&stress=200&at=-2990,-1332.5,90',
     });
     expect(readParams()).toEqual({
       line: 'N62',
@@ -142,7 +142,17 @@ describe('readParams', () => {
       debug: true,
       stop: 'saint-laurent',
       stress: 200,
+      at: { x: -2990, y: -1332.5, h: Math.PI / 2 },
     });
+  });
+
+  it('reads a place without heading and ignores a malformed one', () => {
+    vi.stubGlobal('location', { search: '?at=10,20' });
+    expect(readParams().at).toEqual({ x: 10, y: 20, h: null });
+    for (const at of ['10', '10,a', '1,2,3,4', '']) {
+      vi.stubGlobal('location', { search: '?at=' + at });
+      expect(readParams().at).toBeNull();
+    }
   });
 
   it('uses defaults when the URL is empty', () => {

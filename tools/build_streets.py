@@ -27,6 +27,8 @@ Geometry: see tools/streets.py and ADR 0003. All coordinates in decimetres.
                       "trees": [x, y, ...]   (OSM and seeded, off roads and buildings),
                       "water": [[ring, ...], ...]   (water areas cut along the ground triangles, like "road"),
                       "water_level": [z, ...]   (n x n water surface, like "ground"; [] without water),
+                      "holes": [k, ...]   (ground triangles left out over the mouths of the underpasses,
+                                     numbered like "wet"; see tools/overpasses.py),
                       "wet": [k, ...]   (ground triangles under water, not drawn: k < (n-1)^2 is the first
                                          triangle of cell k, else the second of cell k - (n-1)^2),
                       "dry": [[ring, ...], ...]   (dry parts of the wet triangles, drawn instead of them),
@@ -43,7 +45,14 @@ from typing import Any
 import numpy as np
 from geo import Point
 from lines import corridor, read_lines, routes_xy, tiles_in
-from overpasses import covered_ground, dig_underpasses, separate_levels, underpass_crossings
+from overpasses import (
+    covered_ground,
+    dig_underpasses,
+    opened_triangles,
+    separate_levels,
+    tunnel_openings,
+    underpass_crossings,
+)
 from overpasses import crossings as bridge_crossings
 from shapely import LineString, MultiLineString, MultiPoint, MultiPolygon, Polygon, box, union_all
 from shapely import Point as ShapelyPoint
@@ -66,6 +75,7 @@ from streets import (
     clip_building,
     crossings,
     flat_vertices,
+    grid_triangles,
     junction_radii,
     keep_out_zone,
     kerb_lines,
@@ -180,6 +190,16 @@ def buildings_and_trees(
     return buildings, over, by_tile
 
 
+def triangle_corners(ground: FloatArray, n: int) -> FloatArray:
+    """Heights of the three corners of every ground triangle, in the order of grid_triangles."""
+    z = ground.reshape(n, n)
+    sw, se = z[:-1, :-1].ravel(), z[:-1, 1:].ravel()
+    nw, ne = z[1:, :-1].ravel(), z[1:, 1:].ravel()
+    first = np.stack([sw, se, ne], axis=1)
+    second = np.stack([sw, ne, nw], axis=1)
+    return np.concatenate([first, second])
+
+
 def split_pieces(
     zone: Polygon | MultiPolygon, terraces: BaseGeometry, ox: float, oy: float, n: int
 ) -> list[Polygon]:
@@ -279,6 +299,7 @@ def main() -> None:
     profiles = dig_underpasses(edges, profiles)
     underpasses = sorted({c.road for c in under})
     print(f'  {len(underpasses)} passages inferieurs sous {len(under)} routes')
+    openings = tunnel_openings([edges[k] for k in underpasses], [edges[c.bridge] for c in under], SIDEWALK)
     print(f'  {len(found)} croisements sous un pont, {sum(c.missing > 0 for c in found)} sans hauteur libre')
     print('chaussee (union des troncons)...')
     surface = carriageway(edges)
@@ -357,8 +378,15 @@ def main() -> None:
                 ground, ox, oy, n, STEP, on_ground, terraces.ground_heights, junctions
             )
         road = local if isinstance(local, Polygon | MultiPolygon) else Polygon()
+        road = MultiPolygon(polygon_parts(road.difference(openings)))
         pieces = split_pieces(road, terraces.area, ox, oy, n)
-        walk = clip(sidewalks, box(ox, oy, ox + TILE, oy + TILE))
+        walk = clip(sidewalks.difference(openings), box(ox, oy, ox + TILE, oy + TILE))
+        holes = opened_triangles(
+            grid_triangles(ox, oy, n, STEP),
+            triangle_corners(ground, n),
+            clip(openings, near),
+            [(edges[k], profiles[k]) for k in underpasses],
+        )
         walk_pieces = (
             split_pieces(walk, terraces.area, ox, oy, n) if isinstance(walk, Polygon | MultiPolygon) else []
         )
@@ -408,6 +436,7 @@ def main() -> None:
                 'water': rings_of(MultiPolygon(wet_pieces), ox, oy) if wet_pieces else [],
                 'water_level': [dm(float(z)) for z in tile_level] if wet else [],
                 'wet': wet,
+                'holes': holes,
                 'dry': rings_of(MultiPolygon(dry_pieces), ox, oy) if dry_pieces else [],
                 'banks': [flat_dm(line, ox, oy) for line in shore_lines(water, ox, oy, TILE)] if wet else [],
             },

@@ -498,6 +498,8 @@ async function load() {
         'bad',
       );
   }
+  // debug: start at a place of the map (?debug&at=x,y,heading)
+  if (debug && P.at) teleport(P.at.x, P.at.y, P.at.h ?? drive.h);
   if (debug) showDebug(true);
   // mode test : ?auto&ff=40 -> simule 40 s d'un coup (pilote automatique)
   const ff = +(new URLSearchParams(location.search).get('ff') || 0);
