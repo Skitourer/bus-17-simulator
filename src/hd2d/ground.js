@@ -43,6 +43,7 @@ import { Heightfield } from './heightfield.js';
  * @property {number[]} wet ground triangles under water (not drawn): k < (n-1)^2 is the first triangle of
  * cell k, else the second triangle of cell k - (n-1)^2
  * @property {number[][][]} dry dry parts of the wet triangles, like `road`
+ * @property {number[]} [holes] ground triangles left out over the mouths of the underpasses (#86), like `wet`
  * @property {number[][]} banks water edges: [x, y, ...] (dm, relative to the tile origin)
  */
 

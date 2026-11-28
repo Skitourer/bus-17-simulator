@@ -185,6 +185,16 @@ export const delta = (s) =>
 /** A date parameter "YYYYMMDD", or '' when missing or malformed. @param {string | null} value */
 const ymdParam = (value) => (/^\d{8}$/.test(value || '') ? value || '' : '');
 
+/**
+ * A place of the map "x,y[,heading]" (m, m, degrees), or null when missing or malformed.
+ * @param {string | null} value @returns {{x: number, y: number, h: number | null} | null}
+ */
+function placeParam(value) {
+  const parts = (value || '').split(',').map(Number);
+  if (parts.length < 2 || parts.length > 3 || parts.some((v) => !Number.isFinite(v))) return null;
+  return { x: parts[0], y: parts[1], h: parts.length === 3 ? (parts[2] * Math.PI) / 180 : null };
+}
+
 /** Parametres de partie passes dans l'URL par la page d'accueil. */
 export function readParams() {
   const q = new URLSearchParams(location.search);
@@ -204,6 +214,8 @@ export function readParams() {
     map: q.has('map') ? +(q.get('map') || 1) : null,
     debug: q.has('debug'),
     stop: q.get('stop') || '',
+    // debug start at a place of the map: "x,y" or "x,y,heading" (m, m, degrees from east, counter-clockwise)
+    at: placeParam(q.get('at')),
     stress: Math.max(0, Math.floor(+(q.get('stress') || 0)) || 0),
   };
 }

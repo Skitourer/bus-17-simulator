@@ -158,7 +158,9 @@ function terrainTile(ground, key, tile, material) {
   for (let j = 0; j < n; j++)
     for (let i = 0; i < n; i++) vertex(ox + i * ix.step, oy + j * ix.step, grid[j * n + i]);
   // triangles under water are replaced by their dry parts (tools/water.py)
-  const wet = new Set(tile.wet),
+  // triangles under water are replaced by their dry parts; those over the mouths of the underpasses are left
+  // out (#86)
+  const wet = new Set([...tile.wet, ...(tile.holes ?? [])]),
     cells = (n - 1) * (n - 1);
   for (let j = 0; j + 1 < n; j++)
     for (let i = 0; i + 1 < n; i++) {
@@ -804,6 +806,16 @@ function underpasses(hf, key, records) {
       quad([p(i, -1, 0.05), p(i, 1, 0.05), p(i + 1, 1, 0.05), p(i + 1, -1, 0.05)], road);
       quad(
         [p(i, -1, clearance), p(i + 1, -1, clearance), p(i + 1, 1, clearance), p(i, 1, clearance)],
+        concrete,
+      );
+      // the top of the slab, seen where the ground is open over the mouths (#86)
+      quad(
+        [
+          p(i, -1, clearance + 1),
+          p(i + 1, -1, clearance + 1),
+          p(i + 1, 1, clearance + 1),
+          p(i, 1, clearance + 1),
+        ],
         concrete,
       );
       for (const side of [-1, 1])
